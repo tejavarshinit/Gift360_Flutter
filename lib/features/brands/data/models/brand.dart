@@ -181,10 +181,10 @@ class Brand {
       imageUrl: _extractImageUrl(json),
       logoUrl: json['LogoURL'] as String? ?? json['logoUrl'] as String?,
       brandImageUrl: json['BrandImageURL'] as String? ?? json['brandImageUrl'] as String? ?? json['brand_image_url'] as String?,
-      terms: json['Terms'] as String? ?? json['terms'] as String?,
+      terms: json['Terms'] as String? ?? json['terms'] as String? ?? _parseJsonTextField(json['tnc']),
       validity: json['Validity'] as String? ?? json['validity'] as String?,
       denomination: json['Denomination'] as String? ?? json['denomination'] as String?,
-      howToUse: json['HowToUse'] as String? ?? json['howToUse'] as String?,
+      howToUse: json['HowToUse'] as String? ?? json['howToUse'] as String? ?? _parseJsonTextField(json['redeemSteps']) ?? _parseJsonTextField(json['importantInstruction']),
       brandCode: json['BrandCode'] as String? ?? json['brandCode'] as String?,
       images: parsedImages,
       brandType: json['brandType'] as String? ?? json['BrandType'] as String? ?? json['brand_type'] as String?,
@@ -210,6 +210,27 @@ class Brand {
     final camelBrandImage = _normalizeImageValue(json['brandImageUrl']);
     if (camelBrandImage != null) return camelBrandImage;
     return null;
+  }
+
+  /// Parses a JSON-encoded text field like `{"text":"..."}` or a plain string.
+  /// Returns the extracted text, or null if empty/parse fails.
+  static String? _parseJsonTextField(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      if (value.isEmpty) return null;
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map<String, dynamic>) {
+          return decoded['text'] as String? ?? decoded.values.firstOrNull?.toString();
+        }
+        if (decoded is String) return decoded;
+      } catch (_) {}
+      return value;
+    }
+    if (value is Map<String, dynamic>) {
+      return value['text'] as String? ?? value.values.firstOrNull?.toString();
+    }
+    return value.toString();
   }
 }
 

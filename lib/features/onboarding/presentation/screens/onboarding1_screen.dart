@@ -2,7 +2,6 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/onboarding_design.dart';
-import 'package:gift360/features/onboarding/presentation/widgets/page_indicator.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/navigation_bar.dart';
 
 class _BrandDef {
@@ -172,12 +171,6 @@ class _Onboarding1ScreenState extends State<Onboarding1Screen>
             right: 0,
             bottom: 200,
             child: _heroStage(),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 148,
-            child: const PageIndicator(pageCount: 3, activeIndex: 0),
           ),
           Positioned(
             left: 0,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/onboarding_design.dart';
-import 'package:gift360/features/onboarding/presentation/widgets/page_indicator.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/navigation_bar.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -261,28 +260,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     },
                   ),
 
-                  const SizedBox(height: 8),
-
-                  // Subtitle
-                  AnimatedBuilder(
-                    animation: _fadeUpController,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(0, 16 * (1 - _fadeUpController.value)),
-                        child: Opacity(
-                          opacity: _fadeUpController.value,
-                          child: Text(
-                            'Swipe left to explore how Gift360 works.',
-                            style: OnboardingDesign.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                              color: OnboardingDesign.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
@@ -296,8 +273,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                 child: Column(
                   children: [
-                    const PageIndicator(pageCount: 4, activeIndex: 0),
-                    const SizedBox(height: 16),
                     OnboardingNavBar(
                       onSkip: widget.onSkip,
                       onNext: widget.onNext,

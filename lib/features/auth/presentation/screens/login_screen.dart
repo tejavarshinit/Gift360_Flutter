@@ -1,8 +1,7 @@
-import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_colors.dart';
 import 'package:gift360/core/constants/app_constants.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
@@ -15,15 +14,9 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen>
-    with TickerProviderStateMixin {
-  AnimationController? _coinController;
-  AnimationController? _auroraController;
-  AnimationController? _floatController;
-  AnimationController? _fadeUpController;
-
-  final _emailController = TextEditingController();
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _mobileController = TextEditingController();
+  final _emailController = TextEditingController();
   final _otpController = TextEditingController();
 
   bool _otpSent = false;
@@ -34,36 +27,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _coinController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 9),
-    )..repeat();
-    _auroraController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 12),
-    )..repeat();
-    _floatController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat(reverse: true);
-    _fadeUpController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..forward();
-
-    _emailController.addListener(() => setState(() {}));
     _mobileController.addListener(() => setState(() {}));
     _otpController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _coinController?.dispose();
-    _auroraController?.dispose();
-    _floatController?.dispose();
-    _fadeUpController?.dispose();
-    _emailController.dispose();
     _mobileController.dispose();
+    _emailController.dispose();
     _otpController.dispose();
     super.dispose();
   }
@@ -193,715 +164,329 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF9747FF), Color(0xFFFFFFFF)],
-            stops: [-3.55, 0.9968],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFE8D7FF), Colors.white],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: Stack(
-          children: [
-            // Layer 1: Floating Coins
-            ...List.generate(10, (i) => _buildCoin(i)),
-
-            // Layer 2: Aurora Blurs
-            _buildAuroraBlur1(),
-            _buildAuroraBlur2(),
-            _buildAuroraBlur3(),
-
-            // Layer 3: Grain Texture
-            _buildGrainTexture(),
-
-            // Layer 4: Content
-            if (_fadeUpController != null)
-              SafeArea(
-                child: FadeTransition(
-                  opacity: _fadeUpController!,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.1),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: _fadeUpController!,
-                      curve: Curves.easeOut,
-                    )),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 40, 20, 32),
-                      child: Column(
-                        children: [
-                          // Section A: Branding
-                          _buildBranding(),
-
-                          const SizedBox(height: 32),
-
-                          // Section B: Purple Card
-                          _buildPurpleCard(),
-
-                          const SizedBox(height: 32),
-
-                          // Section C: Footer
-                          _buildFooter(),
-                        ],
+          _auroraBlob(
+            top: -40,
+            left: -40,
+            size: 288,
+            color: const Color(0xFF523DA9),
+          ),
+          _auroraBlob(
+            top: 128,
+            right: -64,
+            size: 320,
+            color: const Color(0xFF4C42B8),
+          ),
+          _auroraBlob(
+            bottom: 80,
+            left: MediaQuery.of(context).size.width * 0.25,
+            size: 224,
+            color: const Color(0xFF5365DF),
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  const SizedBox(height: 60),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/images/Gift.png',
+                        height: 90,
+                        fit: BoxFit.contain,
                       ),
+                      Transform.translate(
+                        offset: const Offset(-35, 8),
+                        child: Image.asset(
+                          'assets/images/G word.png',
+                          height: 40,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Welcome Back',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black,
                     ),
                   ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // LAYER 1: FLOATING COINS
-  // ════════════════════════════════════════════════════════════════════
-  Widget _buildCoin(int index) {
-    final random = Random(index);
-    final size = 8.0 + random.nextDouble() * 10;
-    final left = random.nextDouble() * MediaQuery.of(context).size.width;
-    final delay = random.nextDouble() * 9;
-    final isGold = index % 3 != 2;
-
-    return AnimatedBuilder(
-      animation: _coinController!,
-      builder: (context, child) {
-        final progress = (_coinController!.value + delay / 9) % 1.0;
-        final yOffset = 40.0 + progress * -500;
-        final xDrift = sin(progress * 2 * pi * 2) * 30;
-        final rotation = progress * 2 * pi;
-
-        return Positioned(
-          left: left + xDrift,
-          bottom: -40 + yOffset,
-          child: Transform.rotate(
-            angle: rotation,
-            child: Opacity(
-              opacity: (sin(progress * pi) * 0.5 + 0.5).clamp(0.0, 1.0),
-              child: isGold
-                  ? _buildGoldCoin(size)
-                  : _buildStarSparkle(size * 0.72),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildGoldCoin(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const RadialGradient(
-          center: Alignment(-0.3, -0.4),
-          colors: [
-            Color(0xFFFFEEA0),
-            Color(0xFFD4A017),
-            Color(0xFF8B6914),
-          ],
-          stops: [0.0, 0.6, 1.0],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0x8CFFB433),
-            blurRadius: 14,
-          ),
-          BoxShadow(
-            color: const Color(0x59FFB433).withValues(alpha: 0.35),
-            blurRadius: 4,
-            spreadRadius: -1,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStarSparkle(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment(-1, -1),
-          end: Alignment(1, 1),
-          colors: [Colors.white, Color(0xFFE5C100)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xB3FFB433),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // LAYER 2: AURORA BLURS
-  // ════════════════════════════════════════════════════════════════════
-  Widget _buildAuroraBlur1() {
-    return AnimatedBuilder(
-      animation: _auroraController!,
-      builder: (context, child) {
-        final t = _auroraController!.value;
-        final xOffset = sin(t * 2 * pi) * 20;
-        final yOffset = cos(t * 2 * pi) * -10;
-        final scale = 1.0 + sin(t * 2 * pi) * 0.1;
-        final opacity = 0.6 + sin(t * 2 * pi) * 0.25;
-
-        return Positioned(
-          top: -40 + yOffset,
-          left: -40 + xOffset,
-          child: Transform.scale(
-            scale: scale,
-            child: Opacity(
-              opacity: opacity,
-              child: Container(
-                width: 288,
-                height: 288,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFF523DA9),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.7],
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Sign in to Gift360',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black,
+                    ),
                   ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildAuroraBlur2() {
-    return AnimatedBuilder(
-      animation: _auroraController!,
-      builder: (context, child) {
-        final t = (_auroraController!.value + 0.25) % 1.0;
-        final xOffset = sin(t * 2 * pi) * 20;
-        final yOffset = cos(t * 2 * pi) * -10;
-        final scale = 1.0 + sin(t * 2 * pi) * 0.1;
-        final opacity = 0.6 + sin(t * 2 * pi) * 0.25;
-
-        return Positioned(
-          top: 128 + yOffset,
-          right: -64 + xOffset,
-          child: Transform.scale(
-            scale: scale,
-            child: Opacity(
-              opacity: opacity,
-              child: Container(
-                width: 320,
-                height: 320,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFF4C42B8),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.7],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildAuroraBlur3() {
-    return AnimatedBuilder(
-      animation: _auroraController!,
-      builder: (context, child) {
-        final t = (_auroraController!.value + 0.5) % 1.0;
-        final xOffset = sin(t * 2 * pi) * 20;
-        final yOffset = cos(t * 2 * pi) * -10;
-        final scale = 1.0 + sin(t * 2 * pi) * 0.1;
-        final opacity = 0.6 + sin(t * 2 * pi) * 0.25;
-
-        return Positioned(
-          bottom: 80 + yOffset,
-          left: MediaQuery.of(context).size.width * 0.25 + xOffset,
-          child: Transform.scale(
-            scale: scale,
-            child: Opacity(
-              opacity: opacity,
-              child: Container(
-                width: 224,
-                height: 224,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFF5365DF),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.7],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // LAYER 3: GRAIN TEXTURE
-  // ════════════════════════════════════════════════════════════════════
-  Widget _buildGrainTexture() {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: Opacity(
-          opacity: 0.30,
-          child: CustomPaint(
-            painter: _GrainPainter(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // SECTION A: BRANDING
-  // ════════════════════════════════════════════════════════════════════
-  Widget _buildBranding() {
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: _floatController!,
-          builder: (context, child) {
-            final yOff = sin(_floatController!.value * pi) * 10;
-            return Transform.translate(
-              offset: Offset(0, -yOff),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
+                  const SizedBox(height: 32),
                   Container(
-                    width: 86,
-                    height: 86,
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(27),
-                      gradient: const LinearGradient(
-                        begin: Alignment(-1, -1),
-                        end: Alignment(1, 1),
-                        colors: [
-                          Color(0xFFE5C100),
-                          Color(0xFFF57C00),
-                          Color(0xFFE5A800),
-                        ],
+                      color: AppColors.purpleLight,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: AppColors.gold.withValues(alpha: 0.18),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xCCFFD700),
-                          blurRadius: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5343B2),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x1FFFFFFF),
-                          blurRadius: 0,
-                          spreadRadius: 0,
-                          offset: Offset(0, 1),
-                        ),
-                        BoxShadow(
-                          color: Color(0x2ED7D7FF),
-                          blurRadius: 0,
-                          spreadRadius: 0,
-                        ),
-                        BoxShadow(
-                          color: Color(0xA6000000),
+                          color: Colors.black.withValues(alpha: 0.4),
                           blurRadius: 40,
-                          spreadRadius: -16,
-                          offset: Offset(0, 18),
+                          offset: const Offset(0, 18),
                         ),
                         BoxShadow(
-                          color: Color(0x80000000),
+                          color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 12,
-                          spreadRadius: -6,
-                          offset: Offset(0, 4),
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.card_giftcard_rounded,
-                        size: 40,
-                        color: Color(0xFFFCD34D),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Welcome Back',
-          style: GoogleFonts.poppins(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            color: Colors.black,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Sign in to Gift360',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.black,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // SECTION B: PREMIUM PURPLE CARD
-  // ════════════════════════════════════════════════════════════════════
-  Widget _buildPurpleCard() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF5343B2),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1FFFFFFF),
-            blurRadius: 0,
-            spreadRadius: 0,
-            offset: Offset(0, 1),
-          ),
-          BoxShadow(
-            color: Color(0x2ED7D7FF),
-            blurRadius: 0,
-            spreadRadius: 0,
-          ),
-          BoxShadow(
-            color: Color(0xA6000000),
-            blurRadius: 40,
-            spreadRadius: -16,
-            offset: Offset(0, 18),
-          ),
-          BoxShadow(
-            color: Color(0x80000000),
-            blurRadius: 12,
-            spreadRadius: -6,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Hologram Sheen
-          Positioned(
-            top: -48,
-            left: -48,
-            child: AnimatedBuilder(
-              animation: _auroraController!,
-              builder: (context, child) {
-                final t = (_auroraController!.value * 2) % 1.0;
-                final xOffset = sin(t * 2 * pi) * 60;
-                final opacity = 0.55 + sin(t * 2 * pi) * 0.3;
-
-                return Transform.translate(
-                  offset: Offset(xOffset, 0),
-                  child: Transform.rotate(
-                    angle: 20 * pi / 180,
-                    child: Opacity(
-                      opacity: opacity,
-                      child: Container(
-                        width: 288,
-                        height: 128,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.transparent,
-                              Colors.white.withValues(alpha: 0.10),
-                              Colors.transparent,
-                            ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.auto_awesome,
+                                size: 16, color: AppColors.goldLight),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Sign In',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        if (_error.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.error.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    size: 16, color: AppColors.error),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _error,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.error,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Text(
+                          'EMAIL',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            letterSpacing: 1.2,
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Card Content
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Card Header
-              Row(
-                children: [
-                  const Icon(
-                    Icons.auto_awesome,
-                    size: 16,
-                    color: Color(0xFFFCD34D),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Sign In',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // Error message
-              if (_error.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.error.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline,
-                          size: 16, color: AppColors.error),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _error,
+                        const SizedBox(height: 6),
+                        _buildTextField(
+                          controller: _emailController,
+                          hint: 'Enter your registered email',
+                          keyboardType: TextInputType.emailAddress,
+                          enabled: !_otpSent,
+                          prefixIcon: Icons.email_outlined,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'MOBILE NUMBER',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.error,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                controller: _mobileController,
+                                hint: '10-digit mobile',
+                                keyboardType: TextInputType.phone,
+                                enabled: !_otpSent,
+                                prefixWidget: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.smartphone,
+                                        size: 20,
+                                        color: AppColors.goldLight.withValues(alpha: 0.8)),
+                                    const SizedBox(width: 4),
+                                    const Text(
+                                      '+91',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildSendOtpButton(),
+                          ],
+                        ),
+                        if (_otpSent && _otpMessage.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              '✓ $_otpMessage',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        if (_otpSent) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'ENTER OTP',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.7),
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _otpController,
+                                  hint: '• • • • • •',
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 6,
+                                  textAlign: TextAlign.center,
+                                  letterSpacing: 6,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildVerifyButton(),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        "Don't have an account? ",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => context.push('/register'),
+                        child: const Text(
+                          'Sign up',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
-
-              // Email Field
-              _buildLabel('EMAIL'),
-              const SizedBox(height: 6),
-              _buildTextField(
-                controller: _emailController,
-                hint: 'Enter your registered email',
-                keyboardType: TextInputType.emailAddress,
-                icon: Icons.mail_outline,
-                enabled: !_otpSent,
-              ),
-              const SizedBox(height: 16),
-
-              // Mobile Number Field
-              _buildLabel('MOBILE NUMBER'),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _mobileController,
-                      hint: '10-digit mobile',
-                      keyboardType: TextInputType.phone,
-                      enabled: !_otpSent,
-                      prefixWidget: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(width: 12),
-                          Icon(
-                            Icons.smartphone,
-                            size: 20,
-                            color: const Color(0xFFFCD34D).withValues(alpha: 0.8),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '+91',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                      ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'By continuing, you agree to our Terms and Privacy Policy',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.black,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  _buildSendOtpButton(),
+                  const SizedBox(height: 40),
                 ],
               ),
-
-              // Success message
-              if (_otpSent && _otpMessage.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      size: 12,
-                      color: Color(0xFF6EE7B7),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$_otpMessage',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF6EE7B7),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-
-              // OTP Field
-              if (_otpSent) ...[
-                const SizedBox(height: 16),
-                _buildLabel('ENTER OTP'),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
-                          ),
-                        ),
-                        child: TextField(
-                          controller: _otpController,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          textAlign: TextAlign.center,
-                          autofillHints: const [],
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 18,
-                            letterSpacing: 16,
-                          ),
-                          decoration: InputDecoration(
-                            filled: false,
-                            hintText: '• • • • • •',
-                            hintStyle: GoogleFonts.poppins(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              fontWeight: FontWeight.w400,
-                            ),
-                            counterText: '',
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildVerifyButton(),
-                  ],
-                ),
-              ],
-            ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════
-  // SECTION C: FOOTER
-  // ════════════════════════════════════════════════════════════════════
-  Widget _buildFooter() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Don't have an account? ",
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black,
+  Widget _auroraBlob({
+    double? top,
+    double? left,
+    double? right,
+    double? bottom,
+    required double size,
+    required Color color,
+    double alpha = 0.30,
+  }) {
+    return Positioned(
+      top: top,
+      left: left,
+      right: right,
+      bottom: bottom,
+      child: IgnorePointer(
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 45, sigmaY: 45),
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  color.withValues(alpha: alpha),
+                  color.withValues(alpha: 0),
+                ],
+                stops: const [0.0, 0.7],
               ),
-            ),
-            GestureDetector(
-              onTap: () => context.go('/register'),
-              child: Text(
-                'Sign up',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            'By continuing, you agree to our Terms and Privacy Policy',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.black,
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // HELPER WIDGETS
-  // ════════════════════════════════════════════════════════════════════
-  Widget _buildLabel(String text) {
-    return Text(
-      text,
-      style: GoogleFonts.poppins(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        color: Colors.white.withValues(alpha: 0.7),
-        letterSpacing: 0.1,
       ),
     );
   }
@@ -910,9 +495,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     required TextEditingController controller,
     required String hint,
     TextInputType? keyboardType,
-    IconData? icon,
-    Widget? prefixWidget,
     bool enabled = true,
+    int? maxLength,
+    TextAlign? textAlign,
+    double? letterSpacing,
+    IconData? prefixIcon,
+    Widget? prefixWidget,
   }) {
     return Container(
       height: 48,
@@ -925,36 +513,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         controller: controller,
         keyboardType: keyboardType,
         enabled: enabled,
+        maxLength: maxLength,
+        textAlign: textAlign ?? TextAlign.start,
         autofillHints: const [],
-        style: GoogleFonts.poppins(
+        style: TextStyle(
           color: Colors.white,
-          fontWeight: FontWeight.w500,
-          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+          letterSpacing: letterSpacing ?? 0,
         ),
         decoration: InputDecoration(
           filled: false,
           hintText: hint,
-          hintStyle: GoogleFonts.poppins(
+          hintStyle: TextStyle(
             color: Colors.white.withValues(alpha: 0.4),
             fontWeight: FontWeight.w400,
-            fontSize: 14,
           ),
           counterText: '',
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           prefixIcon: prefixWidget ??
-              (icon != null
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 12, right: 8),
-                      child: Icon(
-                        icon,
-                        size: 20,
-                        color: const Color(0xFFFCD34D).withValues(alpha: 0.8),
-                      ),
-                    )
+              (prefixIcon != null
+                  ? Icon(prefixIcon, size: 20, color: AppColors.goldLight)
                   : null),
         ),
       ),
@@ -971,7 +552,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         decoration: BoxDecoration(
           gradient: _otpSent
               ? null
-              : LinearGradient(
+              : const LinearGradient(
                   colors: [AppColors.gold, AppColors.goldLight],
                 ),
           color: _otpSent ? AppColors.success.withValues(alpha: 0.2) : null,
@@ -992,7 +573,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         child: Center(
           child: Text(
             _isLoading ? 'Sending...' : _otpSent ? '✓ Sent' : 'Send OTP',
-            style: GoogleFonts.poppins(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
               color: _otpSent
@@ -1013,7 +594,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
+          gradient: const LinearGradient(
             colors: [AppColors.gold, AppColors.goldLight],
           ),
           borderRadius: BorderRadius.circular(16),
@@ -1025,58 +606,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ),
           ],
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _isLoading ? 'Verifying...' : 'Verify',
-              style: GoogleFonts.poppins(
+              'Verify',
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF1A0D00),
+                color: Color(0xFF1A0D00),
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.chevron_right,
-              size: 16,
-              color: Color(0xFF1A0D00),
-            ),
+            SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 20, color: Color(0xFF1A0D00)),
           ],
         ),
       ),
     );
   }
-}
-
-// ════════════════════════════════════════════════════════════════════
-// GRAIN TEXTURE PAINTER
-// ════════════════════════════════════════════════════════════════════
-class _GrainPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final random = Random(42);
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    for (double x = 0; x < size.width; x += 3) {
-      for (double y = 0; y < size.height; y += 3) {
-        if (random.nextBool()) {
-          paint.color = Colors.white.withValues(alpha: 0.06);
-          canvas.drawCircle(Offset(x, y), 0.5, paint);
-        }
-      }
-    }
-
-    for (double x = 2; x < size.width; x += 5) {
-      for (double y = 2; y < size.height; y += 5) {
-        if (random.nextBool()) {
-          paint.color = Colors.white.withValues(alpha: 0.04);
-          canvas.drawCircle(Offset(x, y), 0.5, paint);
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

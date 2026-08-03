@@ -71,7 +71,7 @@ class AppColors {
   static const Color sheetBg = Color(0xFFF4F5FA);
 
   // Gift Watermark
-  static const Color giftWatermark = Color(0x295B5B72); // #5B5B72 at 16%
+  static const Color giftWatermark = Color(0xFF5B5B72); // #5B5B72, dimmed via Opacity(0.16) wrapper
 
   // Brand Card
   static const Color brandCardText = Color(0xFF101010);

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/onboarding_design.dart';
-import 'package:gift360/features/onboarding/presentation/widgets/page_indicator.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/navigation_bar.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -303,29 +302,6 @@ class _SplashScreenState extends State<SplashScreen>
                     },
                   ),
 
-                  const SizedBox(height: 8),
-
-                  // Subtitle
-                  AnimatedBuilder(
-                    animation: _fadeUpController,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(0, 16 * (1 - _fadeUpController.value)),
-                        child: Opacity(
-                          opacity: _fadeUpController.value,
-                          child: Text(
-                            'Swipe left or tap next to continue',
-                            style: OnboardingDesign.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: OnboardingDesign.foreground
-                                  .withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
@@ -351,8 +327,6 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               child: Column(
                 children: [
-                  const PageIndicator(pageCount: 4, activeIndex: 0),
-                  const SizedBox(height: 16),
                   OnboardingNavBar(
                     onSkip: widget.onSkip,
                     onNext: widget.onComplete,

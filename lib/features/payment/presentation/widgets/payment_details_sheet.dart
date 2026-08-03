@@ -32,7 +32,7 @@ class _PaymentDetailsSheetState extends State<PaymentDetailsSheet>
     with SingleTickerProviderStateMixin {
   String? _selectedAmount;
   int _quantity = 1;
-  String _infoTab = 'about';
+  String _infoTab = '';
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
 
@@ -657,70 +657,100 @@ class _PaymentDetailsSheetState extends State<PaymentDetailsSheet>
     final hasTerms = brand.terms != null && brand.terms!.isNotEmpty;
     if (!hasAbout && !hasHowToUse && !hasTerms) return const SizedBox.shrink();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 4))],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                if (hasAbout) _buildInfoTabButton('About', 'about'),
-                if (hasHowToUse) _buildInfoTabButton('How to Use', 'howtouse'),
-                if (hasTerms) _buildInfoTabButton('Terms', 'terms'),
-              ],
-            ),
+    return Column(
+      children: [
+        // Tab buttons row
+        Container(
+          height: 44,
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 20, offset: Offset(0, 6))],
           ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            child: _infoTab == 'about' && hasAbout
-                ? _buildInfoContent(brand.description!)
-                : _infoTab == 'howtouse' && hasHowToUse
-                    ? _buildInfoContent(brand.howToUse!)
-                    : _infoTab == 'terms' && hasTerms
-                        ? _buildInfoContent(brand.terms!)
-                        : const SizedBox.shrink(),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (hasAbout)
+                _buildInfoTabButton('i', 'About', 'about', 71),
+              if (hasHowToUse)
+                _buildInfoTabButton('*', 'How to Use', 'howtouse', 102),
+              if (hasTerms)
+                _buildInfoTabButton('#', 'Terms', 'terms', 73),
+            ],
           ),
-        ],
-      ),
+        ),
+        // Expandable content
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: _infoTab == 'about' && hasAbout
+              ? _buildInfoContent(brand.description!, false)
+              : _infoTab == 'howtouse' && hasHowToUse
+                  ? _buildInfoContent(brand.howToUse!, false)
+                  : _infoTab == 'terms' && hasTerms
+                      ? _buildInfoContent(brand.terms!, true)
+                      : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 
-  Widget _buildInfoTabButton(String label, String tab) {
+  Widget _buildInfoTabButton(String symbol, String label, String tab, double width) {
     final isSelected = _infoTab == tab;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _infoTab = tab),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFEDEAFF) : const Color(0xFFF3F4F6),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isSelected ? const Color(0xFF9747FF) : const Color(0xFF6B7280),
+    return GestureDetector(
+      onTap: () => setState(() => _infoTab = isSelected ? '' : tab),
+      child: Container(
+        width: width,
+        height: 30,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDEAFF),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              symbol,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: const Color(0xFF9747FF),
+              ),
             ),
-          ),
+            const SizedBox(width: 2),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: const Color(0xFF9747FF),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoContent(String content) {
+  Widget _buildInfoContent(String content, bool isTerms) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Text(
-        content,
-        style: const TextStyle(fontSize: 13, height: 1.5, color: Color(0xFF4B5563)),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 4, offset: Offset(4, 4))],
+        ),
+        child: Text(
+          content,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            height: 1.5,
+            color: const Color(0xFF4B5563),
+          ),
+        ),
       ),
     );
   }
@@ -756,53 +786,123 @@ class _PaymentDetailsSheetState extends State<PaymentDetailsSheet>
         color: Colors.white,
         boxShadow: [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, -2))],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 42,
-              child: ElevatedButton.icon(
-                onPressed: (isValid && !processing)
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 12, offset: Offset(0, 4))],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Add to Cart button
+            Expanded(
+              child: GestureDetector(
+                onTap: (isValid && !processing)
                     ? () {
                         _showAddToCartSuccess(context);
                         widget.onAddToCart(brand, double.parse(_selectedAmount ?? '0'), _quantity);
                       }
                     : null,
-                icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-                label: const Text('Add to Cart', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isValid ? const Color(0xFF6C5CE7) : const Color(0xFFD1D5DB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Container(
+                  height: 42,
+                  decoration: BoxDecoration(
+                    gradient: (isValid && !processing)
+                        ? const LinearGradient(
+                            colors: [Color(0xFF9747FF), Color(0xFF5B2B99)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          )
+                        : null,
+                    color: (isValid && !processing) ? null : const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Opacity(
+                      opacity: processing ? 0.7 : 1.0,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.shopping_cart_outlined, size: 16, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Add to Cart',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 42,
-              child: ElevatedButton.icon(
-                onPressed: (isValid && !processing)
+            const SizedBox(width: 12),
+            // Pay on Sabbpe button
+            Expanded(
+              child: GestureDetector(
+                onTap: (isValid && !processing)
                     ? () => widget.onPay(brand, double.parse(_selectedAmount ?? '0'), _quantity)
                     : null,
-                icon: processing
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.payment, size: 18),
-                label: Text(
-                  processing ? 'Processing...' : 'Pay on Sabbpe',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: (isValid && !processing) ? Colors.white : const Color(0xFFF3F4F6),
-                  foregroundColor: (isValid && !processing) ? const Color(0xFF6C5CE7) : const Color(0xFF9CA3AF),
-                  side: isValid ? const BorderSide(color: Color(0xFF6C5CE7)) : null,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: (isValid && !processing) ? Colors.white : const Color(0xFFE0E0E0),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: (isValid && !processing) ? const Color(0xFFE5E7EB) : const Color(0xFFD1D5DB),
+                    ),
+                    boxShadow: (isValid && !processing)
+                        ? const [BoxShadow(color: Color(0x14111827), blurRadius: 12, offset: Offset(0, 4))]
+                        : null,
+                  ),
+                  child: Center(
+                    child: processing
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9747FF)),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Processing...',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF9747FF),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Opacity(
+                            opacity: (isValid && !processing) ? 1.0 : 0.5,
+                            child: Image.asset(
+                              'assets/images/payonsabbpe.png',
+                              height: 22,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Text(
+                                'Pay on Sabbpe',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: (isValid && !processing) ? const Color(0xFF6C5CE7) : const Color(0xFF9E9E9E),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

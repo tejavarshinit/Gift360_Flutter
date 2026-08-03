@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/onboarding_design.dart';
-import 'package:gift360/features/onboarding/presentation/widgets/page_indicator.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/navigation_bar.dart';
 
 class Onboarding3Screen extends StatefulWidget {
@@ -56,8 +55,6 @@ class _Onboarding3ScreenState extends State<Onboarding3Screen>
               ),
             ),
           ),
-          Positioned(left: 0, right: 0, bottom: 156,
-              child: const PageIndicator(pageCount: 3, activeIndex: 2)),
           Positioned(left: 0, right: 0, bottom: 80, child: _buildCopyText()),
           Positioned(
             left: 0, right: 0, bottom: 0,

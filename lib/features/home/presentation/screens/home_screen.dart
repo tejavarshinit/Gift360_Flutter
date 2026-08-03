@@ -85,11 +85,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── HomeHeader ──
-                _buildHeader(user),
-
-                // ── BalanceCard (stacked) ──
-                _buildBalanceCard(walletAsync, screenWidth),
+                // ── HomeHeader + BalanceCard (overlapping, matches React reference) ──
+                _buildHeaderSection(user, walletAsync, screenWidth),
 
                 // ── ActionGrid ──
                 _buildActionGrid(),
@@ -181,7 +178,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
           bottomRight: Radius.circular(34),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(21, 40, 21, 0),
+      padding: const EdgeInsets.fromLTRB(21, 4, 21, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -234,6 +231,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
   }
 
   // ─────────────────────────────────────────────
+  // HomeHeader + BalanceCard wrapper — the balance card overlaps
+  // the header by 56px (top:86 vs header height:142), matching the
+  // React reference (Home.tsx `<BalanceCard />` positioned `top-[86px]`
+  // inside the header's `relative` wrapper).
+  // ─────────────────────────────────────────────
+  Widget _buildHeaderSection(dynamic user, AsyncValue walletAsync, double screenWidth) {
+    return SizedBox(
+      height: 212,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _buildHeader(user),
+          Positioned(
+            top: 86,
+            left: 0,
+            right: 0,
+            child: _buildBalanceCard(walletAsync, screenWidth),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
   // BalanceCard (Section 3B) — 3-layer glassmorphism
   // ─────────────────────────────────────────────
   Widget _buildBalanceCard(AsyncValue walletAsync, double screenWidth) {
@@ -246,7 +267,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
       child: Stack(
         alignment: Alignment.topCenter,
         children: [
-          // Layer 1 — furthest back
+          // Layer 1 — furthest back (shadow-lg + backdrop-blur-sm)
           Positioned(
             top: 40,
             child: Container(
@@ -254,12 +275,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
               height: 112,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                color: Colors.white.withValues(alpha: 0.10),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, spreadRadius: -3, offset: const Offset(0, 10)),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6, spreadRadius: -4, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                      color: Colors.white.withValues(alpha: 0.10),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-          // Layer 2 — middle
+          // Layer 2 — middle (shadow-xl + backdrop-blur-sm)
           Positioned(
             top: 24,
             child: Container(
@@ -267,19 +303,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
               height: 112,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-                color: Colors.white.withValues(alpha: 0.15),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 24,
-                    offset: const Offset(0, 12),
-                  ),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 25, spreadRadius: -5, offset: const Offset(0, 20)),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, spreadRadius: -6, offset: const Offset(0, 8)),
                 ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-          // Layer 3 — front with float animation
+          // Layer 3 — front with float animation (shadow + backdrop-blur-md)
           Positioned(
             top: 0,
             child: AnimatedBuilder(
@@ -288,34 +332,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                 offset: Offset(0, _floatAnimation.value),
                 child: child,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(
-                    width: cardWidth,
-                    height: 112,
-                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.20),
-                          Colors.white.withValues(alpha: 0.06),
-                        ],
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: AppColors.balanceCardShadow,
-                          blurRadius: 38,
-                          offset: Offset(0, 18),
-                        ),
-                      ],
+              child: Container(
+                width: cardWidth,
+                height: 112,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: AppColors.balanceCardShadow,
+                      blurRadius: 38,
+                      offset: Offset(0, 18),
                     ),
-                    child: Stack(
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.20),
+                            Colors.white.withValues(alpha: 0.06),
+                          ],
+                        ),
+                      ),
+                      child: Stack(
                       children: [
                         // Decorative watermark gift icons
                         Positioned(
@@ -438,26 +486,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                           ],
                         ),
 
-                        // Gift logo at bottom-right
+                        // Flipkart SuperCoin CTA — white logo card + gold frame + caption
                         Positioned(
-                          bottom: 11,
-                          right: 72,
-                          child: Image.asset(
-                            'assets/images/Gift.png',
-                            height: 25,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        // G word wordmark at bottom-right
-                        Positioned(
-                          bottom: 11,
-                          right: 12,
-                          child: Image.asset(
-                            'assets/images/G word.png',
-                            height: 25,
-                            width: 73,
-                            fit: BoxFit.contain,
-                          ),
+                          bottom: 0,
+                          right: 0,
+                          child: _SuperCoinCtaWidget(),
                         ),
                       ],
                     ),
@@ -466,7 +499,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
               ),
             ),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }
@@ -1235,6 +1269,120 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
 }
 
 // ═══════════════════════════════════════════════
+// SuperCoin CTA — white logo card with gold frame, glow pulse, and caption.
+// ═══════════════════════════════════════════════
+class _SuperCoinCtaWidget extends StatefulWidget {
+  const _SuperCoinCtaWidget();
+
+  @override
+  State<_SuperCoinCtaWidget> createState() => _SuperCoinCtaWidgetState();
+}
+
+class _SuperCoinCtaWidgetState extends State<_SuperCoinCtaWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  late final Animation<double> _glowAlpha;
+  late final Animation<double> _borderAlpha;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+
+    final curve = CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut);
+    _glowAlpha = Tween<double>(begin: 0.25, end: 0.5).animate(curve);
+    _borderAlpha = Tween<double>(begin: 0.4, end: 0.7).animate(curve);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: () {
+        // TODO: wire to SuperCoin conversion flow
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                return Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.gold.withValues(alpha: _borderAlpha.value),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      // Gold glow
+                      BoxShadow(
+                        color: AppColors.gold.withValues(alpha: _glowAlpha.value),
+                        blurRadius: 20,
+                        offset: Offset.zero,
+                      ),
+                      // Dark elevation
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/images/FlipKartSuperCoin-removebg-preview.png',
+                    height: 50,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Earn SuperCoins',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.goldLight,
+                  ),
+                ),
+                const SizedBox(width: 1),
+                Icon(
+                  Icons.chevron_right,
+                  size: 12,
+                  color: AppColors.goldLight,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════
 // RecommendedList (Section 3F)
 // ═══════════════════════════════════════════════
 class _RecommendedSection extends ConsumerWidget {
@@ -1360,7 +1508,7 @@ class _RecommendedSection extends ConsumerWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
+            const SizedBox(height: 3),
                         Text(
                           price > 0 ? '₹${price.toInt()} Voucher' : 'Voucher',
                           style: GoogleFonts.poppins(
@@ -1622,42 +1770,35 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection>
       ),
       error: (_, e) => Padding(
         padding: const EdgeInsets.fromLTRB(21, 26, 21, 0),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.errorBg,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.error_outline, color: AppColors.error, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Failed to load brands',
+                style: GoogleFonts.poppins(fontSize: 13, color: const Color(0xFF991B1B)),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => ref.invalidate(topBrandsProvider),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Text(
-                  'Failed to load brands',
-                  style: GoogleFonts.poppins(fontSize: 13, color: const Color(0xFF991B1B)),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => ref.invalidate(topBrandsProvider),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.error,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Retry',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                  'Retry',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

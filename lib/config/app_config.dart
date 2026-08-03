@@ -29,7 +29,7 @@ class AppConfig {
   static String get paymentCustFirstName => dotenv.env['PAYMENT_CUSTFIRSTNAME'] ?? 'GIFT360';
   static String get paymentCustEmail => dotenv.env['PAYMENT_CUSTEMAIL'] ?? 'contact@gift360.io';
   static String get paymentCustMobile => dotenv.env['PAYMENT_CUSTMOBILE'] ?? '9876501234';
-  static String get supercoinMerchantWalletId => dotenv.env['SUPERCOIN_MERCHANT_WALLET_ID'] ?? '';
+  static String get supercoinMerchantWalletId => dotenv.env['flipkart.supercoin.walletId'] ?? '';
 
   static const bool enableLogging = true;
 }

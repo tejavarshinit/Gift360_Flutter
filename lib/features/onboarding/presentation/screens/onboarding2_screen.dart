@@ -2,7 +2,6 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/onboarding_design.dart';
-import 'package:gift360/features/onboarding/presentation/widgets/page_indicator.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/navigation_bar.dart';
 
 class Onboarding2Screen extends StatefulWidget {
@@ -64,12 +63,6 @@ class _Onboarding2ScreenState extends State<Onboarding2Screen>
             right: 0,
             bottom: 220,
             child: _heroStage(),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 156,
-            child: const PageIndicator(pageCount: 3, activeIndex: 1),
           ),
           Positioned(
             left: 0,
