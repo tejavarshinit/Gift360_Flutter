@@ -258,15 +258,34 @@ class _SuperCoinOTPModalState extends ConsumerState<SuperCoinOTPModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: _buildContent(),
+    return Stack(
+      children: [
+        // Backdrop overlay (matches Radix DialogOverlay — dims background,
+        // does not close on outside tap since OTP flow disables that too).
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(color: Colors.black.withValues(alpha: 0.5)),
+          ),
         ),
-      ),
+        // Centered content card (matches Radix DialogContent).
+        Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 400,
+              maxHeight: MediaQuery.of(context).size.height * 0.9,
+            ),
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: _buildContent(),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

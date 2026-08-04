@@ -26,6 +26,18 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- UPI apps — required so canOpenURL/openURL can resolve them when the
+	     payment WebView hands off a custom-scheme deep link. See
+	     PaymentWebViewScreen._handleNavigationRequest. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>upi</string>
+		<string>tez</string>
+		<string>phonepe</string>
+		<string>paytm</string>
+		<string>paytmmp</string>
+		<string>gpay</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

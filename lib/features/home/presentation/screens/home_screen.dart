@@ -170,7 +170,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
   // ─────────────────────────────────────────────
   Widget _buildHeader(dynamic user) {
     return Container(
-      height: 142,
+      height: 200,
       decoration: const BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.only(
@@ -178,7 +178,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
           bottomRight: Radius.circular(34),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(21, 4, 21, 0),
+      padding: const EdgeInsets.fromLTRB(21, 8, 21, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -238,13 +238,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
   // ─────────────────────────────────────────────
   Widget _buildHeaderSection(dynamic user, AsyncValue walletAsync, double screenWidth) {
     return SizedBox(
-      height: 212,
+      height: 280,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           _buildHeader(user),
           Positioned(
-            top: 86,
+            top: 120,
             left: 0,
             right: 0,
             child: _buildBalanceCard(walletAsync, screenWidth),
@@ -1811,86 +1811,91 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection>
     required double halfWidth,
     required bool isLTR,
   }) {
-    return SizedBox(
-      height: 96,
-      child: ClipRect(
+    return Listener(
+      onPointerDown: (_) => controller.stop(),
+      onPointerUp: (_) => controller.repeat(),
+      onPointerCancel: (_) => controller.repeat(),
+      child: SizedBox(
+        height: 96,
         child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            AnimatedBuilder(
-              animation: controller,
-              builder: (context, child) {
-                final offset = isLTR
-                    ? controller.drive(Tween(begin: -halfWidth, end: 0.0))
-                    : controller.drive(Tween(begin: 0.0, end: -halfWidth));
-                return Transform.translate(
-                  offset: Offset(offset.value, 0),
-                  child: child,
-                );
-              },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: duplicatedItems
-                    .map((brand) => Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: _buildTopBrandCard(brand),
-                        ))
-                    .toList(),
+              AnimatedBuilder(
+                animation: controller,
+                builder: (context, child) {
+                  final offset = isLTR
+                      ? controller.drive(Tween(begin: -halfWidth, end: 0.0))
+                      : controller.drive(Tween(begin: 0.0, end: -halfWidth));
+                  return Transform.translate(
+                    offset: Offset(offset.value, 0),
+                    child: child,
+                  );
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: duplicatedItems
+                      .map((brand) => Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: _buildTopBrandCard(brand),
+                          ))
+                      .toList(),
+                ),
               ),
-            ),
-            // Left fade
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Container(
-                  width: 60,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.scaffoldBg.withValues(alpha: 0.95),
-                        AppColors.scaffoldBg.withValues(alpha: 0.0),
-                      ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
+              // Left fade
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 60,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.scaffoldBg.withValues(alpha: 0.95),
+                          AppColors.scaffoldBg.withValues(alpha: 0.0),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            // Right fade
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Container(
-                  width: 60,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.scaffoldBg.withValues(alpha: 0.0),
-                        AppColors.scaffoldBg.withValues(alpha: 0.95),
-                      ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
+              // Right fade
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 60,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.scaffoldBg.withValues(alpha: 0.0),
+                          AppColors.scaffoldBg.withValues(alpha: 0.95),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildTopBrandCard(Brand brand) {
     final discount = brand.discount ?? '';
     final meta = discount.isNotEmpty ? '$discount% Cashback' : (brand.category ?? 'Gift Voucher');
     final imageUrl = brand.resolvedImageUrl;
-    return Listener(
-      onPointerUp: (_) => widget.onBrandTap(brand.brandId ?? ''),
+    return GestureDetector(
+      onTap: () => widget.onBrandTap(brand.brandId ?? ''),
+      behavior: HitTestBehavior.opaque,
       child: Container(
         width: 88,
         height: 96,

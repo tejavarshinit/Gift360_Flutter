@@ -44,8 +44,37 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
         onPageFinished: (url) {
           setState(() => _isLoading = false);
         },
+        onNavigationRequest: _handleNavigationRequest,
       ))
       ..loadRequest(Uri.parse(widget.paymentUrl));
+  }
+
+  // UPI (and other app-based payment methods) don't work as an http(s) page
+  // load — the checkout page hands off to a custom URL scheme (upi://,
+  // tez://, phonepe://, paytmmp://) to open the target app directly. A
+  // WebView can't render that itself, so intercept it here and let the OS
+  // open the app instead of letting the navigation silently fail.
+  Future<NavigationDecision> _handleNavigationRequest(NavigationRequest request) async {
+    final uri = Uri.tryParse(request.url);
+    if (uri == null || uri.scheme == 'http' || uri.scheme == 'https') {
+      return NavigationDecision.navigate;
+    }
+
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No UPI app found to handle this payment method.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open the UPI app for this payment method.')),
+        );
+      }
+    }
+    return NavigationDecision.prevent;
   }
 
   Future<void> _redirectOnWeb() async {

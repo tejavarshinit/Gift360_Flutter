@@ -38,23 +38,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final redeemed = ref.watch(redeemedVouchersProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           // Aurora background
           Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0xFF9747FF).withValues(alpha: 0.05),
-                    Colors.white,
-                  ],
-                ),
-              ),
-            ),
+            child: _buildAuroraBackground(),
           ),
           SafeArea(
             child: Column(
@@ -74,6 +62,62 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             ),
           ),
           if (_successEntry != null) _buildSuccessOverlay(context, _successEntry!),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Aurora Background (matches Cart)
+  // ─────────────────────────────────────────────
+  Widget _buildAuroraBackground() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF9747FF).withValues(alpha: 0.05),
+            Colors.white,
+          ],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -40,
+            left: -40,
+            child: Container(
+              width: 288,
+              height: 288,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF9747FF).withValues(alpha: 0.55),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 128,
+            right: -64,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF3B82F6).withValues(alpha: 0.5),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:gift360/core/constants/app_colors.dart';
 import 'package:gift360/core/widgets/gift_header.dart';
 import 'package:gift360/core/widgets/notification_toast.dart';
-import 'package:gift360/features/chatbot/presentation/widgets/gift_voucher_chatbot.dart';
 
 class ScaffoldWithNav extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
@@ -20,12 +19,7 @@ class ScaffoldWithNav extends StatelessWidget {
             children: [
               const GiftHeader(),
               Expanded(
-                child: Stack(
-                  children: [
-                    navigationShell,
-                    const GiftVoucherChatbot(),
-                  ],
-                ),
+                child: navigationShell,
               ),
             ],
           ),

@@ -76,6 +76,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               ),
             ],
           ),
+          // SuperCoins OTP modal — overlays the full screen like a real popup.
+          if (_showSuperCoinOtp) _buildSuperCoinOtpModal(),
         ],
       ),
     );
@@ -368,7 +370,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               });
             },
           ),
-        if (_showSuperCoinOtp) _buildSuperCoinOtpModal(),
         PaymentFlowSheet(isOpen: _showPaymentSheet, state: 'loading'),
       ],
     );

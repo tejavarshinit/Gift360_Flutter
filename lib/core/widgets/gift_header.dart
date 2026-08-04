@@ -24,7 +24,7 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
   const GiftHeader({super.key});
 
   @override
-  Size get preferredSize => const Size.fromHeight(60);
+  Size get preferredSize => const Size.fromHeight(72);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,7 +32,7 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
     final themeMode = ref.watch(themeModeProvider);
 
     return Container(
-      height: 60,
+      height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: const BoxDecoration(
         color: Colors.white,

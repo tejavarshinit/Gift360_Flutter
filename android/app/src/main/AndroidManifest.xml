@@ -44,5 +44,16 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- UPI apps — required on Android 11+ so the OS can resolve/launch
+             them when the payment WebView hands off a upi:// (or app-specific)
+             deep link. See PaymentWebViewScreen._handleNavigationRequest. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
+        <package android:name="com.google.android.apps.nbu.paisa.user"/>
+        <package android:name="net.one97.paytm"/>
+        <package android:name="com.phonepe.app"/>
+        <package android:name="in.org.npci.upiapp"/>
     </queries>
 </manifest>

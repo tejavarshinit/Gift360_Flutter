@@ -19,7 +19,7 @@ class TopBrandsApi {
     }
     return items
         .map((e) => Brand.fromJson(e as Map<String, dynamic>))
-        .where((b) => b.brandId != null && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandId!.isNotEmpty && b.brandName != null)
         .toList();
   }
 }
