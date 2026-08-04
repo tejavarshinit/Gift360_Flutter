@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +13,7 @@ import 'package:gift360/features/brands/presentation/providers/brands_provider.d
 import 'package:gift360/features/brands/data/models/brand.dart';
 import 'package:gift360/features/brands/data/models/brand_name.dart';
 import 'package:gift360/core/widgets/brand_image.dart';
-import 'package:gift360/features/home/presentation/widgets/instant_gifting_banner.dart';
+import 'package:gift360/features/home/presentation/widgets/instant_gifting_carousel.dart';
 import 'package:gift360/features/home/presentation/providers/recently_used_provider.dart';
 import 'package:gift360/features/home/data/repositories/recently_used_api.dart';
 import 'package:gift360/features/brands/presentation/providers/filter_meta_provider.dart';
@@ -97,11 +98,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                   child: _buildSearchBar(),
                 ),
 
-                // ── PromoCard ──
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(21, 18, 21, 0),
-                  child: InstantGiftingBanner(
-                    onExplore: () => context.push('/brands'),
+                // ── Instant Gifting Carousel ──
+                Center(
+                  child: SizedBox(
+                    width: 342,
+                    child: InstantGiftingCarousel(
+                      onExploreBrands: () => context.push('/brands'),
+                    ),
                   ),
                 ),
 
@@ -1654,33 +1657,49 @@ class _TopBrandsSection extends ConsumerStatefulWidget {
   ConsumerState<_TopBrandsSection> createState() => _TopBrandsSectionState();
 }
 
-class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection>
-    with TickerProviderStateMixin {
-  AnimationController? _row1Controller;
-  AnimationController? _row2Controller;
+class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
+  final ScrollController _row1Scroll = ScrollController();
+  final ScrollController _row2Scroll = ScrollController();
+  bool _userTouching = false;
+  Timer? _autoScrollTimer1;
+  Timer? _autoScrollTimer2;
 
   @override
   void initState() {
     super.initState();
+    _startAutoScroll();
   }
 
   @override
   void dispose() {
-    _row1Controller?.dispose();
-    _row2Controller?.dispose();
+    _row1Scroll.dispose();
+    _row2Scroll.dispose();
+    _autoScrollTimer1?.cancel();
+    _autoScrollTimer2?.cancel();
     super.dispose();
   }
 
-  void _initAnimations() {
-    if (_row1Controller != null) return;
-    _row1Controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 200),
-    )..repeat();
-    _row2Controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 220),
-    )..repeat();
+  void _startAutoScroll() {
+    _autoScrollTimer1 = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (_userTouching || !_row1Scroll.hasClients) return;
+      final maxScroll = _row1Scroll.position.maxScrollExtent;
+      final current = _row1Scroll.offset;
+      if (current >= maxScroll) {
+        _row1Scroll.jumpTo(0);
+      } else {
+        _row1Scroll.jumpTo(current + 0.5);
+      }
+    });
+    _autoScrollTimer2 = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (_userTouching || !_row2Scroll.hasClients) return;
+      final maxScroll = _row2Scroll.position.maxScrollExtent;
+      final current = _row2Scroll.offset;
+      if (current >= maxScroll) {
+        _row2Scroll.jumpTo(0);
+      } else {
+        _row2Scroll.jumpTo(current + 0.5);
+      }
+    });
   }
 
   @override
@@ -1689,18 +1708,11 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection>
     return topBrandsAsync.when(
       data: (brands) {
         if (brands.isEmpty) return const SizedBox.shrink();
-        _initAnimations();
 
         final indexed = brands.asMap();
         final firstRow = indexed.entries.where((e) => e.key.isEven).map((e) => e.value).toList();
         final secondRow = indexed.entries.where((e) => e.key.isOdd).map((e) => e.value).toList();
         if (secondRow.isEmpty) return const SizedBox.shrink();
-
-        const cardWidth = 88.0;
-        const gapWidth = 12.0;
-        const itemWidth = cardWidth + gapWidth;
-        final firstHalfWidth = firstRow.length * itemWidth;
-        final secondHalfWidth = secondRow.length * itemWidth;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1717,28 +1729,9 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection>
               ),
             ),
             const SizedBox(height: 11),
-            SizedBox(
-              height: 204,
-              child: Column(
-                children: [
-                  _buildMarqueeRow(
-                    controller: _row1Controller!,
-                    items: firstRow,
-                    duplicatedItems: [...firstRow, ...firstRow],
-                    halfWidth: firstHalfWidth,
-                    isLTR: true,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildMarqueeRow(
-                    controller: _row2Controller!,
-                    items: secondRow,
-                    duplicatedItems: [...secondRow, ...secondRow],
-                    halfWidth: secondHalfWidth,
-                    isLTR: false,
-                  ),
-                ],
-              ),
-            ),
+            _buildAutoScrollRow(firstRow, _row1Scroll),
+            const SizedBox(height: 12),
+            _buildAutoScrollRow(secondRow, _row2Scroll),
           ],
         );
       },
@@ -1804,89 +1797,37 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection>
     );
   }
 
-  Widget _buildMarqueeRow({
-    required AnimationController controller,
-    required List<Brand> items,
-    required List<Brand> duplicatedItems,
-    required double halfWidth,
-    required bool isLTR,
-  }) {
+  Widget _buildAutoScrollRow(List<Brand> rowBrands, ScrollController controller) {
     return Listener(
-      onPointerDown: (_) => controller.stop(),
-      onPointerUp: (_) => controller.repeat(),
-      onPointerCancel: (_) => controller.repeat(),
+      onPointerDown: (_) {
+        _userTouching = true;
+      },
+      onPointerUp: (_) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) _userTouching = false;
+        });
+      },
+      onPointerCancel: (_) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) _userTouching = false;
+        });
+      },
       child: SizedBox(
         height: 96,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-              AnimatedBuilder(
-                animation: controller,
-                builder: (context, child) {
-                  final offset = isLTR
-                      ? controller.drive(Tween(begin: -halfWidth, end: 0.0))
-                      : controller.drive(Tween(begin: 0.0, end: -halfWidth));
-                  return Transform.translate(
-                    offset: Offset(offset.value, 0),
-                    child: child,
-                  );
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: duplicatedItems
-                      .map((brand) => Padding(
-                            padding: const EdgeInsets.only(right: 12),
-                            child: _buildTopBrandCard(brand),
-                          ))
-                      .toList(),
-                ),
-              ),
-              // Left fade
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 60,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.scaffoldBg.withValues(alpha: 0.95),
-                          AppColors.scaffoldBg.withValues(alpha: 0.0),
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Right fade
-              Positioned(
-                right: 0,
-                top: 0,
-                bottom: 0,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 60,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.scaffoldBg.withValues(alpha: 0.0),
-                          AppColors.scaffoldBg.withValues(alpha: 0.95),
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        child: ListView.separated(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 21),
+          itemCount: rowBrands.length * 3,
+          separatorBuilder: (_, _) => const SizedBox(width: 12),
+          itemBuilder: (_, index) {
+            final brand = rowBrands[index % rowBrands.length];
+            return _buildTopBrandCard(brand);
+          },
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildTopBrandCard(Brand brand) {
@@ -1895,7 +1836,7 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection>
     final imageUrl = brand.resolvedImageUrl;
     return GestureDetector(
       onTap: () => widget.onBrandTap(brand.brandId ?? ''),
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.deferToChild,
       child: Container(
         width: 88,
         height: 96,

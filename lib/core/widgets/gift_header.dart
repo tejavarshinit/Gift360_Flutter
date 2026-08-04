@@ -43,29 +43,16 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
         child: Row(
           children: [
             // ── Logo + live online indicator ──
-            Expanded(
-              child: GestureDetector(
-                onTap: () => context.go('/'),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/Gift.png',
-                      height: 28,
-                      fit: BoxFit.contain,
-                    ),
-                    Image.asset(
-                      'assets/images/G word.png',
-                      height: 25,
-                      width: 73,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 8),
-                    const _OnlineIndicator(),
-                  ],
-                ),
+            GestureDetector(
+              onTap: () => context.go('/'),
+              child: Image.asset(
+                'assets/images/gift360full.png',
+                height: 65,
+                fit: BoxFit.contain,
               ),
             ),
+            const SizedBox(width: 8),
+            const _OnlineIndicator(),
 
             // ── Notifications ──
             _iconButton(
