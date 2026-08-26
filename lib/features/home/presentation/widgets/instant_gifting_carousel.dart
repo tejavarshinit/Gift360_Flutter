@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class InstantGiftingCarousel extends StatefulWidget {
   final VoidCallback? onExploreBrands;
-  const InstantGiftingCarousel({super.key, this.onExploreBrands});
+  final VoidCallback? onPartnerWithUs;
+  const InstantGiftingCarousel({super.key, this.onExploreBrands, this.onPartnerWithUs});
 
   @override
   State<InstantGiftingCarousel> createState() => _InstantGiftingCarouselState();
@@ -21,6 +22,14 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
   static const _accent = Color(0xFF7C3AED);
   static const _duration = Duration(milliseconds: 450);
   static const _autoInterval = Duration(seconds: 4);
+
+  // Soft peach → lavender gradient, matches the reference web banner.
+  static const _cardGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFFFF9F0), Color(0xFFF8F6FF), Color(0xFFF3F1FE)],
+    stops: [0.0, 0.6, 1.0],
+  );
 
   @override
   void initState() {
@@ -64,10 +73,13 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 400;
+        final isMobile = constraints.maxWidth < 420;
         final padding = isMobile
-            ? const EdgeInsets.fromLTRB(16, 16, 16, 16)
-            : const EdgeInsets.fromLTRB(40, 32, 40, 32);
+            ? const EdgeInsets.fromLTRB(18, 18, 18, 18)
+            : const EdgeInsets.fromLTRB(40, 30, 40, 30);
+        // Sized so the tallest slide (step-flow) fits without overflow,
+        // with a little breathing room for vertical centering.
+        final cardHeight = isMobile ? 250.0 : 280.0;
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -78,9 +90,9 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
               onTapDown: (_) => _onUserInteract(),
               onTapUp: (_) => _onUserRelease(),
               child: Container(
-                height: isMobile ? 200 : 240,
+                height: cardHeight,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  gradient: _cardGradient,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFEDEDED)),
                   boxShadow: const [
@@ -101,7 +113,7 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _buildDots(),
           ],
         );
@@ -136,25 +148,31 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
     return Padding(
       padding: padding,
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildBadge('INSTANT GIFTING', Colors.grey[400]!),
-          const SizedBox(height: 8),
-          Text(
-            'Pick a brand, buy a voucher, send it in seconds',
-            style: TextStyle(
-              fontSize: isMobile ? 16 : 20,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF111827),
-              height: 1.3,
+          _buildAccentBadge('INSTANT GIFTING'),
+          SizedBox(height: isMobile ? 3 : 5),
+          RichText(
+            text: TextSpan(
+              style: GoogleFonts.poppins(
+                fontSize: isMobile ? 14 : 20,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF111827),
+                height: 1.2,
+              ),
+              children: const [
+                TextSpan(text: 'Pick a brand, buy a voucher, '),
+                TextSpan(text: 'send it', style: TextStyle(color: Color(0xFF7C3AED))),
+                TextSpan(text: ' in seconds'),
+              ],
             ),
             maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 10),
-          _buildCTA(label: 'Start gifting', bg: const Color(0xFF1F2937), onTap: widget.onExploreBrands),
-          const SizedBox(height: 10),
+          SizedBox(height: isMobile ? 6 : 10),
+          _CtaButton(label: 'Start gifting', bg: _accent, onTap: widget.onExploreBrands, useGradient: true),
+          SizedBox(height: isMobile ? 8 : 12),
           _buildStepsRow(isMobile),
         ],
       ),
@@ -168,11 +186,11 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
       (Icons.card_giftcard, 'Send instantly', 'Straight to their phone'),
     ];
 
-    final circleSize = isMobile ? 36.0 : 40.0;
-    final iconSize = isMobile ? 16.0 : 18.0;
-    final titleSize = isMobile ? 11.0 : 13.0;
-    final descSize = isMobile ? 9.0 : 11.0;
-    final stepLabelSize = isMobile ? 8.0 : 10.0;
+    final circleSize = isMobile ? 34.0 : 44.0;
+    final iconSize = isMobile ? 15.0 : 20.0;
+    final titleSize = isMobile ? 10.0 : 13.0;
+    final descSize = isMobile ? 8.0 : 11.0;
+    final stepLabelSize = isMobile ? 7.0 : 10.0;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,15 +198,12 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
         final s = steps[i];
         return [
           if (i > 0)
-            Expanded(
-              flex: 0,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 18),
-                child: Container(
-                  height: 2,
-                  width: 8,
-                  color: const Color(0xFFEDE9FE),
-                ),
+            Padding(
+              padding: EdgeInsets.only(top: circleSize / 2 - 1),
+              child: Container(
+                height: 2,
+                width: 6,
+                color: const Color(0xFFEDE9FE),
               ),
             ),
           Expanded(
@@ -204,12 +219,12 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
                 const SizedBox(height: 3),
                 Text(
                   'Step ${i + 1}',
-                  style: TextStyle(fontSize: stepLabelSize, letterSpacing: 0.05, color: Colors.grey[400]),
+                  style: GoogleFonts.poppins(fontSize: stepLabelSize, letterSpacing: 0.5, color: Colors.grey[400]),
                 ),
                 const SizedBox(height: 1),
                 Text(
                   s.$2,
-                  style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.bold, color: Colors.grey[900]),
+                  style: GoogleFonts.poppins(fontSize: titleSize, fontWeight: FontWeight.bold, color: Colors.grey[900]),
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -218,7 +233,7 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
                   const SizedBox(height: 1),
                   Text(
                     s.$3,
-                    style: TextStyle(fontSize: descSize, color: Colors.grey[500]),
+                    style: GoogleFonts.poppins(fontSize: descSize, color: Colors.grey[500]),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -236,90 +251,67 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
   Widget _buildSlide2(EdgeInsets padding, bool isMobile) {
     return Padding(
       padding: padding,
-      child: isMobile
-          ? Row(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: isMobile ? 1 : 3,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildAccentBadge('REWARDS'),
-                      const SizedBox(height: 6),
-                      RichText(
-                        text: const TextSpan(
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF111827), height: 1.3),
-                          children: [
-                            TextSpan(text: 'Earn '),
-                            TextSpan(text: 'SuperCoins', style: TextStyle(color: Color(0xFF7C3AED))),
-                            TextSpan(text: ' on every purchase'),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Get rewarded every time you buy or send a gift voucher.',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const Spacer(),
-                      _buildCTA(label: 'Explore Now', bg: _accent, onTap: widget.onExploreBrands),
+                _buildAccentBadge('REWARDS'),
+                SizedBox(height: isMobile ? 4 : 8),
+                RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.poppins(
+                      fontSize: isMobile ? 14 : 20,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF111827),
+                      height: 1.2,
+                    ),
+                    children: const [
+                      TextSpan(text: 'Earn '),
+                      TextSpan(text: 'SuperCoins', style: TextStyle(color: Color(0xFF7C3AED))),
+                      TextSpan(text: ' on every purchase'),
                     ],
                   ),
                 ),
-                const SizedBox(width: 6),
-                SizedBox(
-                  width: 90,
-                  height: 90,
-                  child: _buildSuperCoinIllustration(small: true),
+                SizedBox(height: isMobile ? 3 : 6),
+                Text(
+                  'Get rewarded every time you buy or send a gift voucher.',
+                  style: GoogleFonts.poppins(fontSize: isMobile ? 10 : 13, color: Colors.grey[500], height: 1.2),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                SizedBox(height: isMobile ? 6 : 12),
+                if (isMobile)
+                  _CtaButton(label: 'Explore Now', bg: _accent, onTap: widget.onExploreBrands, useGradient: true)
+                else
+                  Row(
                     children: [
-                      _buildAccentBadge('REWARDS'),
-                      const SizedBox(height: 10),
-                      RichText(
-                        text: const TextSpan(
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF111827), height: 1.3),
-                          children: [
-                            TextSpan(text: 'Earn '),
-                            TextSpan(text: 'SuperCoins', style: TextStyle(color: Color(0xFF7C3AED))),
-                            TextSpan(text: ' on every purchase'),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Get rewarded every time you buy or send a gift voucher.',
-                        style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                      ),
-                      const Spacer(),
-                      Row(
-                        children: [
-                          _buildCTA(label: 'Explore Now', bg: _accent, onTap: widget.onExploreBrands),
-                          const SizedBox(width: 12),
-                          _buildSuperCoinInfo(),
-                        ],
-                      ),
+                      _CtaButton(label: 'Explore Now', bg: _accent, onTap: widget.onExploreBrands, useGradient: true),
+                      const SizedBox(width: 14),
+                      Expanded(child: _buildSuperCoinInfo()),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(flex: 2, child: _buildSuperCoinIllustration()),
               ],
             ),
+          ),
+          SizedBox(width: isMobile ? 8 : 12),
+          SizedBox(
+            width: isMobile ? 90 : 160,
+            height: isMobile ? 90 : 160,
+            child: _buildSuperCoinIllustration(small: isMobile),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSuperCoinInfo() {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 40,
@@ -327,20 +319,28 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
           decoration: const BoxDecoration(color: Color(0xFFF3F0FF), shape: BoxShape.circle),
           child: const Icon(Icons.monetization_on_outlined, color: _accent, size: 20),
         ),
-        const SizedBox(width: 6),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('SuperCoins', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[900])),
-            Text('Redeem across 500+ brands on Gift360', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-          ],
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('SuperCoins', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[900])),
+              Text(
+                'Redeem across 500+ brands on Gift360',
+                style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[500]),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildSuperCoinIllustration({bool small = false}) {
-    final imgWidth = small ? 70.0 : 160.0;
+    final imgWidth = small ? 72.0 : 150.0;
     final coinCount = small ? 6 : 12;
     return Stack(
       alignment: Alignment.center,
@@ -354,8 +354,8 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
         ...List.generate(coinCount, (i) {
           final rng = Random(i);
           final size = (small ? 8.0 : 14.0) + rng.nextDouble() * (small ? 6 : 10);
-          final left = -(small ? 25.0 : 40.0) + rng.nextDouble() * (small ? 50 : 80);
-          final top = -(small ? 35.0 : 60.0) + rng.nextDouble() * (small ? 70 : 120);
+          final left = -(small ? 26.0 : 42.0) + rng.nextDouble() * (small ? 52 : 84);
+          final top = -(small ? 36.0 : 62.0) + rng.nextDouble() * (small ? 72 : 124);
           final delay = rng.nextDouble() * 1.8;
           final dur = 2.5 + rng.nextDouble() * 0.7;
           return _FloatingCoin(key: ValueKey(i), size: size, left: left, top: top, delay: delay, duration: dur);
@@ -368,77 +368,68 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
   Widget _buildSlide3(EdgeInsets padding, bool isMobile) {
     return Padding(
       padding: padding,
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: isMobile ? 1 : 3,
+            child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildAccentBadge('PARTNER'),
-                const SizedBox(height: 8),
+                SizedBox(height: isMobile ? 4 : 8),
                 RichText(
-                  text: const TextSpan(
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF111827), height: 1.3),
-                    children: [
+                  text: TextSpan(
+                    style: GoogleFonts.poppins(
+                      fontSize: isMobile ? 14 : 20,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF111827),
+                      height: 1.2,
+                    ),
+                    children: const [
                       TextSpan(text: 'Unlock '),
                       TextSpan(text: 'bulk pricing', style: TextStyle(color: Color(0xFF7C3AED))),
                       TextSpan(text: ' as a partner'),
                     ],
                   ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: isMobile ? 3 : 6),
                 Text(
-                  'Bulk pricing, smart reselling, and corporate gifting — all in one place.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  isMobile
+                      ? 'Bulk pricing, smart reselling, and corporate gifting.'
+                      : 'Bulk pricing, smart reselling, and corporate gifting — all in one place.',
+                  style: GoogleFonts.poppins(fontSize: isMobile ? 10 : 13, color: Colors.grey[500], height: 1.2),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const Spacer(),
-                _buildCTA(
-                  label: 'Partner With Us',
-                  bg: _accent,
-                  onTap: () => launchUrl(Uri.parse('http://localhost:7789/distributor'), mode: LaunchMode.externalApplication),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildAccentBadge('PARTNER'),
-                      const SizedBox(height: 10),
-                      RichText(
-                        text: const TextSpan(
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF111827), height: 1.3),
-                          children: [
-                            TextSpan(text: 'Unlock '),
-                            TextSpan(text: 'bulk pricing', style: TextStyle(color: Color(0xFF7C3AED))),
-                            TextSpan(text: ' as a partner'),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Bulk pricing, smart reselling, and corporate gifting — all in one place.',
-                        style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                      ),
-                      const Spacer(),
-                      _buildCTA(
-                        label: 'Partner With Us',
-                        bg: _accent,
-                        onTap: () => launchUrl(Uri.parse('http://localhost:7789/distributor'), mode: LaunchMode.externalApplication),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildPartnerChips(),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(flex: 2, child: _buildPartnerIllustration()),
+                SizedBox(height: isMobile ? 6 : 12),
+                _CtaButton(label: 'Partner With Us', bg: _accent, onTap: widget.onPartnerWithUs, useGradient: true),
+                if (!isMobile) ...[
+                  const SizedBox(height: 10),
+                  _buildPartnerChips(),
+                ],
               ],
             ),
+          ),
+          SizedBox(width: isMobile ? 8 : 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(isMobile ? 10 : 12),
+            child: Image.asset(
+              'assets/images/coorp.png',
+              width: isMobile ? 120 : 160,
+              height: isMobile ? 120 : 160,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: isMobile ? 100 : 160,
+                height: isMobile ? 100 : 160,
+                decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(isMobile ? 10 : 12)),
+                child: Icon(Icons.business, size: isMobile ? 40 : 64, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -462,7 +453,7 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
               const SizedBox(height: 3),
               Text(
                 c.$2,
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey[600]),
+                style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -472,94 +463,109 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
     );
   }
 
-  Widget _buildPartnerIllustration() {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-          width: 100,
-          height: 65,
-          decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(12)),
-          child: Stack(
-            children: [
-              Positioned(
-                top: 18,
-                left: 38,
-                child: Container(
-                  width: 24,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFC4B5FD), width: 2),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          top: 18,
-          child: Container(
-            width: 30,
-            height: 14,
-            decoration: BoxDecoration(
-              border: Border.all(color: _accent, width: 3),
-              borderRadius: const BorderRadius.only(topLeft: Radius.circular(8), topRight: Radius.circular(8)),
-            ),
-          ),
-        ),
-        Positioned(top: 15, left: 0, child: _buildMiniGift(30, 25, const Color(0xFFF59E0B))),
-        Positioned(top: 10, right: 0, child: _buildMiniGift(24, 20, const Color(0xFFEF4444))),
-        Positioned(top: 8, right: 5, child: Icon(Icons.trending_up, color: _accent, size: 18)),
-      ],
-    );
-  }
-
-  Widget _buildMiniGift(double w, double h, Color color) {
-    return Container(
-      width: w,
-      height: h,
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
-      child: Center(child: Container(width: 2, height: h * 0.6, color: Colors.white.withValues(alpha: 0.7))),
-    );
-  }
-
   // ─── Shared widgets ───
-  Widget _buildBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.18, color: color),
-      ),
-    );
-  }
-
   Widget _buildAccentBadge(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(4)),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.18, color: Colors.white),
+        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.18, color: Colors.white),
       ),
     );
   }
+}
 
-  Widget _buildCTA({required String label, required Color bg, VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-            const SizedBox(width: 6),
-            const Icon(Icons.arrow_forward, color: Colors.white, size: 14),
-          ],
+// ─── Pressable CTA — subtle scale-down on tap, mirrors the web's active:scale states ───
+class _CtaButton extends StatefulWidget {
+  final String label;
+  final Color bg;
+  final VoidCallback? onTap;
+  final bool useGradient;
+  const _CtaButton({required this.label, required this.bg, this.onTap, this.useGradient = false});
+
+  @override
+  State<_CtaButton> createState() => _CtaButtonState();
+}
+
+class _CtaButtonState extends State<_CtaButton> {
+  bool _pressed = false;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDisabled = widget.onTap == null;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: isDisabled ? SystemMouseCursors.forbidden : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.95 : (_hovered ? 1.03 : 1.0),
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: widget.useGradient
+                  ? LinearGradient(
+                      colors: [widget.bg, widget.bg.withValues(alpha: 0.8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              color: widget.useGradient ? null : widget.bg,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                if (_hovered && !isDisabled)
+                  BoxShadow(
+                    color: widget.bg.withValues(alpha: 0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  )
+                else
+                  BoxShadow(
+                    color: widget.bg.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onTap,
+                borderRadius: BorderRadius.circular(12),
+                splashColor: Colors.white.withValues(alpha: 0.25),
+                highlightColor: Colors.white.withValues(alpha: 0.1),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.label,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: isDisabled ? 0.5 : 1.0),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.arrow_forward,
+                      color: Colors.white.withValues(alpha: isDisabled ? 0.5 : 1.0),
+                      size: 14,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

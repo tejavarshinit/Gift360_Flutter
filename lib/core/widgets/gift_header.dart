@@ -54,6 +54,8 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
             const SizedBox(width: 8),
             const _OnlineIndicator(),
 
+            const Spacer(),
+
             // ── Notifications ──
             _iconButton(
               icon: Icons.notifications_none_rounded,
@@ -119,7 +121,10 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
       barrierDismissible: true,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (ctx, anim1, anim2) => const SizedBox.shrink(),
+      pageBuilder: (ctx, anim1, anim2) => Material(
+        type: MaterialType.transparency,
+        child: const SizedBox.shrink(),
+      ),
       transitionBuilder: (ctx, anim1, anim2, child) {
         final offset = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
             .animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic));

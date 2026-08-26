@@ -99,12 +99,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
                 ),
 
                 // ── Instant Gifting Carousel ──
-                Center(
-                  child: SizedBox(
-                    width: 342,
-                    child: InstantGiftingCarousel(
-                      onExploreBrands: () => context.push('/brands'),
-                    ),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 21),
+                  child: InstantGiftingCarousel(
+                    onExploreBrands: () => context.push('/brands'),
+                    onPartnerWithUs: () => context.push('/distributor'),
                   ),
                 ),
 
@@ -181,9 +181,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
           bottomRight: Radius.circular(34),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(21, 8, 21, 0),
+      padding: EdgeInsets.fromLTRB(21, MediaQuery.of(context).padding.top + 8, 21, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Hi ${user?.name ?? 'User'}!',
