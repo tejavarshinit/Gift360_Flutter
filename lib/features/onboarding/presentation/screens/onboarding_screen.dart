@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/onboarding/presentation/screens/splash_screen.dart';
 import 'package:gift360/features/onboarding/presentation/screens/welcome_screen.dart';
 import 'package:gift360/features/onboarding/presentation/screens/onboarding1_screen.dart';
 import 'package:gift360/features/onboarding/presentation/screens/onboarding2_screen.dart';
 import 'package:gift360/features/onboarding/presentation/screens/onboarding3_screen.dart';
+import 'package:gift360/core/navigation/app_router.dart';
 
-class OnboardingPage extends StatefulWidget {
+class OnboardingPage extends ConsumerStatefulWidget {
   const OnboardingPage({super.key});
 
   @override
-  State<OnboardingPage> createState() => _OnboardingPageState();
+  ConsumerState<OnboardingPage> createState() => _OnboardingPageState();
 }
 
-class _OnboardingPageState extends State<OnboardingPage> {
+class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   late final PageController _pageController;
   int _currentPage = 0;
 
@@ -31,8 +32,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   }
 
   Future<void> _completeOnboarding() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('g360_onboarding_v3', true);
+    await ref.read(onboardingCompleteProvider.notifier).complete();
     if (mounted) {
       context.go('/register');
     }

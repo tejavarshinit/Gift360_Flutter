@@ -1,17 +1,11 @@
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/coupon/data/repositories/coupon_api.dart';
 import 'package:gift360/features/order/data/repositories/order_api.dart';
 import 'package:gift360/features/order/data/repositories/validate_order_api.dart';
 import 'package:gift360/features/payment/data/models/payment.dart';
-import 'package:gift360/features/payment/data/repositories/payment_api.dart';
-
-final paymentApiProvider = Provider<PaymentApi>((ref) {
-  final dio = ref.watch(paymentDioProvider);
-  return PaymentApi(dio);
-});
 
 final orderApiProvider = Provider<OrderApi>((ref) {
   final dio = ref.watch(giftcardDioProvider);
@@ -31,8 +25,6 @@ final couponApiProvider = Provider<CouponApi>((ref) {
 class PaymentState {
   final bool isLoading;
   final String? error;
-  final TokenGenerationResponse? tokenResponse;
-  final SabbPeInitiateResponse? initiateResponse;
   final ValidateOrderResponse? validationResponse;
   final CouponValidateResponse? couponResponse;
   final OrderDetailsResponse? orderDetails;
@@ -42,12 +34,11 @@ class PaymentState {
   final bool orderCreated;
   final bool orderValidated;
   final bool paymentInitiated;
+  final String? cartSignature;
 
   PaymentState({
     this.isLoading = false,
     this.error,
-    this.tokenResponse,
-    this.initiateResponse,
     this.validationResponse,
     this.couponResponse,
     this.orderDetails,
@@ -57,13 +48,12 @@ class PaymentState {
     this.orderCreated = false,
     this.orderValidated = false,
     this.paymentInitiated = false,
+    this.cartSignature,
   });
 
   PaymentState copyWith({
     bool? isLoading,
     String? error,
-    TokenGenerationResponse? tokenResponse,
-    SabbPeInitiateResponse? initiateResponse,
     ValidateOrderResponse? validationResponse,
     CouponValidateResponse? couponResponse,
     OrderDetailsResponse? orderDetails,
@@ -73,38 +63,36 @@ class PaymentState {
     bool? orderCreated,
     bool? orderValidated,
     bool? paymentInitiated,
+    String? cartSignature,
     bool clearError = false,
-    bool clearToken = false,
-    bool clearInitiate = false,
     bool clearValidation = false,
     bool clearCoupon = false,
     bool clearOrderDetails = false,
+    bool clearOrder = false,
   }) {
     return PaymentState(
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
-      tokenResponse: clearToken ? null : (tokenResponse ?? this.tokenResponse),
-      initiateResponse: clearInitiate ? null : (initiateResponse ?? this.initiateResponse),
       validationResponse: clearValidation ? null : (validationResponse ?? this.validationResponse),
       couponResponse: clearCoupon ? null : (couponResponse ?? this.couponResponse),
       orderDetails: clearOrderDetails ? null : (orderDetails ?? this.orderDetails),
-      orderNumber: orderNumber ?? this.orderNumber,
-      orderId: orderId ?? this.orderId,
-      reservationId: reservationId ?? this.reservationId,
-      orderCreated: orderCreated ?? this.orderCreated,
-      orderValidated: orderValidated ?? this.orderValidated,
-      paymentInitiated: paymentInitiated ?? this.paymentInitiated,
+      orderNumber: clearOrder ? null : (orderNumber ?? this.orderNumber),
+      orderId: clearOrder ? null : (orderId ?? this.orderId),
+      reservationId: clearOrder ? null : (reservationId ?? this.reservationId),
+      orderCreated: clearOrder ? false : (orderCreated ?? this.orderCreated),
+      orderValidated: clearOrder ? false : (orderValidated ?? this.orderValidated),
+      paymentInitiated: clearOrder ? false : (paymentInitiated ?? this.paymentInitiated),
+      cartSignature: clearOrder ? null : (cartSignature ?? this.cartSignature),
     );
   }
 }
 
 class PaymentNotifier extends StateNotifier<PaymentState> {
-  final PaymentApi _paymentApi;
   final OrderApi _orderApi;
   final ValidateOrderApi _validateOrderApi;
   final CouponApi _couponApi;
 
-  PaymentNotifier(this._paymentApi, this._orderApi, this._validateOrderApi, this._couponApi)
+  PaymentNotifier(this._orderApi, this._validateOrderApi, this._couponApi)
       : super(PaymentState());
 
   Future<String?> createOrder({
@@ -113,7 +101,22 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     required double totalAmount,
     bool walletUsed = false,
     double walletAmount = 0,
+    double superCoinDeduction = 0,
+    double superCoinAmount = 0,
+    bool earnCashback = true,
+    String? cartSignature,
   }) async {
+    // Order reuse (matches React ensureOrder): if an order already exists for
+    // the same cart signature, reuse it instead of minting duplicate PENDING
+    // orders on every retry.
+    if (state.orderNumber != null &&
+        state.orderId != null &&
+        state.cartSignature != null &&
+        cartSignature != null &&
+        state.cartSignature == cartSignature) {
+      return state.orderNumber;
+    }
+
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final now = DateTime.now();
@@ -131,6 +134,9 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
           'status': 'PENDING',
           'walletUsed': walletUsed,
           'walletAmount': walletAmount,
+          if (superCoinDeduction > 0) 'superCoinDeduction': superCoinDeduction,
+          if (superCoinAmount > 0) 'superCoinAmount': superCoinAmount,
+          'earnCashback': earnCashback,
         },
         'items': items,
       };
@@ -142,6 +148,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         orderCreated: true,
         orderNumber: returnedOrderNumber,
         orderId: response['orderId'] as String?,
+        cartSignature: cartSignature,
       );
       return returnedOrderNumber;
     } catch (e) {
@@ -179,58 +186,6 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     }
   }
 
-  Future<bool> generateToken() async {
-    if (state.orderNumber == null) return false;
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final response = await _paymentApi.generateToken(state.orderNumber!);
-      state = state.copyWith(
-        isLoading: false,
-        tokenResponse: response,
-      );
-      return response.sabbpeToken != null;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      return false;
-    }
-  }
-
-  Future<bool> initiatePayment({
-    required double amount,
-    required String productInfo,
-    required String frontendUrl,
-    required CustomerInfo customer,
-    String? encryptedOrderRef,
-    String? clientId,
-  }) async {
-    final token = state.tokenResponse?.sabbpeToken;
-    if (token == null) {
-      state = state.copyWith(error: 'No payment token available');
-      return false;
-    }
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final response = await _paymentApi.initiatePayment(SabbPeInitiateRequest(
-        sabbpeToken: token,
-        productInfo: productInfo,
-        amount: amount,
-        frontendUrl: frontendUrl,
-        encryptedOrderRef: encryptedOrderRef,
-        clientId: clientId,
-        customer: customer,
-      ));
-      state = state.copyWith(
-        isLoading: false,
-        initiateResponse: response,
-        paymentInitiated: true,
-      );
-      return response.status;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      return false;
-    }
-  }
-
   Future<CouponValidateResponse?> validateCoupon(CouponValidateRequest request) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -240,6 +195,10 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         couponResponse: response,
         reservationId: response.reservationId,
       );
+      // Persist reservationId to survive gateway redirect (matches React sessionStorage)
+      if (response.reservationId != null && state.orderNumber != null) {
+        await _persistReservation(state.orderNumber!, response.reservationId!);
+      }
       return response;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -255,6 +214,10 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         reservationId: reservationId,
         orderId: orderId,
       ));
+      // Clear persisted reservation after successful confirm
+      if (state.orderNumber != null) {
+        await _clearReservation(state.orderNumber!);
+      }
     } catch (_) {}
   }
 
@@ -264,7 +227,49 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     try {
       await _couponApi.releaseCoupon(CouponReleaseRequest(reservationId: reservationId));
       state = state.copyWith(reservationId: null, clearCoupon: true);
+      // Clear persisted reservation after release
+      if (state.orderNumber != null) {
+        await _clearReservation(state.orderNumber!);
+      }
     } catch (_) {}
+  }
+
+  /// Persist coupon reservation to SharedPreferences (mirrors React's sessionStorage).
+  Future<void> _persistReservation(String orderNumber, String reservationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('coupon_reservation_$orderNumber', reservationId);
+    } catch (_) {}
+  }
+
+  /// Clear persisted coupon reservation from SharedPreferences.
+  Future<void> _clearReservation(String orderNumber) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('coupon_reservation_$orderNumber');
+    } catch (_) {}
+  }
+
+  /// Set flag indicating user just returned from payment (for auto-expand in Orders).
+  static Future<void> setJustReturnedFromPayment() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('justReturnedFromPayment', true);
+    } catch (_) {}
+  }
+
+  /// Check and clear the auto-expand flag (called by Orders screen).
+  static Future<bool> consumeJustReturnedFromPayment() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getBool('justReturnedFromPayment') ?? false;
+      if (value) {
+        await prefs.remove('justReturnedFromPayment');
+      }
+      return value;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Returns true only if the backend call actually succeeded — callers
@@ -322,12 +327,48 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   void reset() {
     state = PaymentState();
   }
+
+  /// Compute a cart checkout signature (matches React's getCartCheckoutSignature:
+  /// sorted "itemId:quantity:unitValue" joined by "|"). Used for order reuse.
+  static String cartSignatureFor(List<Map<String, dynamic>> items) {
+    final sigs = items
+        .map((i) => '${i['brandId']}:${i['quantity']}:${i['unitValue']}')
+        .toList()
+      ..sort();
+    return sigs.join('|');
+  }
+
+  /// Reset the in-memory order (e.g. when the cart changes) so a fresh order is
+  /// created next time. Mirrors React's useEffect on cart signature change.
+  void resetOrder() {
+    state = state.copyWith(clearOrder: true);
+  }
+
+  /// Backend-mediated payment initiation.
+  /// The backend owns the merchant credentials and computes the net payable,
+  /// so the frontend never sends an amount or token to the gateway directly.
+  /// This is the primary payment flow used in the React reference project.
+  /// Uses the giftcards API (matching React's giftcardApiClient).
+  Future<Map<String, dynamic>?> initiateBackendPayment() async {
+    if (state.orderNumber == null) return null;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _orderApi.initiateBackendPayment(state.orderNumber!);
+      state = state.copyWith(
+        isLoading: false,
+        paymentInitiated: true,
+      );
+      return response;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return null;
+    }
+  }
 }
 
 final paymentProvider = StateNotifierProvider<PaymentNotifier, PaymentState>((ref) {
-  final paymentApi = ref.watch(paymentApiProvider);
   final orderApi = ref.watch(orderApiProvider);
   final validateOrderApi = ref.watch(validateOrderApiProvider);
   final couponApi = ref.watch(couponApiProvider);
-  return PaymentNotifier(paymentApi, orderApi, validateOrderApi, couponApi);
+  return PaymentNotifier(orderApi, validateOrderApi, couponApi);
 });

@@ -147,5 +147,12 @@ class AuthApi {
       userInfo: userInfo,
     );
   }
+
+  /// Server-side user profile enrichment after OTP login.
+  /// Returns enriched user info (name, email, mobile) from the auth service.
+  Future<Map<String, dynamic>> validateToken() async {
+    final response = await _dio.post('/validate-token');
+    return response.data as Map<String, dynamic>;
+  }
 }
 

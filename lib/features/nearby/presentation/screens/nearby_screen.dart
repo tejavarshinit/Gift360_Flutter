@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +19,7 @@ import 'package:gift360/features/cart/presentation/providers/cart_provider.dart'
 import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
+import 'package:gift360/core/widgets/app_bottom_nav.dart';
 import 'package:gift360/theme/app_colors.dart';
 import 'package:gift360/theme/app_text_styles.dart';
 import 'package:gift360/widgets/location_loading.dart';
@@ -170,7 +173,24 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
 
     final paymentNotifier = ref.read(paymentProvider.notifier);
     try {
-      final orderNumber = await paymentNotifier.createOrder(clientId: user.clientId, items: [{'brandId': brandId, 'quantity': quantity, 'unitValue': amount, 'lineTotal': totalAmount, 'meta': '{}'}], totalAmount: totalAmount);
+      final orderNumber = await paymentNotifier.createOrder(
+        clientId: user.clientId,
+        items: [
+          {
+            'brandId': brandId,
+            'quantity': quantity,
+            'unitValue': amount,
+            'lineTotal': totalAmount,
+            'meta': jsonEncode({
+              'brand_id': brandId,
+              'brand_name': brand.brandName,
+              'image_url': brand.resolvedImageUrl,
+              'redeem_steps': <String>[],
+            }),
+          },
+        ],
+        totalAmount: totalAmount,
+      );
       if (!mounted) return;
       if (orderNumber == null) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Failed to create order'))); return; }
 
@@ -178,20 +198,16 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       if (!mounted) return;
       if (!valid) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Order validation failed'))); return; }
 
-      final tokenOk = await paymentNotifier.generateToken();
+      // Backend-mediated payment initiation (backend computes net payable).
+      final paymentResponse = await paymentNotifier.initiateBackendPayment();
       if (!mounted) return;
-      if (!tokenOk) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Failed to generate payment token'))); return; }
+      if (paymentResponse == null) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Payment initiation failed'))); return; }
 
-      final encryptedOrderRef = encryptOrderRef(orderNumber, user.clientId);
-      final initiated = await paymentNotifier.initiatePayment(amount: totalAmount, productInfo: AppConfig.paymentProductInfo, frontendUrl: AppConfig.sabbpeFrontendUrl, customer: CustomerInfo(firstname: AppConfig.paymentCustFirstName, email: AppConfig.paymentCustEmail, phone: AppConfig.paymentCustMobile), encryptedOrderRef: encryptedOrderRef, clientId: user.clientId);
-      if (!mounted) return;
-      if (!initiated) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Payment initiation failed'))); return; }
-
-      final paymentUrl = ref.read(paymentProvider).initiateResponse?.paymentUrl;
-      if (paymentUrl == null || paymentUrl.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment URL not received from gateway'))); return; }
+      final paymentUrl = paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
+      if (paymentUrl == null || paymentUrl.toString().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment URL not received from gateway'))); return; }
 
       setState(() { _showPaymentSheet = false; _paymentBrand = null; });
-      context.push('/payment-webview', extra: {'paymentUrl': paymentUrl, 'orderNumber': orderNumber});
+      context.push('/payment-webview', extra: {'paymentUrl': paymentUrl.toString(), 'orderNumber': orderNumber});
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment error: ${e.toString()}')));
@@ -241,6 +257,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: -1),
     );
   }
 

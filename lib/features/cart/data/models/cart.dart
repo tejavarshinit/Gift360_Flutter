@@ -32,6 +32,28 @@ class CartItem {
     );
   }
 
+  CartItem copyWith({
+    String? itemId,
+    String? brandId,
+    String? brandName,
+    int? quantity,
+    double? unitValue,
+    double? lineTotal,
+    String? image,
+    double? discount,
+  }) {
+    return CartItem(
+      itemId: itemId ?? this.itemId,
+      brandId: brandId ?? this.brandId,
+      brandName: brandName ?? this.brandName,
+      quantity: quantity ?? this.quantity,
+      unitValue: unitValue ?? this.unitValue,
+      lineTotal: lineTotal ?? this.lineTotal,
+      image: image ?? this.image,
+      discount: discount ?? this.discount,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'itemId': itemId,

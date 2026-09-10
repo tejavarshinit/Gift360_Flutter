@@ -158,9 +158,9 @@ class CartItemCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Plus button
+                        // Plus button (capped at 3 — matches React MAX_QUANTITY_PER_ITEM)
                         GestureDetector(
-                          onTap: () => onQuantityChange(itemId, quantity + 1),
+                          onTap: quantity >= 3 ? null : () => onQuantityChange(itemId, quantity + 1),
                           child: Container(
                             width: 32,
                             height: 32,

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/screens/login_screen.dart';
 import 'package:gift360/features/auth/presentation/screens/register_screen.dart';
@@ -25,21 +26,42 @@ import 'package:gift360/features/nearby/presentation/screens/nearby_screen.dart'
 import 'package:gift360/features/brands/presentation/screens/brand_details_screen.dart';
 import 'package:gift360/features/spin_wheel/presentation/screens/spin_wheel_screen.dart';
 import 'package:gift360/features/bulk_purchase/presentation/screens/bulk_purchase_screen.dart';
-import 'package:gift360/features/payment/presentation/screens/payment_screen.dart';
 import 'package:gift360/features/payment/presentation/screens/payment_webview_screen.dart';
 import 'package:gift360/features/payment/presentation/screens/payment_result_screen.dart';
 import 'package:gift360/features/notifications/presentation/screens/notifications_screen.dart';
+import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
+import 'package:gift360/features/support/presentation/providers/support_ticket_provider.dart';
+import 'package:gift360/main.dart' show navigatorKey;
 import 'scaffold_with_nav.dart';
 
-final onboardingCompleteProvider = Provider<bool>((ref) => false);
+/// Tracks onboarding completion, persisted in SharedPreferences under
+/// `g360_onboarding_v3` (matches React's `localStorage["g360_onboarding_v3"]`).
+class OnboardingNotifier extends StateNotifier<bool> {
+  OnboardingNotifier(bool initial) : super(initial);
+
+  /// Mark onboarding complete — persists to SharedPreferences and updates state.
+  Future<void> complete() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('g360_onboarding_v3', true);
+    } catch (_) {}
+    state = true;
+  }
+}
+
+final onboardingCompleteProvider =
+    StateNotifierProvider<OnboardingNotifier, bool>((ref) {
+  return OnboardingNotifier(false);
+});
 
 final goRouterProvider = Provider<GoRouter>((ref) {
-  final onboardingDone = ref.read(onboardingCompleteProvider);
-
   return GoRouter(
+    navigatorKey: navigatorKey,
     initialLocation: '/',
     redirect: (context, state) {
       final isLoggedIn = ref.read(authProvider) != null;
+      final authInitialized = ref.read(authInitializedProvider);
+      final onboardingDone = ref.read(onboardingCompleteProvider);
       final path = state.matchedLocation;
 
       final isPublicPath = path == '/onboarding' ||
@@ -49,6 +71,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           path == '/reset-password' ||
           path == '/payment-result' ||
           path.startsWith('/payment-webview');
+
+      // Wait for the persisted auth session to be restored before redirecting,
+      // so a logged-in user isn't sent to /login on cold start (matches React's
+      // synchronous localStorage restore).
+      if (!authInitialized) {
+        return null;
+      }
 
       // First launch: not logged in AND not onboarded -> force onboarding
       if (!isLoggedIn && !onboardingDone && !isPublicPath) {
@@ -87,10 +116,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/brand/:id',
         builder: (context, state) => BrandDetailsScreen(brandId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/payment',
-        builder: (context, state) => const PaymentScreen(),
       ),
       GoRoute(
         path: '/payment-webview',

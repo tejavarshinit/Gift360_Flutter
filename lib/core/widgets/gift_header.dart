@@ -4,8 +4,25 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/feedback/presentation/providers/feedback_provider.dart';
+import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/supercoin_buy_sheet.dart';
+
+const _coachmarkKey = 'sc_header_coachmark_seen';
+
+Future<bool> _hasSeenCoachmark() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(_coachmarkKey) == true;
+}
+
+Future<void> _markCoachmarkSeen() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_coachmarkKey, true);
+}
 
 /// Simple app-wide light/dark toggle. There is no dark palette designed
 /// yet, so this falls back to Flutter's default dark [ThemeData] — but the
@@ -56,6 +73,10 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
 
             const Spacer(),
 
+            // ── Feedback icon (with red dot badge) ──
+            _FeedbackIconButton(isAuthenticated: isAuthenticated),
+
+            // ── SuperCoin header icon ──
             // ── Notifications ──
             _iconButton(
               icon: Icons.notifications_none_rounded,
@@ -138,6 +159,280 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
       },
     );
   }
+}
+
+/// Feedback icon button with red dot badge (matches React Header feedback icon).
+/// Shows red dot if user hasn't submitted feedback and hasn't been prompted yet.
+/// Opens FeedbackForm dialog on tap.
+class _FeedbackIconButton extends ConsumerStatefulWidget {
+  final bool isAuthenticated;
+  const _FeedbackIconButton({required this.isAuthenticated});
+
+  @override
+  ConsumerState<_FeedbackIconButton> createState() => _FeedbackIconButtonState();
+}
+
+class _FeedbackIconButtonState extends ConsumerState<_FeedbackIconButton> {
+  bool _showBadge = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBadge();
+  }
+
+  Future<void> _checkBadge() async {
+    if (!widget.isAuthenticated) return;
+    final hasSubmitted = await FeedbackNotifier.hasSubmittedFeedback();
+    final hasBeenPrompted = await FeedbackNotifier.hasBeenPrompted();
+    if (mounted) {
+      setState(() => _showBadge = !hasSubmitted && !hasBeenPrompted);
+    }
+  }
+
+  void _openFeedback() {
+    setState(() => _showBadge = false);
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+        child: const FeedbackForm(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _openFeedback,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 36,
+        height: 36,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        alignment: Alignment.center,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.message_outlined, size: 20, color: Color(0xFF1A1A1A)),
+            if (_showBadge)
+              Positioned(
+                top: -1,
+                right: -1,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                    border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// SuperCoin header icon with auto-expand/collapse animation and coachmark.
+/// Matches React's SuperCoinHeaderIcon component exactly.
+class SuperCoinHeaderIcon extends StatefulWidget {
+  final VoidCallback onTap;
+  const SuperCoinHeaderIcon({required this.onTap});
+
+  @override
+  State<SuperCoinHeaderIcon> createState() => SuperCoinHeaderIconState();
+}
+
+class SuperCoinHeaderIconState extends State<SuperCoinHeaderIcon> with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  bool _spinning = false;
+  bool _showCoachmark = false;
+  Timer? _expandTimer;
+  Timer? _collapseTimer;
+  Timer? _intervalTimer;
+  Timer? _coachmarkShowTimer;
+  Timer? _coachmarkDismissTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAnimation();
+    _tryShowCoachmark();
+  }
+
+  @override
+  void dispose() {
+    _expandTimer?.cancel();
+    _collapseTimer?.cancel();
+    _intervalTimer?.cancel();
+    _coachmarkShowTimer?.cancel();
+    _coachmarkDismissTimer?.cancel();
+    super.dispose();
+  }
+
+  void _tryShowCoachmark() async {
+    if (await _hasSeenCoachmark()) return;
+    if (!mounted) return;
+    _coachmarkShowTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      _markCoachmarkSeen();
+      setState(() => _showCoachmark = true);
+      _coachmarkDismissTimer = Timer(const Duration(milliseconds: 4000), () {
+        if (mounted) setState(() => _showCoachmark = false);
+      });
+    });
+  }
+
+  void _dismissCoachmark() {
+    _coachmarkDismissTimer?.cancel();
+    if (mounted) setState(() => _showCoachmark = false);
+  }
+
+  void _startAnimation() {
+    _expandTimer = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      _doExpand();
+      _intervalTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        if (!mounted) return;
+        _doExpand();
+      });
+    });
+  }
+
+  void _doExpand() {
+    setState(() { _expanded = true; _spinning = true; });
+    Timer(const Duration(milliseconds: 600), () {
+      if (mounted) setState(() => _spinning = false);
+    });
+    _collapseTimer = Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) setState(() => _expanded = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        _dismissCoachmark();
+        widget.onTap();
+      },
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut,
+            width: _expanded ? 110 : 28,
+            height: 28,
+            padding: _expanded ? const EdgeInsets.symmetric(horizontal: 10) : EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: _expanded ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedRotation(
+                  turns: _spinning ? 1 : 0,
+                  duration: const Duration(milliseconds: 600),
+                  child: Image.asset(
+                    'assets/images/SuperCOin-removebg-preview.png',
+                    width: 18,
+                    height: 18,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                if (_expanded) ...[
+                  const SizedBox(width: 4),
+                  Text('Convert coins', style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.white)),
+                ],
+              ],
+            ),
+          ),
+          if (_showCoachmark)
+            Positioned(
+              top: 37,
+              right: -8,
+              child: GestureDetector(
+                onTap: _dismissCoachmark,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    CustomPaint(
+                      size: const Size(14, 7),
+                      painter: _CoachmarkArrowPainter(),
+                    ),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 180,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0x26000000), blurRadius: 20, offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: Text(
+                            'Convert SuperCoins to a gift voucher, right here.',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF374151),
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: -6,
+                          right: -6,
+                          child: GestureDetector(
+                            onTap: _dismissCoachmark,
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE5E7EB),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Center(
+                                child: Text('✕', style: TextStyle(fontSize: 8, color: Color(0xFF6B7280))),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoachmarkArrowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width / 2, 0)
+      ..lineTo(0, size.height)
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _MenuPanel extends StatelessWidget {

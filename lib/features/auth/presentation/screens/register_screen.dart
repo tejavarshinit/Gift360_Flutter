@@ -87,6 +87,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
 
       if (response.success) {
+        // If the response indicates this mobile is already registered,
+        // don't proceed with OTP — inform the user and send them to login
+        // (matches React Register.tsx alreadyRegistered flow).
+        if (response.notRegistered == false) {
+          setState(() {
+            _isLoading = false;
+            _error = '';
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('This mobile is already registered. Please login.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+          if (mounted) {
+            await Future.delayed(const Duration(milliseconds: 1500));
+            if (mounted) context.push('/login');
+          }
+          return;
+        }
         setState(() {
           _otpSent = true;
           _isLoading = false;
@@ -130,12 +152,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       if (response.success && response.token != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Welcome to Gift360!'),
-              backgroundColor: AppColors.success,
-            ),
-          );
           await Future.delayed(const Duration(milliseconds: 400));
           if (mounted) context.go('/');
         }
@@ -156,89 +172,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: SizedBox.expand(
+        child: Stack(
         children: [
           Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFE8D7FF), Colors.white],
-                ),
-              ),
-            ),
-          ),
-          _auroraBlob(
-            top: -40,
-            left: -40,
-            size: 288,
-            color: const Color(0xFFB83DF5),
-            alpha: 0.22,
-          ),
-          _auroraBlob(
-            top: 128,
-            right: -64,
-            size: 320,
-            color: const Color(0xFF256AF4),
-            alpha: 0.18,
-          ),
-          _auroraBlob(
-            bottom: 80,
-            left: MediaQuery.of(context).size.width * 0.25,
-            size: 224,
-            color: AppColors.gold,
-            alpha: 0.14,
+            child: Image.asset('assets/images/ganeshauth.png', fit: BoxFit.cover, alignment: Alignment.topCenter),
           ),
 
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).size.height * 0.42, 20, 24),
               child: Column(
                 children: [
-                  const SizedBox(height: 48),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        'assets/images/Gift.png',
-                        height: 80,
-                        fit: BoxFit.contain,
-                      ),
-                      Transform.translate(
-                        offset: const Offset(-32, 6),
-                        child: Image.asset(
-                          'assets/images/G word.png',
-                          height: 36,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Create Account',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Join Gift360 today',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: AppColors.purpleLight,
+                      color: Colors.white.withValues(alpha: 0.90),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: AppColors.gold.withValues(alpha: 0.18)),
                       boxShadow: [
@@ -263,7 +212,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             const SizedBox(width: 8),
                             const Text(
                               'Sign Up',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF351265)),
                             ),
                           ],
                         ),
@@ -335,7 +284,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   children: [
                                     Icon(Icons.smartphone, size: 20, color: AppColors.goldLight.withValues(alpha: 0.8)),
                                     const SizedBox(width: 4),
-                                    const Text('+91', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                                    const Text('+91', style: TextStyle(color: Color(0xFF24184B), fontWeight: FontWeight.w600, fontSize: 14)),
                                   ],
                                 ),
                               ),
@@ -416,6 +365,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -462,7 +412,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w600,
-        color: Colors.white.withValues(alpha: 0.7),
+        color: const Color(0xFF625A70),
         letterSpacing: 1.2,
       ),
     );
@@ -482,9 +432,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Container(
       height: 44,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: Colors.white.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        border: Border.all(color: const Color(0xFFDFDBE3)),
       ),
       child: TextField(
         controller: controller,
@@ -494,7 +444,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         textAlign: textAlign ?? TextAlign.start,
         autofillHints: const [],
         style: TextStyle(
-          color: Colors.white,
+        color: const Color(0xFF24184B),
           fontWeight: FontWeight.w600,
           fontSize: 15,
           letterSpacing: letterSpacing ?? 0,
@@ -502,7 +452,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         decoration: InputDecoration(
           filled: false,
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontWeight: FontWeight.w400),
+          hintStyle: TextStyle(color: Color(0xFF9C96A6), fontWeight: FontWeight.w400),
           counterText: '',
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

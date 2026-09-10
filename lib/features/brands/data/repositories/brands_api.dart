@@ -79,8 +79,8 @@ class BrandsApi {
     return [];
   }
 
-  Future<List<Brand>> getTopBrands() async {
-    final response = await _dio.post('/v1/fetchbrands', data: {});
+  Future<List<Brand>> getTopBrands({String? occasion}) async {
+    final response = await _dio.post('/v1/fetchbrands', data: occasion != null ? {'occasion': occasion} : {});
     final items = _extractItems(response.data);
     return items
         .map(Brand.fromJson)
@@ -131,6 +131,17 @@ class BrandsApi {
     throw Exception('Brand payment details not found');
   }
 
+  /// Fetch brand details via POST /brands/{brandId} (matches React's useBrandDetails).
+  /// This endpoint returns supercoinMultiplier and other brand-specific data.
+  Future<Brand> getBrandDetailsById(String brandId) async {
+    final response = await _dio.post('/brands/$brandId', data: {});
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      return Brand.fromJson(data);
+    }
+    throw Exception('Brand details not found');
+  }
+
   Future<List<Map<String, dynamic>>> filterBrands(Map<String, dynamic> filter) async {
     final response = await _dio.post('/brands/filter', data: filter);
     final data = response.data;
@@ -142,10 +153,11 @@ class BrandsApi {
     return [];
   }
 
-  Future<List<Map<String, dynamic>>> fetchNewOrders(String clientId, {int timeline = 12}) async {
+  Future<List<Map<String, dynamic>>> fetchNewOrders(String clientId, {int timeline = 12, String? type}) async {
     final response = await _dio.post('/v1/neworders', data: {
       'clientId': clientId,
       'timeline': timeline,
+      if (type != null) 'type': type,
     });
     final data = response.data;
     if (data is List) return data.cast<Map<String, dynamic>>();
@@ -192,5 +204,44 @@ class BrandsApi {
         .map((e) => Brand.fromJson(e as Map<String, dynamic>))
         .where((b) => b.brandId != null && b.brandName != null)
         .toList();
+  }
+
+  /// Fetch available occasion categories for recommendations.
+  Future<List<String>> getOccasions() async {
+    final response = await _dio.post('/v1/occasions', data: {});
+    final data = response.data;
+    if (data is List) {
+      return data.whereType<String>().where((s) => s.trim().isNotEmpty).toList();
+    }
+    return [];
+  }
+
+  /// Fetch occasion-based brands using the same fetchbrands payload as React.
+  Future<List<Brand>> getRecommendations(String occasion) async {
+    final response = await _dio.post('/v1/fetchbrands', data: {'occasion': occasion});
+    final items = _extractItems(response.data);
+    return items
+        .map((e) => Brand.fromJson(e))
+        .where((b) => b.brandId != null && b.brandName != null)
+        .toList();
+  }
+
+  /// Fetch personalized brand recommendations for the user.
+  Future<List<Brand>> getPersonalRecommendations() async {
+    final response = await _dio.post('/v1/personal-recommendations', data: {});
+    final items = _extractItems(response.data);
+    return items
+        .map((e) => Brand.fromJson(e))
+        .where((b) => b.brandId != null && b.brandName != null)
+        .toList();
+  }
+
+  /// Fetch live platform fee configuration (feePercent, feeMax).
+  Future<Map<String, dynamic>> getPlatformFeeConfig() async {
+    final response = await _dio.get('/v1/platform-fee-config');
+    if (response.data is Map<String, dynamic>) {
+      return response.data as Map<String, dynamic>;
+    }
+    return {'feePercent': 0.02, 'feeMax': 20.0};
   }
 }

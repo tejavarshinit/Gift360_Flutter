@@ -4,20 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gift360/config/app_config.dart';
-import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_checkout_provider.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
+import 'package:gift360/features/supercoin/data/repositories/supercoin_api.dart';
+import 'package:gift360/features/supercoin/data/supercoin_excluded_brands.dart';
+import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
-import 'package:gift360/features/payment/data/models/payment.dart';
+import 'package:gift360/config/app_config.dart';
 
 class OrderSummarySection extends ConsumerWidget {
   final VoidCallback onSuperCoinTap;
+  final VoidCallback onPaymentStart;
+  final VoidCallback onPaymentComplete;
 
-  const OrderSummarySection({super.key, required this.onSuperCoinTap});
+  const OrderSummarySection({
+    super.key,
+    required this.onSuperCoinTap,
+    required this.onPaymentStart,
+    required this.onPaymentComplete,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -27,14 +35,28 @@ class OrderSummarySection extends ConsumerWidget {
     final walletAsync = ref.watch(walletBalanceProvider);
     final superCoinState = ref.watch(supercoinProvider);
     final paymentState = ref.watch(paymentProvider);
+    final cart = ref.watch(cartProvider);
+
+    // If every cart item is SuperCoin-excluded, hide the SuperCoins tab.
+    final allSuperCoinExcluded = cart != null &&
+        cart.items.isNotEmpty &&
+        cart.items.every((i) => !isSuperCoinEligible(brandId: i.brandId, brandName: i.brandName));
 
     final walletBalance = (walletAsync.value?.totalBalance ?? 0).toDouble();
+    final cashbackRedeemPercent = walletAsync.value?.cashbackRedeemPercent ?? AppConfig.cashbackRedeemPercent;
 
     String countdownDisplay(int seconds) {
       final mins = (seconds ~/ 60).toString().padLeft(2, '0');
       final secs = (seconds % 60).toString().padLeft(2, '0');
       return '$mins:$secs';
     }
+
+    final previewSuperCoins = superCoinState.balance < breakdown.maxSuperCoinRedeemable
+        ? superCoinState.balance
+        : breakdown.maxSuperCoinRedeemable;
+    final previewSavings = breakdown.effectiveSupercoinMultiplier > 0
+        ? previewSuperCoins / breakdown.effectiveSupercoinMultiplier
+        : 0.0;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 96),
@@ -177,46 +199,50 @@ class OrderSummarySection extends ConsumerWidget {
                     ),
                   ),
                 ),
-                // SuperCoins
+                // SuperCoins (hidden when all items are SuperCoin-excluded)
+                if (!allSuperCoinExcluded)
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => ref.read(cartCheckoutProvider.notifier).setRewardMode(RewardMode.superCoins),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: checkout.rewardMode == RewardMode.superCoins
-                            ? const Color(0xFFD1FAE5)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: checkout.rewardMode == RewardMode.superCoins
-                            ? [BoxShadow(blurRadius: 4, color: Colors.black.withValues(alpha: 0.05))]
-                            : [],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Image.asset(
-                            'assets/images/SuperCOin-removebg-preview.png',
-                            width: 16,
-                            height: 16,
-                            fit: BoxFit.contain,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'SuperCoins',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: checkout.rewardMode == RewardMode.superCoins
-                                  ? const Color(0xFF2D2D2D)
-                                  : const Color(0xFF6B7280),
+                    onTap: () async {
+                      ref.read(cartCheckoutProvider.notifier).setRewardMode(RewardMode.superCoins);
+                      await ref.read(supercoinProvider.notifier).refresh();
+                    },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: checkout.rewardMode == RewardMode.superCoins
+                              ? const Color(0xFFD1FAE5)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: checkout.rewardMode == RewardMode.superCoins
+                              ? [BoxShadow(blurRadius: 4, color: Colors.black.withValues(alpha: 0.05))]
+                              : [],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image.asset(
+                              'assets/images/SuperCOin-removebg-preview.png',
+                              width: 16,
+                              height: 16,
+                              fit: BoxFit.contain,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Text(
+                              'SuperCoins',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: checkout.rewardMode == RewardMode.superCoins
+                                    ? const Color(0xFF2D2D2D)
+                                    : const Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -328,7 +354,7 @@ class OrderSummarySection extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${breakdown.walletDeduction.toStringAsFixed(2)} (50% of cart)',
+                            'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${breakdown.maxWalletUsage.toStringAsFixed(2)} (${cashbackRedeemPercent.round()}% of cart)',
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: const Color(0xFF6B7280),
@@ -368,7 +394,62 @@ class OrderSummarySection extends ConsumerWidget {
           // SuperCoins content
           if (checkout.rewardMode == RewardMode.superCoins) ...[
             if (!checkout.superCoinAuthorized) ...[
-              if (superCoinState.isEnrolled) ...[
+              // Keep the React SuperCoinStatusCard visible while the account
+              // lookup is settling so the selected reward flow is not blank.
+              if (superCoinState.isEnrolled || superCoinState.balance >= 0) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9747FF).withValues(alpha: 0.04),
+                    border: Border.all(color: const Color(0xFF9747FF).withValues(alpha: 0.2)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/SuperCOin-removebg-preview.png',
+                        width: 30,
+                        height: 30,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text.rich(
+                              TextSpan(
+                                style: GoogleFonts.poppins(fontSize: 14, color: const Color(0xFF2D2D2D)),
+                                children: [
+                                  const TextSpan(text: 'Save more with '),
+                                  TextSpan(
+                                    text: 'SuperCoins',
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: const Color(0xFF5B3FFF)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Text(
+                            'Powered by Flipkart',
+                            style: GoogleFonts.poppins(fontSize: 10, color: const Color(0xFF6B7280)),
+                          ),
+                          if (superCoinState.isSearching || superCoinState.isBalanceLoading)
+                            Text(
+                              'Loading SuperCoin balance...',
+                              style: GoogleFonts.poppins(fontSize: 10, color: const Color(0xFF6B7280)),
+                            ),
+                          if (superCoinState.error != null)
+                            Text(
+                              'Unable to load SuperCoins. Please try again.',
+                              style: GoogleFonts.poppins(fontSize: 10, color: const Color(0xFFDC2626)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -388,7 +469,7 @@ class OrderSummarySection extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'SuperCoin balance: ${superCoinState.balance.toStringAsFixed(2)} coins',
+                            'Use ${previewSuperCoins.toStringAsFixed(2)} SuperCoins  •  Balance: ${superCoinState.balance.toStringAsFixed(2)}',
                             style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
                           ),
                         ],
@@ -404,7 +485,7 @@ class OrderSummarySection extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'You can use ${breakdown.maxSuperCoinRedeemable.toStringAsFixed(2)} coins on this order',
+                            'Save ₹${previewSavings.toStringAsFixed(2)} on this order',
                             style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF2D2D2D)),
                           ),
                         ],
@@ -749,7 +830,7 @@ class OrderSummarySection extends ConsumerWidget {
   String _getLoadingMessage(dynamic paymentState) {
     if (paymentState.orderCreated == false) return 'Creating order...';
     if (paymentState.orderValidated == false) return 'Validating order...';
-    if (paymentState.tokenResponse == null) return 'Generating secure token...';
+    if (paymentState.paymentInitiated == false) return 'Initiating payment...';
     return 'Processing...';
   }
 
@@ -802,16 +883,51 @@ class OrderSummarySection extends ConsumerWidget {
     final breakdown = ref.read(paymentBreakdownProvider);
     final checkout = ref.read(cartCheckoutProvider);
 
+    final superCoinIdentity = _buildSuperCoinIdentity(user);
+
+    // Show the PaymentFlowSheet loading state
+    onPaymentStart();
     checkoutNotifier.setProcessing(true);
 
     try {
+      // Fetch brand details to populate redeem_steps (matches React: brand.RedeemSteps || []).
+      final brandApi = ref.read(brandsApiProvider);
+      final redeemStepsByBrand = <String, List<String>>{};
+      final uniqueBrandIds = cart.items.map((i) => i.brandId).toSet().toList();
+      await Future.wait(uniqueBrandIds.map((id) async {
+        try {
+          final brand = await brandApi.getBrandById(id);
+          final howToUse = brand.howToUse ?? '';
+          redeemStepsByBrand[id] = howToUse
+              .split('\n')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
+        } catch (_) {
+          redeemStepsByBrand[id] = <String>[];
+        }
+      }));
+
       final orderItems = cart.items.map((item) => {
         'brandId': item.brandId,
         'quantity': item.quantity,
         'unitValue': item.unitValue,
         'lineTotal': item.lineTotal,
-        'meta': jsonEncode({'brand_id': item.brandId, 'brand_name': item.brandName}),
+        'meta': jsonEncode({
+          'brand_id': item.brandId,
+          'brand_name': item.brandName,
+          'image_url': item.image,
+          'redeem_steps': redeemStepsByBrand[item.brandId] ?? <String>[],
+        }),
       }).toList();
+
+      final superCoinDeduction = breakdown.superCoinDeduction;
+      final superCoinAmount = checkout.superCoinHoldContext?.amount ?? 0.0;
+      final earnCashback = checkout.rewardMode != RewardMode.superCoins;
+
+      // Order reuse (matches React ensureOrder): reuse the existing order if the
+      // cart signature is unchanged, so retries don't mint duplicate PENDING orders.
+      final cartSignature = PaymentNotifier.cartSignatureFor(orderItems);
 
       final orderNumber = await paymentNotifier.createOrder(
         clientId: user.clientId,
@@ -819,15 +935,21 @@ class OrderSummarySection extends ConsumerWidget {
         totalAmount: cart.totalAmount,
         walletUsed: checkout.useWalletBalance,
         walletAmount: breakdown.walletDeduction,
+        superCoinDeduction: superCoinDeduction,
+        superCoinAmount: superCoinAmount,
+        earnCashback: earnCashback,
+        cartSignature: cartSignature,
       );
 
       if (orderNumber == null) {
-        checkoutNotifier.setProcessing(false);
-        checkoutNotifier.setPaymentError('Failed to create order');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to create order')));
-        }
+        await _failPay(context, ref, 'Failed to create order', checkoutNotifier, superCoinIdentity);
         return;
+      }
+
+      // Persist SuperCoin hold context keyed by order number (survives redirect)
+      if (checkout.superCoinAuthorized && checkout.superCoinHoldContext != null) {
+        await SuperCoinOtpNotifier.persistHoldContext(orderNumber, checkout.superCoinHoldContext!);
+        await SuperCoinOtpNotifier.persistActiveOrderNumber(orderNumber);
       }
 
       final validated = await paymentNotifier.validateOrder(
@@ -837,67 +959,55 @@ class OrderSummarySection extends ConsumerWidget {
       );
 
       if (!validated) {
-        checkoutNotifier.setProcessing(false);
-        if (context.mounted) {
-          final msg = ref.read(paymentProvider).error ?? 'Order validation failed';
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-        }
+        await _failPay(context, ref, ref.read(paymentProvider).error ?? 'Order validation failed', checkoutNotifier, superCoinIdentity);
         return;
       }
 
-      final tokenGenerated = await paymentNotifier.generateToken();
-      if (!tokenGenerated) {
-        checkoutNotifier.setProcessing(false);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to generate payment token')),
-          );
-        }
+      // Backend-mediated payment initiation (backend computes net payable).
+      final paymentResponse = await paymentNotifier.initiateBackendPayment();
+      if (paymentResponse == null) {
+        await _failPay(context, ref, 'Failed to initiate payment', checkoutNotifier, superCoinIdentity);
         return;
       }
 
-      final encryptedOrderRef = encryptOrderRef(ref.read(paymentProvider).orderNumber ?? '', user.clientId);
-      final productInfo = cart.items.map((i) => i.brandName).join(', ');
-
-      final initiated = await paymentNotifier.initiatePayment(
-        amount: breakdown.finalPayable,
-        productInfo: productInfo.isNotEmpty ? productInfo : 'Gift Voucher Purchase',
-        frontendUrl: AppConfig.sabbpeFrontendUrl,
-        customer: CustomerInfo(
-          firstname: AppConfig.paymentCustFirstName,
-          email: AppConfig.paymentCustEmail,
-          phone: AppConfig.paymentCustMobile,
-        ),
-        encryptedOrderRef: encryptedOrderRef,
-        clientId: user.clientId,
-      );
-
-      if (!initiated) {
+      final paymentUrl = paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
+      if (paymentUrl != null && paymentUrl.toString().isNotEmpty && context.mounted) {
         checkoutNotifier.setProcessing(false);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to initiate payment')),
-          );
-        }
-        return;
-      }
-
-      final paymentUrl = ref.read(paymentProvider).initiateResponse?.paymentUrl;
-      if (paymentUrl != null && context.mounted) {
-        ref.read(cartProvider.notifier).clearCart();
-        checkoutNotifier.setProcessing(false);
+        onPaymentComplete();
+        // Match React Cart: clear the submitted cart after payment initiation
+        // succeeds and before leaving for the gateway.
+        await ref.read(cartProvider.notifier).clearCart();
         context.push('/payment-webview', extra: {
-          'paymentUrl': paymentUrl,
-          'orderNumber': ref.read(paymentProvider).orderNumber,
+          'paymentUrl': paymentUrl.toString(),
+          'orderNumber': orderNumber,
         });
+      } else {
+        await _failPay(context, ref, 'Failed to initiate payment', checkoutNotifier, superCoinIdentity);
       }
     } catch (e) {
-      checkoutNotifier.setProcessing(false);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Payment error: $e')),
-        );
-      }
+      await _failPay(context, ref, 'Payment error: $e', checkoutNotifier, superCoinIdentity);
+    }
+  }
+
+  SuperCoinIdentity? _buildSuperCoinIdentity(dynamic user) {
+    final normalized = normalizeMobileToE164(user?.mobile);
+    if (normalized == null) return null;
+    return SuperCoinIdentity(identifier: normalized, type: 'MOBILE');
+  }
+
+  Future<void> _failPay(
+    BuildContext context,
+    WidgetRef ref,
+    String message,
+    CartCheckoutNotifier checkoutNotifier,
+    SuperCoinIdentity? superCoinIdentity,
+  ) async {
+    // Release any active SuperCoin hold before surfacing the failure.
+    await checkoutNotifier.cancelSuperCoinHoldIfNeeded(identity: superCoinIdentity);
+    checkoutNotifier.setProcessing(false);
+    onPaymentComplete();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 }

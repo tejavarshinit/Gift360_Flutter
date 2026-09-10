@@ -55,6 +55,8 @@ class Brand {
   final BrandImages? images;
   final String? brandType;
   final String? denominationList;
+  final String? importantInstruction;
+  final double? supercoinMultiplier;
 
   const Brand({
     this.brandId,
@@ -75,6 +77,8 @@ class Brand {
     this.images,
     this.brandType,
     this.denominationList,
+    this.importantInstruction,
+    this.supercoinMultiplier,
   });
 
   Brand copyWith({
@@ -96,6 +100,8 @@ class Brand {
     BrandImages? images,
     String? brandType,
     String? denominationList,
+    String? importantInstruction,
+    double? supercoinMultiplier,
   }) {
     return Brand(
       brandId: brandId ?? this.brandId,
@@ -116,6 +122,8 @@ class Brand {
       images: images ?? this.images,
       brandType: brandType ?? this.brandType,
       denominationList: denominationList ?? this.denominationList,
+      importantInstruction: importantInstruction ?? this.importantInstruction,
+      supercoinMultiplier: supercoinMultiplier ?? this.supercoinMultiplier,
     );
   }
 
@@ -184,11 +192,13 @@ class Brand {
       terms: json['Terms'] as String? ?? json['terms'] as String? ?? _parseJsonTextField(json['tnc']),
       validity: json['Validity'] as String? ?? json['validity'] as String?,
       denomination: json['Denomination'] as String? ?? json['denomination'] as String?,
-      howToUse: json['HowToUse'] as String? ?? json['howToUse'] as String? ?? _parseJsonTextField(json['redeemSteps']) ?? _parseJsonTextField(json['importantInstruction']),
+      howToUse: json['HowToUse'] as String? ?? json['howToUse'] as String? ?? _parseJsonTextField(json['redeemSteps']),
+      importantInstruction: _parseJsonTextField(json['importantInstruction']) ?? _parseJsonTextField(json['important_instruction']),
       brandCode: json['BrandCode'] as String? ?? json['brandCode'] as String?,
       images: parsedImages,
       brandType: json['brandType'] as String? ?? json['BrandType'] as String? ?? json['brand_type'] as String?,
       denominationList: json['denominationList'] as String? ?? json['DenominationList'] as String? ?? json['denomination_list'] as String?,
+      supercoinMultiplier: _parseDouble(json['supercoinMultiplier']),
     );
   }
 
@@ -209,6 +219,11 @@ class Brand {
     if (directBrandImage != null) return directBrandImage;
     final camelBrandImage = _normalizeImageValue(json['brandImageUrl']);
     if (camelBrandImage != null) return camelBrandImage;
+    // fetchbrands/occasions API returns imageUrl (camelCase) as a direct URL string
+    final imageUrl = _normalizeImageValue(json['imageUrl']);
+    if (imageUrl != null) return imageUrl;
+    final ImageUrl = _normalizeImageValue(json['ImageUrl']);
+    if (ImageUrl != null) return ImageUrl;
     return null;
   }
 
@@ -231,6 +246,14 @@ class Brand {
       return value['text'] as String? ?? value.values.firstOrNull?.toString();
     }
     return value.toString();
+  }
+
+  /// Safely parse a value to double, handling String, num, and null.
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }
 

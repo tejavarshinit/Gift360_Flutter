@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -192,7 +194,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         children: [
           // Aurora background
           Positioned.fill(
-            child: _buildAuroraBackground(),
+            child: Image.asset('assets/images/ganeshbackdrop.png', fit: BoxFit.cover),
           ),
           // Main content
           Column(
@@ -794,6 +796,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
   Widget _buildBrandCard(Brand brand) {
     final imageUrl = brand.resolvedImageUrl;
     final brandName = brand.brandName ?? '';
+    final discountValue = double.tryParse(brand.discount ?? '0') ?? 0;
 
     return GestureDetector(
       onTap: () => _onBrandTap(brand),
@@ -811,44 +814,74 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
           children: [
-            Container(
-              width: 70,
-              height: 70,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 70,
+                  height: 70,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: imageUrl != null
-                  ? BrandImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.contain,
-                      placeholder: (_, s) => const SizedBox(),
-                      errorWidget: (_, s, e) => const Icon(Icons.store, color: Color(0xFF94A3B8)),
-                    )
-                  : const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                  child: imageUrl != null
+                      ? BrandImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.contain,
+                          placeholder: (_, s) => const SizedBox(),
+                          errorWidget: (_, s, e) => const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                        )
+                      : const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  brandName,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF111827),
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              brandName,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF111827),
-                height: 1.2,
+            if (discountValue > 0)
+              Positioned(
+                top: 4,
+                left: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF5A4BD1)]),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${discountValue.toStringAsFixed(0)}%',
+                    style: GoogleFonts.poppins(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
+                ),
+              ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: Image.asset(
+                'assets/images/SuperCOin-removebg-preview.png',
+                width: 16,
+                height: 16,
+                fit: BoxFit.contain,
               ),
             ),
           ],
@@ -1280,7 +1313,12 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
             'quantity': quantity,
             'unitValue': amount,
             'lineTotal': totalAmount,
-            'meta': '{}',
+            'meta': jsonEncode({
+              'brand_id': brandId,
+              'brand_name': brand.brandName,
+              'image_url': brand.resolvedImageUrl,
+              'redeem_steps': <String>[],
+            }),
           },
         ],
         totalAmount: totalAmount,
@@ -1306,39 +1344,18 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         return;
       }
 
-      final tokenOk = await paymentNotifier.generateToken();
+      // Backend-mediated payment initiation (backend computes net payable).
+      final paymentResponse = await paymentNotifier.initiateBackendPayment();
       if (!mounted) return;
-      if (!tokenOk) {
-        final err = ref.read(paymentProvider).error ?? 'Failed to generate payment token';
-        setState(() => _paymentProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-        return;
-      }
-
-      final encryptedOrderRef = encryptOrderRef(orderNumber, user.clientId);
-      final initiated = await paymentNotifier.initiatePayment(
-        amount: totalAmount,
-        productInfo: AppConfig.paymentProductInfo,
-        frontendUrl: AppConfig.sabbpeFrontendUrl,
-        customer: CustomerInfo(
-          firstname: AppConfig.paymentCustFirstName,
-          email: AppConfig.paymentCustEmail,
-          phone: AppConfig.paymentCustMobile,
-        ),
-        encryptedOrderRef: encryptedOrderRef,
-        clientId: user.clientId,
-      );
-      if (!mounted) return;
-      if (!initiated) {
+      if (paymentResponse == null) {
         final err = ref.read(paymentProvider).error ?? 'Payment initiation failed';
         setState(() => _paymentProcessing = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
         return;
       }
 
-      final initiateResponse = ref.read(paymentProvider).initiateResponse;
-      final paymentUrl = initiateResponse?.paymentUrl;
-      if (paymentUrl == null || paymentUrl.isEmpty) {
+      final paymentUrl = paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
+      if (paymentUrl == null || paymentUrl.toString().isEmpty) {
         setState(() => _paymentProcessing = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Payment URL not received from gateway')),
@@ -1353,7 +1370,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
       });
 
       context.push('/payment-webview', extra: {
-        'paymentUrl': paymentUrl,
+        'paymentUrl': paymentUrl.toString(),
         'orderNumber': orderNumber,
       });
     } catch (e) {

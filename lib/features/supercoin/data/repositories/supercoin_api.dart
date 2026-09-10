@@ -51,6 +51,14 @@ class SuperCoinApi {
           String transactionId, Map<String, dynamic> payload) =>
       _post('/v1/supercoin/transaction/$transactionId/status', payload);
 
+  Future<Map<String, dynamic>> burnAndOrder(Map<String, dynamic> payload) =>
+      _post('/v1/supercoin/burn-and-order', payload);
+
+  Future<Map<String, dynamic>> fetchConfig() async {
+    final response = await _dio.get('/v1/supercoin/config');
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> data) async {
     final response = await _dio.post(path, data: data);
     return response.data as Map<String, dynamic>;

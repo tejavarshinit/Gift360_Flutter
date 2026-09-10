@@ -9,24 +9,44 @@ import 'package:gift360/features/orders/data/models/voucher_view.dart';
 
 const _redeemedStorageKey = 'g360_redeemed_vouchers';
 
-/// Fetches the client's orders via POST /v1/neworders (same endpoint the
-/// React Orders page calls directly on `brandApi`), sorted newest-first.
+/// Holds both cash and SuperCoin orders separately, matching React's
+/// `cashOrders` / `superCoinOrders` state variables exactly.
+class OrdersData {
+  final List<Map<String, dynamic>> cashOrders;
+  final List<Map<String, dynamic>> superCoinOrders;
+
+  const OrdersData({required this.cashOrders, required this.superCoinOrders});
+
+  List<Map<String, dynamic>> get allOrders => [...cashOrders, ...superCoinOrders];
+}
+
+/// Fetches the client's orders via two POST /v1/neworders calls with different
+/// payloads (NORMAL and SUPERCOIN), matching React's Orders.tsx exactly.
 final ordersProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+    FutureProvider.autoDispose<OrdersData>((ref) async {
   final user = ref.watch(authProvider);
-  if (user == null || user.clientId.isEmpty) return [];
+  if (user == null || user.clientId.isEmpty) {
+    return const OrdersData(cashOrders: [], superCoinOrders: []);
+  }
 
   final api = ref.watch(brandsApiProvider);
-  final raw = await api.fetchNewOrders(user.clientId, timeline: 12);
-  final orders = raw.map((e) => Map<String, dynamic>.from(e)).toList();
 
-  orders.sort((a, b) {
+  // Make two parallel API calls with different type payloads (matches React)
+  final results = await Future.wait([
+    api.fetchNewOrders(user.clientId, timeline: 12, type: 'NORMAL'),
+    api.fetchNewOrders(user.clientId, timeline: 12, type: 'SUPERCOIN'),
+  ]);
+
+  final sortFn = (Map<String, dynamic> a, Map<String, dynamic> b) {
     final da = DateTime.tryParse(orderCreatedAt(a) ?? '') ?? DateTime(1970);
     final db = DateTime.tryParse(orderCreatedAt(b) ?? '') ?? DateTime(1970);
     return db.compareTo(da);
-  });
+  };
 
-  return orders;
+  final cashOrders = results[0]..sort(sortFn);
+  final superCoinOrders = results[1]..sort(sortFn);
+
+  return OrdersData(cashOrders: cashOrders, superCoinOrders: superCoinOrders);
 });
 
 /// One entry in the "Redeemed" tab — created once a buyer confirms a

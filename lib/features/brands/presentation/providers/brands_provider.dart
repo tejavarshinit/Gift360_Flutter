@@ -18,6 +18,13 @@ final brandDetailsProvider = FutureProvider.family.autoDispose<Brand, String>((r
   return await api.getBrandDetails(brandId);
 });
 
+/// Fetch brand details via POST /brands/{brandId} (matches React's useBrandDetails).
+/// Used by SuperCoin conversion screen which needs supercoinMultiplier.
+final brandDetailsByIdProvider = FutureProvider.family.autoDispose<Brand, String>((ref, brandId) async {
+  final api = ref.watch(brandsApiProvider);
+  return await api.getBrandDetailsById(brandId);
+});
+
 final brandSearchProvider = FutureProvider.family.autoDispose<List<Brand>, String>((ref, query) async {
   final api = ref.watch(brandsApiProvider);
   return await api.searchBrands(query);

@@ -1,11 +1,20 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gift360/core/constants/app_constants.dart';
 
+typedef OnSessionExpired = void Function();
+
 class DioClient {
   late final Dio _dio;
   final FlutterSecureStorage _secureStorage;
+
+  /// Global callback for 401 session expiry. Set once at app startup.
+  static OnSessionExpired? onSessionExpired;
+
+  /// Paths that should NOT trigger session expiry on 401.
+  static const _skipExpiryPaths = {'/payment-result'};
 
   DioClient({required String baseUrl, FlutterSecureStorage? secureStorage})
       : _secureStorage = secureStorage ?? const FlutterSecureStorage() {
@@ -55,12 +64,18 @@ class _AuthInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     if (err.response?.statusCode == 401) {
-      _handleSessionExpired();
+      final path = err.requestOptions.path;
+      final shouldSkip = DioClient._skipExpiryPaths.any((p) => path.contains(p));
+      if (!shouldSkip) {
+        _handleSessionExpired();
+      }
     }
     handler.next(err);
   }
 
-  void _handleSessionExpired() {}
+  void _handleSessionExpired() {
+    DioClient.onSessionExpired?.call();
+  }
 }
 
 class _LogInterceptor extends Interceptor {

@@ -9,10 +9,17 @@ import 'package:gift360/features/auth/presentation/providers/providers.dart';
 class AuthNotifier extends StateNotifier<AuthUser?> {
   final FlutterSecureStorage _secureStorage;
   final AuthApi _authApi;
+  bool _initialized = false;
 
   AuthNotifier(this._secureStorage, this._authApi) : super(null) {
     _loadUser();
   }
+
+  /// True once the persisted session has been fully restored (or confirmed
+  /// absent) on cold start. The router waits on this before deciding whether
+  /// to redirect a previously-logged-in user to /login — matching React's
+  /// synchronous localStorage restore.
+  bool get initialized => _initialized;
 
   Future<void> _loadUser() async {
     try {
@@ -30,12 +37,51 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
             _persistUser(user);
           }
         }
+        // Enrich name/email/mobile via validate-token (matches React's
+        // fetchValidatedUserInfo) so a restored session shows the real profile.
+        user = await _enrichUser(user);
         state = user;
       }
     } catch (e) {
       print('🔐 _loadUser error: $e');
       state = null;
+    } finally {
+      _initialized = true;
     }
+  }
+
+  Future<AuthUser> _enrichUser(AuthUser user) async {
+    if (user.token.isEmpty) return user;
+    try {
+      final data = await _authApi.validateToken();
+      final valid = data['valid'] == true;
+      final info = data['userInfo'];
+      if (valid && info is Map<String, dynamic>) {
+        final name = (info['name'] as String?)?.trim().isNotEmpty == true
+            ? info['name'].toString()
+            : user.name;
+        final email = (info['email'] as String?)?.trim().isNotEmpty == true
+            ? info['email'].toString()
+            : user.email;
+        final mobile = (info['mobile'] as String?)?.trim().isNotEmpty == true
+            ? info['mobile'].toString()
+            : user.mobile;
+        final clientId = (info['clientId'] as String?)?.trim().isNotEmpty == true
+            ? info['clientId'].toString()
+            : user.clientId;
+        final enriched = user.copyWith(
+          name: name,
+          email: email,
+          mobile: mobile,
+          clientId: clientId,
+        );
+        _persistUser(enriched);
+        return enriched;
+      }
+    } catch (_) {
+      // Best-effort — never break restore on a validate-token failure.
+    }
+    return user;
   }
 
   bool get isAuthenticated => state != null;
@@ -133,5 +179,13 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthUser?>((ref) {
 
 final isAuthenticatedProvider = Provider<bool>((ref) {
   return ref.watch(authProvider) != null;
+});
+
+/// True once the persisted auth session has been restored on cold start.
+/// The router must wait for this before redirecting, so previously-logged-in
+/// users aren't bounced to /login while the async secure-storage restore runs.
+final authInitializedProvider = Provider<bool>((ref) {
+  final notifier = ref.watch(authProvider.notifier);
+  return notifier.initialized;
 });
 

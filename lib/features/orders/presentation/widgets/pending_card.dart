@@ -83,7 +83,7 @@ class PendingCard extends StatelessWidget {
                     children: [
                       const Icon(Icons.access_time, size: 9, color: Color(0xFF92400E)),
                       const SizedBox(width: 4),
-                      Text('PENDING',
+                      Text(orderStatus(order) == 'TAMPERED' ? 'TAMPERED' : 'PENDING',
                           style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF92400E))),
                     ],
                   ),

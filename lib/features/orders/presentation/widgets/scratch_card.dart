@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -33,6 +34,7 @@ class ScratchCard extends ConsumerStatefulWidget {
 
 class _ScratchCardState extends ConsumerState<ScratchCard> {
   late VoucherState _voucherState;
+  String? _copiedField;
 
   @override
   void initState() {
@@ -46,6 +48,14 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
     if (oldWidget.voucher.initialState != widget.voucher.initialState) {
       _voucherState = widget.voucher.initialState;
     }
+  }
+
+  void _copyToClipboard(String text, String field) {
+    Clipboard.setData(ClipboardData(text: text));
+    setState(() => _copiedField = field);
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _copiedField = null);
+    });
   }
 
   void _showSnack(String title, String? description, {bool isError = false}) {
@@ -202,111 +212,11 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
 
     return Stack(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1E1335), Color(0xFF2D1B69)],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: _voucherState == VoucherState.scratched
-                ? Border.all(color: const Color(0x99FBBF24), width: 2)
-                : _voucherState == VoucherState.gifted
-                    ? Border.all(color: const Color(0x66FCD34D), width: 2)
-                    : null,
-            boxShadow: const [
-              BoxShadow(color: Color(0x4D6E66E7), blurRadius: 6, offset: Offset(4, 4)),
-            ],
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [AppColors.goldLight, AppColors.gold]),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(blurRadius: 6, color: Colors.black.withValues(alpha: 0.2)),
-                      ],
-                    ),
-                    child: const Icon(Icons.auto_awesome, color: Color(0xFF92400E), size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Gift Voucher',
-                            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xB3FCD34D))),
-                        Text(displayName,
-                            style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('Value',
-                          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xB3FCD34D))),
-                      ShaderMask(
-                        shaderCallback: (bounds) => const LinearGradient(
-                          colors: [Color(0xFFFFD700), Color(0xFFDAA520), Color(0xFFFFD700)],
-                        ).createShader(bounds),
-                        child: Text('₹${widget.voucher.amount}',
-                            style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w700, color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _detailBox(
-                icon: Icons.credit_card,
-                label: 'Card Number',
-                value: _voucherState == VoucherState.scratched ? widget.voucher.cardNumber : '••••  ••••  ••••',
-              ),
-              const SizedBox(height: 10),
-              _detailBox(
-                icon: Icons.lock,
-                label: 'Card PIN',
-                value: _voucherState == VoucherState.scratched ? widget.voucher.cardPin : '••••••',
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today, size: 14, color: const Color(0xFFFCD34D).withValues(alpha: 0.5)),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Expires',
-                              style: GoogleFonts.poppins(
-                                  fontSize: 10, fontWeight: FontWeight.w500, color: const Color(0xFFFCD34D).withValues(alpha: 0.5))),
-                          Text(widget.voucher.expiryDate,
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  _statusBadge(),
-                ],
-              ),
-            ],
-          ),
-        ),
+        // ── SCRATCHED (compact) — matches React light cream design ──
+        if (_voucherState == VoucherState.scratched) _buildScratchedCompact(displayName),
+
+        // ── PENDING / GIFTED (original dark purple rendering) ──
+        if (_voucherState != VoucherState.scratched) _buildPendingOrGifted(displayName),
 
         // Scratch overlay (PENDING only)
         if (_voucherState == VoucherState.pending)
@@ -383,57 +293,325 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
               ),
             ),
           ),
-
-        // Revealed celebration overlay (SCRATCHED)
-        if (_voucherState == VoucherState.scratched)
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFDAA520)]),
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                    blurRadius: 12,
-                  ),
-                ],
-              ),
-              child: Text('🎉 Revealed!',
-                  style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF92400E))),
-            ),
-          ),
       ],
     );
   }
 
-  Widget _detailBox({required IconData icon, required String label, required String value}) {
+  // ════════════════════════════════════════════════════════════════════════════
+  // SCRATCHED — Compact layout matching React ScratchCard compact mode
+  // Light cream bg (#F8F5F4), dark blue info boxes (#1A3052), copy buttons
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildScratchedCompact(String displayName) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      height: 200,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        color: const Color(0xFFF8F5F4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x99FBBF24), width: 2),
+        boxShadow: const [
+          BoxShadow(color: Color(0x26000000), blurRadius: 6, offset: Offset(4, 4)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Top: Gold icon + Brand name + Amount ──
+            Center(
+              child: Column(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.goldLight, AppColors.gold],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(blurRadius: 6, color: Colors.black.withValues(alpha: 0.2)),
+                      ],
+                    ),
+                    child: const Icon(Icons.auto_awesome, color: Color(0xFF92400E), size: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF152039),
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Color(0xFFFFD700), Color(0xFFDAA520), Color(0xFFFFD700)],
+                    ).createShader(bounds),
+                    child: Text(
+                      '₹${widget.voucher.amount}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        height: 1.0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Spacer(),
+
+            // ── Card Number box ──
+            _buildInfoBox(
+              label: 'Card Number',
+              value: widget.voucher.cardNumber,
+              fieldKey: 'number',
+            ),
+            const SizedBox(height: 6),
+
+            // ── PIN box ──
+            _buildInfoBox(
+              label: 'PIN',
+              value: widget.voucher.cardPin,
+              fieldKey: 'pin',
+            ),
+
+            const Spacer(),
+
+            // ── Bottom: Expiry + Shield ──
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Exp ${widget.voucher.expiryDate}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF8A8A8A),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF10B981), Color(0xFF16A34A)],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.shield, color: Colors.white, size: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Info box — dark blue (#1A3052) with gold label (#EBBB64), white value,
+  // copy button (matches React compact card)
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildInfoBox({
+    required String label,
+    required String value,
+    required String fieldKey,
+  }) {
+    final isCopied = _copiedField == fieldKey;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A3052),
         borderRadius: BorderRadius.circular(8),
       ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFEBBB64),
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _copyToClipboard(value, fieldKey),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                isCopied ? Icons.check_circle : Icons.copy,
+                size: 12,
+                color: isCopied ? const Color(0xFF34D399) : const Color(0xB3EBBB64),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // PENDING / GIFTED — Original dark purple rendering
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildPendingOrGifted(String displayName) {
+    return Container(
+      height: 152,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E1335), Color(0xFF2D1B69)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: _voucherState == VoucherState.gifted
+            ? Border.all(color: const Color(0x66FCD34D), width: 2)
+            : null,
+        boxShadow: const [
+          BoxShadow(color: Color(0x4D6E66E7), blurRadius: 6, offset: Offset(4, 4)),
+        ],
+      ),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 14, color: const Color(0xFFFCD34D)),
-              const SizedBox(width: 8),
-              Text(label,
-                  style: GoogleFonts.poppins(
-                      fontSize: 12, color: const Color(0xB3FCD34D), fontWeight: FontWeight.w600)),
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [AppColors.goldLight, AppColors.gold]),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(blurRadius: 6, color: Colors.black.withValues(alpha: 0.2)),
+                  ],
+                ),
+                child: const Icon(Icons.auto_awesome, color: Color(0xFF92400E), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Gift Voucher',
+                        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w500, color: const Color(0xB3FCD34D))),
+                    Text(displayName,
+                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Value',
+                      style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w500, color: const Color(0xB3FCD34D))),
+                  ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Color(0xFFFFD700), Color(0xFFDAA520), Color(0xFFFFD700)],
+                    ).createShader(bounds),
+                    child: Text('₹${widget.voucher.amount}',
+                        style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ],
+              ),
             ],
           ),
+          const SizedBox(height: 8),
+          _darkDetailBox(
+            icon: Icons.credit_card,
+            label: 'Card Number',
+            value: '••••  ••••  ••••',
+          ),
           const SizedBox(height: 6),
+          _darkDetailBox(
+            icon: Icons.lock,
+            label: 'Card PIN',
+            value: '••••••',
+          ),
+          const Spacer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 12, color: const Color(0xFFFCD34D).withValues(alpha: 0.5)),
+                  const SizedBox(width: 6),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Expires',
+                          style: GoogleFonts.poppins(
+                              fontSize: 8, fontWeight: FontWeight.w500, color: const Color(0xFFFCD34D).withValues(alpha: 0.5))),
+                      Text(widget.voucher.expiryDate,
+                          style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ],
+                  ),
+                ],
+              ),
+              _statusBadge(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _darkDetailBox({required IconData icon, required String label, required String value}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFFFCD34D)),
+          const SizedBox(width: 6),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 10, color: const Color(0xB3FCD34D), fontWeight: FontWeight.w600)),
+          const Spacer(),
           Text(value,
               style: GoogleFonts.poppins(
-                fontSize: 16,
+                fontSize: 12,
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 2,
@@ -445,19 +623,6 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
 
   Widget _statusBadge() {
     switch (_voucherState) {
-      case VoucherState.scratched:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFDAA520)]),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: [
-              BoxShadow(blurRadius: 6, color: const Color(0xFFFBBF24).withValues(alpha: 0.3)),
-            ],
-          ),
-          child: Text('✓ Revealed',
-              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF92400E))),
-        );
       case VoucherState.gifted:
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -486,6 +651,8 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
           child: Text('Active',
               style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFFCD34D))),
         );
+      case VoucherState.scratched:
+        return const SizedBox.shrink();
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gift360/config/app_config.dart';
 
 class CashbackWalletSection extends ConsumerWidget {
   final double cashbackPercent;
@@ -121,7 +122,7 @@ class CashbackWalletSection extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${maxWalletUsage.toStringAsFixed(2)} (50% of cart)',
+                        'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${maxWalletUsage.toStringAsFixed(2)} (${AppConfig.cashbackRedeemPercent.round()}% of cart)',
                         style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                       ),
                       if (walletBalance <= 0)

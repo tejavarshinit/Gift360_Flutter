@@ -1,109 +1,3 @@
-class TokenGenerationResponse {
-  final bool status;
-  final String? sabbpeToken;
-  final String? transactionId;
-  final String? message;
-
-  TokenGenerationResponse({
-    required this.status,
-    this.sabbpeToken,
-    this.transactionId,
-    this.message,
-  });
-
-  factory TokenGenerationResponse.fromJson(Map<String, dynamic> json) {
-    return TokenGenerationResponse(
-      status: json['status'] == true || json['status'] == 1,
-      sabbpeToken: json['sabbpe_token'] as String?,
-      transactionId: json['transaction_id'] as String?,
-      message: json['message'] as String?,
-    );
-  }
-}
-
-class SabbPeInitiateRequest {
-  final String sabbpeToken;
-  final String productInfo;
-  final double amount;
-  final String frontendUrl;
-  final String? encryptedOrderRef;
-  final String? clientId;
-  final CustomerInfo customer;
-
-  SabbPeInitiateRequest({
-    required this.sabbpeToken,
-    required this.productInfo,
-    required this.amount,
-    required this.frontendUrl,
-    this.encryptedOrderRef,
-    this.clientId,
-    required this.customer,
-  });
-
-  Map<String, dynamic> toJson() {
-    final map = <String, dynamic>{
-      'sabbpe_token': sabbpeToken,
-      'productinfo': productInfo,
-      'amount': amount,
-      'frontend_url': frontendUrl,
-      'customer': customer.toJson(),
-    };
-    if (encryptedOrderRef != null) map['encrypted_order_ref'] = encryptedOrderRef;
-    if (clientId != null) map['client_id'] = clientId;
-    return map;
-  }
-}
-
-class CustomerInfo {
-  final String firstname;
-  final String email;
-  final String phone;
-
-  CustomerInfo({
-    required this.firstname,
-    required this.email,
-    required this.phone,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'firstname': firstname,
-    'email': email,
-    'phone': phone,
-  };
-}
-
-class SabbPeInitiateResponse {
-  final bool status;
-  final String? paymentUrl;
-  final String? transactionId;
-  final String? merchantOrderRef;
-  final String? gateway;
-  final String? message;
-  final String? data;
-
-  SabbPeInitiateResponse({
-    required this.status,
-    this.paymentUrl,
-    this.transactionId,
-    this.merchantOrderRef,
-    this.gateway,
-    this.message,
-    this.data,
-  });
-
-  factory SabbPeInitiateResponse.fromJson(Map<String, dynamic> json) {
-    return SabbPeInitiateResponse(
-      status: json['status'] == true || json['status'] == 1,
-      paymentUrl: json['payment_url'] as String? ?? json['paymentUrl'] as String? ?? json['data'] as String?,
-      transactionId: json['transactionId'] as String? ?? json['txnid'] as String?,
-      merchantOrderRef: json['merchantOrderRef'] as String?,
-      gateway: json['gateway'] as String?,
-      message: json['message'] as String?,
-      data: json['data'] as String?,
-    );
-  }
-}
-
 class ValidateOrderRequest {
   final String orderNumber;
   final double cartTotal;
@@ -255,15 +149,14 @@ class CouponReleaseRequest {
 
   CouponReleaseRequest({required this.reservationId});
 
-  Map<String, dynamic> toJson() => {
-    'reservationId': reservationId,
-  };
+  Map<String, dynamic> toJson() => {'reservationId': reservationId};
 }
 
 class OrderDetailsResponse {
   final String? orderNumber;
   final String? status;
   final int? coinsEarned;
+  final double? cashbackEarned;
   final String? createdAt;
   final List<OrderItemDetail>? items;
 
@@ -271,6 +164,7 @@ class OrderDetailsResponse {
     this.orderNumber,
     this.status,
     this.coinsEarned,
+    this.cashbackEarned,
     this.createdAt,
     this.items,
   });
@@ -280,8 +174,11 @@ class OrderDetailsResponse {
       orderNumber: json['order_number'] as String?,
       status: json['status'] as String?,
       coinsEarned: json['coins_earned'] as int?,
+      cashbackEarned: (json['cashback_earned'] as num?)?.toDouble(),
       createdAt: json['created_at'] as String?,
-      items: (json['items'] as List?)?.map((i) => OrderItemDetail.fromJson(i as Map<String, dynamic>)).toList(),
+      items: (json['items'] as List?)
+          ?.map((i) => OrderItemDetail.fromJson(i as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -295,7 +192,9 @@ class OrderItemDetail {
 
   factory OrderItemDetail.fromJson(Map<String, dynamic> json) {
     return OrderItemDetail(
-      brandName: json['brand_name'] as String? ?? json['meta']?['brand_name'] as String?,
+      brandName:
+          json['brand_name'] as String? ??
+          json['meta']?['brand_name'] as String?,
       unitValue: (json['unitValue'] as num?)?.toDouble(),
       quantity: json['quantity'] as int?,
     );

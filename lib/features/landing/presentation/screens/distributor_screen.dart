@@ -24,6 +24,8 @@ class _DistributorScreenState extends State<DistributorScreen> {
   final _stateController = TextEditingController();
   final _panController = TextEditingController();
   final _gstController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _contactController = TextEditingController();
   final _messageController = TextEditingController();
 
   late final ContactApi _contactApi;
@@ -41,6 +43,8 @@ class _DistributorScreenState extends State<DistributorScreen> {
     _stateController.dispose();
     _panController.dispose();
     _gstController.dispose();
+    _emailController.dispose();
+    _contactController.dispose();
     _messageController.dispose();
     super.dispose();
   }
@@ -59,6 +63,8 @@ class _DistributorScreenState extends State<DistributorScreen> {
         state: _stateController.text.trim(),
         pan: _panController.text.trim().toUpperCase(),
         gst: _gstController.text.trim().toUpperCase(),
+        email: _emailController.text.trim(),
+        contactNo: _contactController.text.trim(),
         message: _messageController.text.trim(),
       ));
       setState(() {
@@ -484,6 +490,10 @@ class _DistributorScreenState extends State<DistributorScreen> {
           _buildTextField('Enter PAN Number', _panController, maxLength: 10, uppercase: true),
           const SizedBox(height: 12),
           _buildTextField('Enter GST', _gstController, maxLength: 15, uppercase: true),
+          const SizedBox(height: 12),
+          _buildTextField('Enter Email ID', _emailController),
+          const SizedBox(height: 12),
+          _buildTextField('Enter Contact Number', _contactController, maxLength: 15),
           const SizedBox(height: 12),
           _buildTextField('Tell us message', _messageController, maxLines: 3),
           if (_error != null) ...[

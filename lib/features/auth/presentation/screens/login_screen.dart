@@ -164,84 +164,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: SizedBox.expand(
+        child: Stack(
         children: [
           Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFE8D7FF), Colors.white],
-                ),
-              ),
-            ),
-          ),
-          _auroraBlob(
-            top: -40,
-            left: -40,
-            size: 288,
-            color: const Color(0xFF523DA9),
-          ),
-          _auroraBlob(
-            top: 128,
-            right: -64,
-            size: 320,
-            color: const Color(0xFF4C42B8),
-          ),
-          _auroraBlob(
-            bottom: 80,
-            left: MediaQuery.of(context).size.width * 0.25,
-            size: 224,
-            color: const Color(0xFF5365DF),
+            child: Image.asset('assets/images/ganeshauth.png', fit: BoxFit.cover, alignment: Alignment.topCenter),
           ),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).size.height * 0.42, 20, 24),
               child: Column(
                 children: [
-                  const SizedBox(height: 60),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        'assets/images/Gift.png',
-                        height: 90,
-                        fit: BoxFit.contain,
-                      ),
-                      Transform.translate(
-                        offset: const Offset(-35, 8),
-                        child: Image.asset(
-                          'assets/images/G word.png',
-                          height: 40,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Welcome Back',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Sign in to Gift360',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: AppColors.purpleLight,
+                      color: Colors.white.withValues(alpha: 0.90),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
                         color: AppColors.gold.withValues(alpha: 0.18),
@@ -272,7 +209,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                            color: const Color(0xFF351265),
                               ),
                             ),
                           ],
@@ -308,29 +245,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                         Text(
-                          'EMAIL',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white.withValues(alpha: 0.7),
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        _buildTextField(
-                          controller: _emailController,
-                          hint: 'Enter your registered email',
-                          keyboardType: TextInputType.emailAddress,
-                          enabled: !_otpSent,
-                          prefixIcon: Icons.email_outlined,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
                           'MOBILE NUMBER',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white.withValues(alpha: 0.7),
+                            color: const Color(0xFF625A70),
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -353,7 +272,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     const Text(
                                       '+91',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: const Color(0xFF24184B),
                                         fontWeight: FontWeight.w600,
                                         fontSize: 14,
                                       ),
@@ -385,7 +304,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha: 0.7),
+                              color: const Color(0xFF625A70),
                               letterSpacing: 1.2,
                             ),
                           ),
@@ -451,6 +370,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -505,9 +425,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: Colors.white.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        border: Border.all(color: const Color(0xFFDFDBE3)),
       ),
       child: TextField(
         controller: controller,
@@ -517,7 +437,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         textAlign: textAlign ?? TextAlign.start,
         autofillHints: const [],
         style: TextStyle(
-          color: Colors.white,
+          color: const Color(0xFF24184B),
           fontWeight: FontWeight.w600,
           fontSize: 15,
           letterSpacing: letterSpacing ?? 0,
@@ -526,7 +446,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           filled: false,
           hintText: hint,
           hintStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
+            color: const Color(0xFF9C96A6),
             fontWeight: FontWeight.w400,
           ),
           counterText: '',

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:convert';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
 import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_checkout_provider.dart';
+import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/cart/presentation/widgets/cart_item_card.dart';
@@ -55,6 +57,12 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     ref.listen(cartProvider, (prev, next) {
       if (next != null && next.items.isNotEmpty) {
         _fetchBrandDiscounts();
+        // Reset in-memory order when the cart changes so a fresh order is
+        // created on next pay (matches React's cart-signature reset effect).
+        if (prev != null &&
+            _cartSignature(prev.items) != _cartSignature(next.items)) {
+          ref.read(paymentProvider.notifier).resetOrder();
+        }
       }
     });
 
@@ -65,7 +73,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         children: [
           // Aurora background
           Positioned.fill(
-            child: _buildAuroraBackground(),
+            child: Image.asset('assets/images/ganeshbackdrop.png', fit: BoxFit.cover),
           ),
           // Main content
           Column(
@@ -343,8 +351,17 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 const SizedBox(height: 12),
                 // Order Summary
                 OrderSummarySection(
-                  onSuperCoinTap: () {
-                    setState(() => _showSuperCoinOtp = true);
+                  onSuperCoinTap: () async {
+                    final ensured = await _ensureOrderBeforeSuperCoin();
+                    if (ensured != null && mounted) {
+                      setState(() => _showSuperCoinOtp = true);
+                    }
+                  },
+                  onPaymentStart: () {
+                    setState(() => _showPaymentSheet = true);
+                  },
+                  onPaymentComplete: () {
+                    setState(() => _showPaymentSheet = false);
                   },
                 ),
               ],
@@ -380,7 +397,10 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final superCoinState = ref.read(supercoinProvider);
     final user = ref.read(authProvider);
     final breakdown = ref.read(paymentBreakdownProvider);
-    final orderNumber = checkout.superCoinOrderNumber ?? _generateOrderNumber();
+    final paymentState = ref.read(paymentProvider);
+    final orderNumber = checkout.superCoinOrderNumber ??
+        paymentState.orderNumber ??
+        _generateOrderNumber();
 
     return SuperCoinOTPModal(
       merchantWalletId: AppConfig.supercoinMerchantWalletId,
@@ -403,10 +423,81 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
+  /// Ensure a real (backend) order exists before starting the SuperCoin hold,
+  /// matching React's openSuperCoinFlow → ensureOrder() so the hold's
+  /// merchantReferenceId points at a real order (not a locally generated dummy).
+  Future<String?> _ensureOrderBeforeSuperCoin() async {
+    final user = ref.read(authProvider);
+    final cart = ref.read(cartProvider);
+    if (user == null || cart == null || cart.items.isEmpty) return null;
+
+    final breakdown = ref.read(paymentBreakdownProvider);
+    final checkout = ref.read(cartCheckoutProvider);
+
+    // If we already have an authorized hold on a real order, reuse it.
+    if (checkout.superCoinAuthorized && checkout.superCoinOrderNumber != null) {
+      return checkout.superCoinOrderNumber;
+    }
+
+    final paymentNotifier = ref.read(paymentProvider.notifier);
+
+    // If an order already exists for this cart signature, reuse it (React ensureOrder).
+    final existing = ref.read(paymentProvider).orderNumber;
+    if (existing != null) return existing;
+
+    final orderItems = cart.items.map((item) => {
+      'brandId': item.brandId,
+      'quantity': item.quantity,
+      'unitValue': item.unitValue,
+      'lineTotal': item.lineTotal,
+      'meta': jsonEncode({
+        'brand_id': item.brandId,
+        'brand_name': item.brandName,
+        'image_url': item.image,
+        'redeem_steps': <String>[],
+      }),
+    }).toList();
+
+    final cartSignature = PaymentNotifier.cartSignatureFor(orderItems);
+
+    final orderNumber = await paymentNotifier.createOrder(
+      clientId: user.clientId,
+      items: orderItems,
+      totalAmount: cart.totalAmount,
+      walletUsed: checkout.useWalletBalance,
+      walletAmount: breakdown.walletDeduction,
+      superCoinDeduction: breakdown.superCoinDeduction,
+      superCoinAmount: checkout.superCoinHoldContext?.amount ?? 0,
+      earnCashback: checkout.rewardMode != RewardMode.superCoins,
+      cartSignature: cartSignature,
+    );
+
+    if (orderNumber == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to start SuperCoins. Please try again.')),
+        );
+      }
+      return null;
+    }
+    return orderNumber;
+  }
+
   String _generateOrderNumber() {
     final now = DateTime.now();
     final yymmdd = '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final random = DateTime.now().microsecondsSinceEpoch.toRadixString(16).toUpperCase();
     return 'ORD$yymmdd${random.substring(0, random.length.clamp(0, 12))}';
+  }
+
+  /// Cart checkout signature used to detect cart changes (matches React's
+  /// getCartCheckoutSignature: sorted "itemId:quantity:unitValue" joined by "|").
+  String _cartSignature(List<CartItem> items) {
+    if (items.isEmpty) return '';
+    final sigs = items
+        .map((i) => '${i.itemId}:${i.quantity}:${i.unitValue}')
+        .toList()
+      ..sort();
+    return sigs.join('|');
   }
 }

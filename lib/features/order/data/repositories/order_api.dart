@@ -28,4 +28,11 @@ class OrderApi {
     });
     return response.data as Map<String, dynamic>;
   }
+
+  /// Backend-mediated payment initiation (matches React's giftcardApiClient).
+  /// The backend owns merchant credentials and computes the net payable.
+  Future<Map<String, dynamic>> initiateBackendPayment(String orderNumber) async {
+    final response = await _dio.post('/orders/$orderNumber/initiate-payment');
+    return response.data as Map<String, dynamic>;
+  }
 }

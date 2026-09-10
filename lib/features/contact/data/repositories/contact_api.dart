@@ -6,6 +6,7 @@ class ContactLeadRequest {
   final String? email;
   final String? companyName;
   final String? phoneNumber;
+  final String? contactNo;
   final String? organizationName;
   final String? city;
   final String? state;
@@ -20,6 +21,7 @@ class ContactLeadRequest {
     this.email,
     this.companyName,
     this.phoneNumber,
+    this.contactNo,
     this.organizationName,
     this.city,
     this.state,
@@ -35,6 +37,7 @@ class ContactLeadRequest {
     if (email != null) 'email': email,
     if (companyName != null) 'companyName': companyName,
     if (phoneNumber != null) 'phoneNumber': phoneNumber,
+    if (contactNo != null) 'contactNo': contactNo,
     if (organizationName != null) 'organizationName': organizationName,
     if (city != null) 'city': city,
     if (state != null) 'state': state,

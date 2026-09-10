@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/supercoin/data/repositories/supercoin_api.dart';
@@ -8,6 +11,94 @@ final supercoinApiProvider = Provider<SuperCoinApi>((ref) {
   final dio = ref.watch(brandsDioProvider);
   return SuperCoinApi(dio);
 });
+
+/// SuperCoin configuration fetched from the backend.
+/// Contains capPercent (default 20%) which limits how much of a voucher's
+/// face value can be redeemed via SuperCoins.
+class SuperCoinConfig {
+  final double capPercent;
+  const SuperCoinConfig({this.capPercent = 20});
+}
+
+final superCoinConfigProvider = FutureProvider<SuperCoinConfig>((ref) async {
+  final api = ref.watch(supercoinApiProvider);
+  try {
+    final response = await api.fetchConfig();
+    final rawCap = response['capPercent'];
+    final cap = rawCap is num
+        ? rawCap.toDouble()
+        : double.tryParse(rawCap?.toString() ?? '') ?? 20.0;
+    return SuperCoinConfig(capPercent: cap > 0 ? cap : 20.0);
+  } catch (_) {
+    return const SuperCoinConfig();
+  }
+});
+
+/// Normalize a mobile number to E.164 (matches React's normalizeMobileToE164).
+/// Strips non-digits, prepends +91 to 10-digit, normalizes +91…, keeps +country.
+String? normalizeMobileToE164(String? mobile) {
+  if (mobile == null || mobile.trim().isEmpty) return null;
+  final trimmed = mobile.trim();
+  final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
+  if (trimmed.startsWith('+') && digitsOnly.length >= 10) return '+$digitsOnly';
+  if (digitsOnly.length == 10) return '+91$digitsOnly';
+  if (digitsOnly.length == 12 && digitsOnly.startsWith('91'))
+    return '+$digitsOnly';
+  return trimmed.startsWith('+')
+      ? trimmed
+      : '+${digitsOnly.isNotEmpty ? digitsOnly : trimmed}';
+}
+
+/// Extract the first finite balance value from a SuperCoin response.
+/// Matches React's extractSuperCoinBalance().
+double extractSuperCoinBalance(Map<String, dynamic> response) {
+  for (final key in ['balance', 'totalBalance', 'availableBalance', 'amount']) {
+    final val = response[key];
+    if (val is num) return val.toDouble();
+    if (val is String) {
+      final parsed = double.tryParse(val);
+      if (parsed != null) return parsed;
+    }
+  }
+  return 0;
+}
+
+/// Burn ratio for converting rupees to SuperCoins (from config, default 1.25).
+double get superCoinBurnRatio => SuperCoinConversionConfig.burnRatio;
+
+/// Calculate the number of SuperCoins required to redeem a given rupee amount.
+/// Formula: ceil(round(amount * burnRatio * 100) / 100) — matches React exactly.
+int calculateSuperCoinsRequired(double voucherAmount) {
+  final scaled = (voucherAmount * superCoinBurnRatio * 100).round();
+  return (scaled / 100).ceil();
+}
+
+/// Check if the user can afford a voucher with their SuperCoin balance.
+/// Matches React's canAffordVoucher().
+bool canAffordVoucher(double balance, double voucherAmount) {
+  return balance >= calculateSuperCoinsRequired(voucherAmount);
+}
+
+/// Calculate the maximum SuperCoin redemption amount for a set of cart items.
+/// Uses capPercent from backend config and per-brand multiplier (default 1.25).
+/// Formula per item: ceil(itemTotal * capPercent/100 * multiplier)
+/// Total = sum of per-item caps.
+double calculateMaxSuperCoinRedeemable({
+  required List<Map<String, dynamic>> items,
+  required double capPercent,
+  double defaultMultiplier = 1.25,
+}) {
+  double total = 0;
+  for (final item in items) {
+    final itemTotal = (item['lineTotal'] as num?)?.toDouble() ?? 0;
+    final multiplier =
+        (item['supercoinMultiplier'] as num?)?.toDouble() ?? defaultMultiplier;
+    final itemRupeeCap = itemTotal * (capPercent / 100);
+    final itemCoinCap = (itemRupeeCap * multiplier).ceil().toDouble();
+    total += itemCoinCap;
+  }
+  return total;
+}
 
 // ── Hold Context ──
 class SuperCoinHoldContext {
@@ -75,15 +166,7 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
     }
   }
 
-  String? _normalizeMobile(String? mobile) {
-    if (mobile == null || mobile.trim().isEmpty) return null;
-    final trimmed = mobile.trim();
-    final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
-    if (trimmed.startsWith('+') && digitsOnly.length >= 10) return '+$digitsOnly';
-    if (digitsOnly.length == 10) return '+91$digitsOnly';
-    if (digitsOnly.length == 12 && digitsOnly.startsWith('91')) return '+$digitsOnly';
-    return trimmed.startsWith('+') ? trimmed : '+${digitsOnly.isNotEmpty ? digitsOnly : trimmed}';
-  }
+  String? _normalizeMobile(String? mobile) => normalizeMobileToE164(mobile);
 
   SuperCoinIdentity? get identity {
     final normalized = _normalizeMobile(_mobile);
@@ -98,10 +181,15 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
     state = state.copyWith(isSearching: true, clearError: true);
     try {
       final searchResult = await _api.searchUser(id);
-      final exists = searchResult['userExists'] == true ||
+      final exists =
+          searchResult['userExists'] == true ||
           (searchResult['state']?.toString().toUpperCase() == 'ACTIVATED');
 
-      state = state.copyWith(userExists: exists, isEnrolled: exists, isSearching: false);
+      state = state.copyWith(
+        userExists: exists,
+        isEnrolled: exists,
+        isSearching: false,
+      );
 
       if (exists) {
         await fetchBalance();
@@ -118,19 +206,18 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
     state = state.copyWith(isBalanceLoading: true, clearError: true);
     try {
       final result = await _api.fetchBalance(id);
-      final bal = _extractBalance(result);
+      final bal = extractSuperCoinBalance(result);
       state = state.copyWith(balance: bal, isBalanceLoading: false);
     } catch (e) {
       state = state.copyWith(isBalanceLoading: false, error: e.toString());
     }
   }
 
-  double _extractBalance(Map<String, dynamic> response) {
-    for (final key in ['balance', 'totalBalance', 'availableBalance', 'amount']) {
-      final val = response[key];
-      if (val is num) return val.toDouble();
-    }
-    return 0;
+  /// Re-run the same account lookup sequence as React's SuperCoinStatusCard.
+  /// This is called when the user explicitly opens the SuperCoins checkout tab,
+  /// so an already-mounted cart cannot leave the account state stale.
+  Future<void> refresh() async {
+    await _searchAndLoadBalance();
   }
 
   void reset() {
@@ -140,10 +227,10 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
 
 final supercoinProvider =
     StateNotifierProvider.autoDispose<SuperCoinNotifier, SuperCoinState>((ref) {
-  final api = ref.watch(supercoinApiProvider);
-  final user = ref.watch(authProvider);
-  return SuperCoinNotifier(api, user?.mobile);
-});
+      final api = ref.watch(supercoinApiProvider);
+      final user = ref.watch(authProvider);
+      return SuperCoinNotifier(api, user?.mobile);
+    });
 
 // ── OTP Modal State ──
 enum SuperCoinOtpStep { loadingBalance, ready, otpSent, authorized }
@@ -198,7 +285,8 @@ class SuperCoinOtpState {
       coinAmount: coinAmount ?? this.coinAmount,
       otp: otp ?? this.otp,
       prefilledOtp: prefilledOtp ?? this.prefilledOtp,
-      merchantTransactionId: merchantTransactionId ?? this.merchantTransactionId,
+      merchantTransactionId:
+          merchantTransactionId ?? this.merchantTransactionId,
       error: clearError ? null : (error ?? this.error),
       isLoading: isLoading ?? this.isLoading,
       transactionTime: transactionTime ?? this.transactionTime,
@@ -228,17 +316,19 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
     required String displayName,
     required double preloadedBalance,
     required double maxRedeemable,
-  })  : _api = api,
-        _identity = identity,
-        _merchantWalletId = merchantWalletId,
-        _orderNumber = orderNumber,
-        _displayName = displayName,
-        _preloadedBalance = preloadedBalance,
-        _maxRedeemable = maxRedeemable,
-        super(SuperCoinOtpState(
-          balance: preloadedBalance,
-          coinAmount: _calculateCoinAmount(preloadedBalance, maxRedeemable),
-        )) {
+  }) : _api = api,
+       _identity = identity,
+       _merchantWalletId = merchantWalletId,
+       _orderNumber = orderNumber,
+       _displayName = displayName,
+       _preloadedBalance = preloadedBalance,
+       _maxRedeemable = maxRedeemable,
+       super(
+         SuperCoinOtpState(
+           balance: preloadedBalance,
+           coinAmount: _calculateCoinAmount(preloadedBalance, maxRedeemable),
+         ),
+       ) {
     _loadBalance();
   }
 
@@ -263,7 +353,12 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
     try {
       final result = await _api.fetchBalance(_identity!);
       double bal = 0;
-      for (final key in ['balance', 'totalBalance', 'availableBalance', 'amount']) {
+      for (final key in [
+        'balance',
+        'totalBalance',
+        'availableBalance',
+        'amount',
+      ]) {
         final val = result[key];
         if (val is num) {
           bal = val.toDouble();
@@ -291,16 +386,24 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       return;
     }
     if (_merchantWalletId.isEmpty) {
-      state = state.copyWith(error: 'SuperCoin merchant wallet is not configured.');
+      state = state.copyWith(
+        error: 'SuperCoin merchant wallet is not configured.',
+      );
       return;
     }
     if (_orderNumber.trim().isEmpty) {
-      state = state.copyWith(error: 'Order is not ready yet. Please try again.');
+      state = state.copyWith(
+        error: 'Order is not ready yet. Please try again.',
+      );
       return;
     }
 
     final txnId = '${_orderNumber}-SC';
-    state = state.copyWith(isLoading: true, clearError: true, merchantTransactionId: txnId);
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      merchantTransactionId: txnId,
+    );
     try {
       final response = await _api.initHold({
         'identity': _identity!.toJson(),
@@ -348,14 +451,21 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       try {
         final startMs = DateTime.parse(txTime).millisecondsSinceEpoch;
         final endMs = startMs + 15 * 60 * 1000;
-        remaining = ((endMs - DateTime.now().millisecondsSinceEpoch) / 1000).round().clamp(0, 900);
+        remaining = ((endMs - DateTime.now().millisecondsSinceEpoch) / 1000)
+            .round()
+            .clamp(0, 900);
       } catch (_) {
         final endMs = holdExpiryMs;
-        remaining = ((endMs - DateTime.now().millisecondsSinceEpoch) / 1000).round().clamp(0, 900);
+        remaining = ((endMs - DateTime.now().millisecondsSinceEpoch) / 1000)
+            .round()
+            .clamp(0, 900);
       }
     }
 
-    state = state.copyWith(countdownSeconds: remaining, countdownExpired: remaining <= 0);
+    state = state.copyWith(
+      countdownSeconds: remaining,
+      countdownExpired: remaining <= 0,
+    );
 
     if (remaining <= 0) return;
 
@@ -381,7 +491,9 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       return null;
     }
     if (state.merchantTransactionId.isEmpty || _merchantWalletId.isEmpty) {
-      state = state.copyWith(error: 'Missing transaction context. Please start over.');
+      state = state.copyWith(
+        error: 'Missing transaction context. Please start over.',
+      );
       return null;
     }
 
@@ -397,18 +509,26 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       final txnState = response['transactionState']?.toString().toUpperCase();
       if (txnState == 'SUCCESSFUL' || txnState == 'SUCCESS') {
         _countdownTimer?.cancel();
-        state = state.copyWith(step: SuperCoinOtpStep.authorized, isLoading: false);
-        return SuperCoinHoldContext(
+        state = state.copyWith(
+          step: SuperCoinOtpStep.authorized,
+          isLoading: false,
+        );
+        final holdContext = SuperCoinHoldContext(
           merchantTransactionId: state.merchantTransactionId,
           merchantWalletId: _merchantWalletId,
           amount: state.coinAmount,
           stampExpiry: state.holdExpiryMs,
           transactionTime: state.transactionTime,
         );
+        // Persist hold context to survive gateway redirect (matches React sessionStorage)
+        await _persistHoldContext(holdContext);
+        return holdContext;
       } else {
         state = state.copyWith(
           isLoading: false,
-          error: response['message']?.toString() ?? 'OTP verification failed. Please try again.',
+          error:
+              response['message']?.toString() ??
+              'OTP verification failed. Please try again.',
         );
         return null;
       }
@@ -430,8 +550,101 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       coinAmount: _calculateCoinAmount(_preloadedBalance, _maxRedeemable),
     );
   }
+
+  /// Persist SuperCoin hold context to SharedPreferences (mirrors React sessionStorage).
+  Future<void> _persistHoldContext(SuperCoinHoldContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'merchantTransactionId': context.merchantTransactionId,
+        'merchantWalletId': context.merchantWalletId,
+        'amount': context.amount,
+        'stampExpiry': context.stampExpiry,
+        'transactionTime': context.transactionTime,
+      };
+      await prefs.setString('superCoinHold_${_orderNumber}', jsonEncode(data));
+    } catch (_) {}
+  }
+
+  /// Persist a SuperCoin hold context to SharedPreferences keyed by order number.
+  static Future<void> persistHoldContext(
+    String orderNumber,
+    SuperCoinHoldContext context,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'merchantTransactionId': context.merchantTransactionId,
+        'merchantWalletId': context.merchantWalletId,
+        'amount': context.amount,
+        'stampExpiry': context.stampExpiry,
+        'transactionTime': context.transactionTime,
+      };
+      await prefs.setString('superCoinHold_$orderNumber', jsonEncode(data));
+    } catch (_) {}
+  }
+
+  /// Load persisted SuperCoin hold context from SharedPreferences.
+  static Future<SuperCoinHoldContext?> loadHoldContext(
+    String orderNumber,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('superCoinHold_$orderNumber');
+      if (raw == null) return null;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      return SuperCoinHoldContext(
+        merchantTransactionId: data['merchantTransactionId'] as String? ?? '',
+        merchantWalletId: data['merchantWalletId'] as String? ?? '',
+        amount: (data['amount'] as num?)?.toDouble() ?? 0,
+        stampExpiry: data['stampExpiry'] as int?,
+        transactionTime: data['transactionTime'] as String?,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clear persisted SuperCoin hold context.
+  static Future<void> clearHoldContext(String orderNumber) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('superCoinHold_$orderNumber');
+    } catch (_) {}
+  }
+
+  // ── Active order number persistence (rehydration on cold start) ──
+
+  /// Persist the active order number that has a SuperCoin hold, so the
+  /// cart screen can rehydrate the hold on cold start (matches React's
+  /// sessionStorage persistence of superCoinOrderNumber).
+  static Future<void> persistActiveOrderNumber(String orderNumber) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('activeSuperCoinOrderNumber', orderNumber);
+    } catch (_) {}
+  }
+
+  /// Load the active order number that has a SuperCoin hold.
+  static Future<String?> loadActiveOrderNumber() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('activeSuperCoinOrderNumber');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clear the active order number (after hold is consumed or cancelled).
+  static Future<void> clearActiveOrderNumber() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('activeSuperCoinOrderNumber');
+    } catch (_) {}
+  }
 }
 
-final superCoinOtpProvider = StateNotifierProvider.autoDispose<SuperCoinOtpNotifier, SuperCoinOtpState>(
-  (ref) => throw UnimplementedError('Override in widget'),
-);
+final superCoinOtpProvider =
+    StateNotifierProvider.autoDispose<SuperCoinOtpNotifier, SuperCoinOtpState>(
+      (ref) => throw UnimplementedError('Override in widget'),
+    );
