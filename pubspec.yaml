@@ -1,7 +1,7 @@
 name: gift360
 description: "Gift360 - Gift Voucher Platform"
 publish_to: 'none'
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: ^3.12.0

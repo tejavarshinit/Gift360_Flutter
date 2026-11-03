@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_constants.dart';
+import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
+import 'package:gift360/features/auth/presentation/providers/providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final bool isSessionExpired;
@@ -16,8 +18,10 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _mobileController = TextEditingController();
-  final List<TextEditingController> _otpControllers =
-      List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _otpControllers = List.generate(
+    4,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _otpFocusNodes = List.generate(4, (_) => FocusNode());
 
   bool _otpSent = false;
@@ -25,6 +29,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _otpMessage = '';
   String _error = '';
   String _mobileError = '';
+  bool _biometricEnrolled = false;
+  String? _biometricIssue;
 
   // Brand logos for marquee (matching React)
   static const _brandLogos = [
@@ -43,8 +49,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    if (AppConfig.biometricLoginEnabled) _loadBiometricState();
     if (widget.isSessionExpired) {
       _error = 'Your session has expired. Please login again.';
+    }
+  }
+
+  Future<void> _loadBiometricState() async {
+    try {
+      final state = await ref.read(biometricServiceProvider).enrollmentState();
+      if (!mounted) return;
+      setState(() {
+        _biometricEnrolled = state.isEnabled;
+        _biometricIssue = state.issue;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _biometricIssue = error.toString());
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    setState(() {
+      _isLoading = true;
+      _error = '';
+    });
+    try {
+      final result = await ref.read(biometricServiceProvider).login();
+      await ref.read(authProvider.notifier).loginWithBiometrics(result);
+      if (mounted) context.go('/');
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = _friendlyError(error);
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -61,8 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   bool _validateMobile(String m) => AppConstants.mobileRegex.hasMatch(m);
-  bool _validateOtp() =>
-      _otpControllers.every((c) => c.text.length == 1);
+  bool _validateOtp() => _otpControllers.every((c) => c.text.length == 1);
 
   String get _otpString => _otpControllers.map((c) => c.text).join();
 
@@ -101,15 +140,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
     if (!_validateMobile(mobile)) {
       setState(
-          () => _mobileError = 'Please enter a valid 10-digit mobile number');
+        () => _mobileError = 'Please enter a valid 10-digit mobile number',
+      );
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final response = await ref.read(authProvider.notifier).sendOtp(
-            SendOtpRequest(mobileNumber: mobile),
-          );
+      final response = await ref
+          .read(authProvider.notifier)
+          .sendOtp(SendOtpRequest(mobileNumber: mobile));
       if (response.notRegistered == true) {
         setState(() {
           _error = 'Mobile number not registered. Please register first.';
@@ -148,12 +188,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final response = await ref.read(authProvider.notifier).loginWithOtp(
-            LoginWithOtpRequest(
-              mobileNumber: mobile,
-              otp: otp,
-            ),
-          );
+      final response = await ref
+          .read(authProvider.notifier)
+          .loginWithOtp(LoginWithOtpRequest(mobileNumber: mobile, otp: otp));
       if (response.success && response.token != null) {
         if (mounted) {
           await Future.delayed(const Duration(milliseconds: 400));
@@ -161,8 +198,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
       } else {
         setState(() {
-          _error =
-              response.message.isNotEmpty ? response.message : 'OTP login failed';
+          _error = response.message.isNotEmpty
+              ? response.message
+              : 'OTP login failed';
           _isLoading = false;
         });
       }
@@ -181,11 +219,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         msg.contains('SocketException')) {
       return 'No internet connection. Please check your network and try again.';
     }
-    if (msg.contains('connection timeout') ||
-        msg.contains('receive timeout')) {
+    if (msg.contains('connection timeout') || msg.contains('receive timeout')) {
       return 'Connection timed out. Please try again.';
     }
-    if (msg.contains('404')) return 'Service not found. Please try again later.';
+    if (msg.contains('404')) {
+      return 'Service not found. Please try again later.';
+    }
     if (msg.contains('500')) return 'Server error. Please try again later.';
     if (msg.contains('401') || msg.contains('403')) {
       return 'Session expired. Please try again.';
@@ -306,14 +345,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           // Session expired alert
                           if (widget.isSessionExpired && _error.isNotEmpty)
-                            _buildAlert(
-                              _error,
-                              isAmber: true,
-                            ),
+                            _buildAlert(_error, isAmber: true),
 
                           // Error alert
                           if (_error.isNotEmpty && !widget.isSessionExpired)
                             _buildAlert(_error),
+
+                          if (AppConfig.biometricLoginEnabled &&
+                              _biometricIssue != null)
+                            _buildAlert(
+                              '$_biometricIssue Use OTP login instead.',
+                            ),
+                          if (AppConfig.biometricLoginEnabled &&
+                              _biometricEnrolled) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _isLoading
+                                    ? null
+                                    : _handleBiometricLogin,
+                                icon: const Icon(Icons.fingerprint),
+                                label: const Text('Log in with biometrics'),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
 
                           // ── Mobile input ──
                           _buildMobileInput(),
@@ -445,10 +501,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 8),
 
                   // ── Brand logos marquee ──
-                  SizedBox(
-                    height: 28,
-                    child: _buildBrandMarquee(),
-                  ),
+                  SizedBox(height: 28, child: _buildBrandMarquee()),
                   const SizedBox(height: 8),
 
                   // ── Terms ──
@@ -463,7 +516,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           children: [
                             const TextSpan(
-                                text: 'By continuing, you agree to our '),
+                              text: 'By continuing, you agree to our ',
+                            ),
                             TextSpan(
                               text: 'Terms & Conditions',
                               style: GoogleFonts.poppins(
@@ -512,17 +566,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: const BoxDecoration(
                   color: Color(0xFFF7F7FA),
-                  border: Border(
-                    right: BorderSide(color: Color(0xFFEBEBEB)),
-                  ),
+                  border: Border(right: BorderSide(color: Color(0xFFEBEBEB))),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      '🇮🇳',
-                      style: TextStyle(fontSize: 13),
-                    ),
+                    const Text('🇮🇳', style: TextStyle(fontSize: 13)),
                     const SizedBox(width: 4),
                     Text(
                       '+91',
@@ -550,10 +599,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   enabled: !_otpSent,
                   onChanged: (_) => _clearErrors(),
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: Colors.black,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 11, color: Colors.black),
                   decoration: InputDecoration(
                     hintText: 'Enter mobile number',
                     hintStyle: GoogleFonts.poppins(
@@ -563,7 +609,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     counterText: '',
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                 ),
               ),
@@ -613,11 +661,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 if (!_isLoading) ...[
                   const SizedBox(width: 6),
-                  const Icon(
-                    Icons.send_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
+                  const Icon(Icons.send_rounded, size: 16, color: Colors.white),
                 ],
               ],
             ),
@@ -660,7 +704,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(
-                        color: Color(0xFF7C3AED), width: 1.5),
+                      color: Color(0xFF7C3AED),
+                      width: 1.5,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),

@@ -84,12 +84,11 @@ GoRoute _backAwareRoute({
 final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: navigatorKey,
-    initialLocation: '/',
+    initialLocation: '/login',
     observers: [LocationObserver()],
     redirect: (context, state) {
       final isLoggedIn = ref.read(authProvider) != null;
       final authInitialized = ref.read(authInitializedProvider);
-      final onboardingDone = ref.read(onboardingCompleteProvider);
       final path = state.matchedLocation;
 
       final isPublicPath =
@@ -105,16 +104,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           path.startsWith('/reseller/') ||
           path == '/changepassword';
 
-      // Wait for the persisted auth session to be restored before redirecting,
-      // so a logged-in user isn't sent to /login on cold start (matches React's
-      // synchronous localStorage restore).
+      // Wait until the previous session has been cleared before routing.
       if (!authInitialized) {
         return null;
-      }
-
-      // First launch: not logged in AND not onboarded -> force onboarding
-      if (!isLoggedIn && !onboardingDone && !isPublicPath) {
-        return '/onboarding';
       }
 
       if (!isLoggedIn && !isPublicPath) {

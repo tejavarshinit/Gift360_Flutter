@@ -4,6 +4,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class AppConfig {
   AppConfig._();
 
+  // Keep biometric entry points disabled without removing the implementation.
+  static const bool biometricLoginEnabled = false;
+
   static String get authApiUrl => dotenv.env['AUTH_API_URL'] ?? '';
   static String get brandApiUrl => dotenv.env['BRAND_API_URL'] ?? '';
   static String get cartApiUrl => dotenv.env['CART_API_URL'] ?? '';

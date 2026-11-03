@@ -5,6 +5,10 @@ import 'package:gift360/core/network/dio_client.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/data/repositories/auth_api.dart';
 import 'package:gift360/features/auth/data/repositories/auth_repository.dart';
+import 'package:gift360/features/auth/data/repositories/biometric_api.dart';
+import 'package:gift360/features/auth/data/repositories/biometric_key_store.dart';
+import 'package:gift360/features/auth/data/repositories/biometric_service.dart';
+import 'package:gift360/features/auth/data/models/biometric_models.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   final client = DioClient(
@@ -46,3 +50,18 @@ final paymentDioProvider = Provider<Dio>((ref) {
   return client.dio;
 });
 
+final biometricServiceProvider = Provider<BiometricService>((ref) {
+  final origin = biometricGatewayOrigin(AppConfig.brandApiUrl);
+  if (origin == null) {
+    throw const BiometricException(
+      'Biometric login requires a secure HTTPS ValueDesign API host.',
+    );
+  }
+  const secureStorage = FlutterSecureStorage();
+  final client = DioClient(baseUrl: origin, secureStorage: secureStorage);
+  return BiometricService(
+    api: BiometricApi(client.dio),
+    keyStore: PlatformBiometricKeyStore(),
+    storage: FlutterBiometricStorage(secureStorage),
+  );
+});

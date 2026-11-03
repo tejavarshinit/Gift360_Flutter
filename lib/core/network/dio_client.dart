@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,14 +9,11 @@ class DioClient {
   late final Dio _dio;
   final FlutterSecureStorage _secureStorage;
 
-  /// Global callback for 401 session expiry. Set once at app startup.
   static OnSessionExpired? onSessionExpired;
-
-  /// Paths that should NOT trigger session expiry on 401.
   static const _skipExpiryPaths = {'/payment-result'};
 
   DioClient({required String baseUrl, FlutterSecureStorage? secureStorage})
-      : _secureStorage = secureStorage ?? const FlutterSecureStorage() {
+    : _secureStorage = secureStorage ?? const FlutterSecureStorage() {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
@@ -54,9 +50,15 @@ class _AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    if (options.extra['skipGlobalAuth'] == true ||
+        options.headers.containsKey('Authorization')) {
+      handler.next(options);
+      return;
+    }
     final token = await _secureStorage.read(key: 'auth_token');
     if (token != null && token.isNotEmpty) {
-      options.headers['Authorization'] = 'Bearer $token';
+      const scheme = 'Bearer';
+      options.headers['Authorization'] = '$scheme $token';
     }
     handler.next(options);
   }
@@ -65,16 +67,12 @@ class _AuthInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) {
     if (err.response?.statusCode == 401) {
       final path = err.requestOptions.path;
-      final shouldSkip = DioClient._skipExpiryPaths.any((p) => path.contains(p));
-      if (!shouldSkip) {
-        _handleSessionExpired();
-      }
+      final shouldSkip = DioClient._skipExpiryPaths.any(
+        (p) => path.contains(p),
+      );
+      if (!shouldSkip) DioClient.onSessionExpired?.call();
     }
     handler.next(err);
-  }
-
-  void _handleSessionExpired() {
-    DioClient.onSessionExpired?.call();
   }
 }
 
@@ -82,7 +80,7 @@ class _LogInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     assert(() {
-      print('[DIO] → ${options.method} ${options.uri}');
+      debugPrint('[DIO] → ${options.method} ${options.uri}');
       return true;
     }());
     handler.next(options);
@@ -91,7 +89,9 @@ class _LogInterceptor extends Interceptor {
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
     assert(() {
-      print('[DIO] ← ${response.statusCode} ${response.requestOptions.uri}');
+      debugPrint(
+        '[DIO] ← ${response.statusCode} ${response.requestOptions.uri}',
+      );
       return true;
     }());
     handler.next(response);
@@ -100,7 +100,12 @@ class _LogInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     assert(() {
-      print('[DIO] ✕ ${err.type} ${err.requestOptions.uri} — ${err.message}');
+      final statusCode = err.response?.statusCode;
+      debugPrint(
+        '[DIO] ✕ ${err.type}'
+        '${statusCode == null ? '' : ' HTTP $statusCode'} '
+        '${err.requestOptions.uri}',
+      );
       return true;
     }());
     handler.next(err);
@@ -122,7 +127,10 @@ class _ErrorInterceptor extends Interceptor {
         message = 'No internet connection.';
         break;
       case DioExceptionType.badResponse:
-        message = _handleBadResponse(err.response?.statusCode, err.response?.data);
+        message = _handleBadResponse(
+          err.response?.statusCode,
+          err.response?.data,
+        );
         break;
       default:
         message = 'Something went wrong. Please try again.';

@@ -24,6 +24,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Gift360 uses Face ID to securely sign you in when you choose biometric login.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- UPI apps — required so canOpenURL/openURL can resolve them when the

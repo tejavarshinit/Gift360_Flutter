@@ -5,13 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
-import 'package:gift360/features/support/presentation/providers/support_ticket_provider.dart';
-import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -27,6 +26,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   int _selectedTab = 0; // 0 = Profile, 1 = Rewards
   Timer? _rewardsTimer;
   int _rewardsTick = 0;
+  bool _biometricActionLoading = false;
+  String? _biometricEnrollmentIssue;
+  String? _biometricActionError;
+  String? _biometricClientId;
 
   @override
   void initState() {
@@ -34,6 +37,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.read(authProvider);
     _nameController = TextEditingController(text: user?.name ?? '');
     _restoreDisplayName(user);
+    if (AppConfig.biometricLoginEnabled) _loadBiometricEnrollment();
 
     // Rewards tab: 1s countdown refresh + 10s status re-fetch (matches React).
     _rewardsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -43,6 +47,82 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ref.invalidate(rewardStatusProvider);
       }
     });
+  }
+
+  Future<void> _loadBiometricEnrollment() async {
+    try {
+      final state = await ref.read(biometricServiceProvider).enrollmentState();
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _biometricClientId = state.enrollment?.clientId;
+          _biometricEnrollmentIssue = state.issue;
+        });
+      });
+    } catch (error) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _biometricEnrollmentIssue = error.toString());
+      });
+    }
+  }
+
+  Future<void> _toggleBiometricLogin(dynamic user) async {
+    setState(() => _biometricActionLoading = true);
+    try {
+      final service = ref.read(biometricServiceProvider);
+      if (_biometricClientId == user.clientId) {
+        await service.disable(clientId: user.clientId, token: user.token);
+        _biometricClientId = null;
+      } else {
+        await service.enable(clientId: user.clientId, token: user.token);
+        _biometricClientId = user.clientId;
+      }
+      _biometricEnrollmentIssue = null;
+      _biometricActionError = null;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _biometricClientId == null
+                  ? 'Biometric login disabled.'
+                  : 'Biometric login enabled.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      _biometricActionError = error.toString();
+    } finally {
+      if (mounted) setState(() => _biometricActionLoading = false);
+    }
+  }
+
+  Future<void> _recoverBiometricLogin(dynamic user) async {
+    setState(() => _biometricActionLoading = true);
+    try {
+      await ref
+          .read(biometricServiceProvider)
+          .recoverAfterOtp(clientId: user.clientId, token: user.token);
+      if (mounted) {
+        setState(() {
+          _biometricClientId = null;
+          _biometricEnrollmentIssue = null;
+          _biometricActionError = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Biometric enrollment removed.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _biometricActionError = error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _biometricActionLoading = false);
+    }
   }
 
   Future<void> _restoreDisplayName(dynamic user) async {
@@ -124,10 +204,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 CircleAvatar(
                   radius: 43,
                   backgroundColor: const Color(0xFFDF9CA9),
-                  child: Text(initial, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white)),
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 18),
-                Text(user.name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w600, color: Color(0xFF454545))),
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF454545),
+                  ),
+                ),
               ],
             ),
           ),
@@ -138,9 +232,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF7357F1), Color(0xFF5040A0), Color(0xFF3B327D)],
+                  colors: [
+                    Color(0xFF7357F1),
+                    Color(0xFF5040A0),
+                    Color(0xFF3B327D),
+                  ],
                 ),
-                borderRadius: BorderRadius.only(topLeft: Radius.circular(34), topRight: Radius.circular(34)),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(34),
+                  topRight: Radius.circular(34),
+                ),
               ),
               padding: const EdgeInsets.fromLTRB(20, 32, 20, 18),
               child: Column(
@@ -181,11 +282,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
-                  child: Text('Profile',
-                      style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _selectedTab == 0 ? const Color(0xFF523DA9) : Colors.white70)),
+                  child: Text(
+                    'Profile',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _selectedTab == 0
+                          ? const Color(0xFF523DA9)
+                          : Colors.white70,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -200,11 +306,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
-                  child: Text('Rewards',
-                      style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _selectedTab == 1 ? const Color(0xFF523DA9) : Colors.white70)),
+                  child: Text(
+                    'Rewards',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _selectedTab == 1
+                          ? const Color(0xFF523DA9)
+                          : Colors.white70,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -214,7 +325,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileTab(dynamic user, double balance, SuperCoinState supercoinState) {
+  Widget _buildProfileTab(
+    dynamic user,
+    double balance,
+    SuperCoinState supercoinState,
+  ) {
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -230,15 +345,81 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _buildField('Balance', '₹${balance.toStringAsFixed(2)}'),
           const SizedBox(height: 20),
           // SuperCoin balance
-          _buildField('SuperCoins', '${supercoinState.balance.toInt()} coins',
-              icon: Icons.monetization_on, iconColor: Colors.amber),
-          const SizedBox(height: 30),
+          _buildField(
+            'SuperCoins',
+            '${supercoinState.balance.toInt()} coins',
+            icon: Icons.monetization_on,
+            iconColor: Colors.amber,
+          ),
+          const SizedBox(height: 20),
+          if (AppConfig.biometricLoginEnabled) ...[
+            _buildBiometricLoginAction(user),
+            const SizedBox(height: 30),
+          ],
           // Contact Us section
           _buildContactSection(),
           const SizedBox(height: 20),
           _buildLogoutButton(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildBiometricLoginAction(dynamic user) {
+    final belongsToOtherAccount =
+        _biometricClientId != null && _biometricClientId != user.clientId;
+    final enabledForUser = _biometricClientId == user.clientId;
+    final label = belongsToOtherAccount
+        ? 'Biometric login is enrolled for another account'
+        : enabledForUser
+        ? 'Disable biometric login'
+        : 'Enable biometric login';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed:
+              _biometricActionLoading ||
+                  belongsToOtherAccount ||
+                  _biometricEnrollmentIssue != null
+              ? null
+              : () => _toggleBiometricLogin(user),
+          icon: _biometricActionLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.fingerprint),
+          label: Text(label),
+        ),
+        if (_biometricEnrollmentIssue != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              children: [
+                Text(
+                  _biometricEnrollmentIssue!,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                ),
+                TextButton(
+                  onPressed: _biometricActionLoading
+                      ? null
+                      : () => _recoverBiometricLogin(user),
+                  child: const Text('Remove invalid enrollment after sign-in'),
+                ),
+              ],
+            ),
+          ),
+        if (_biometricActionError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              _biometricActionError!,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
+          ),
+      ],
     );
   }
 
@@ -268,11 +449,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Column(
       children: [
         const SizedBox(height: 40),
-        Icon(Icons.card_giftcard, size: 48, color: Colors.white.withValues(alpha: 0.5)),
+        Icon(
+          Icons.card_giftcard,
+          size: 48,
+          color: Colors.white.withValues(alpha: 0.5),
+        ),
         const SizedBox(height: 16),
         Text(
           'No rewards yet',
-          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -319,7 +508,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.card_giftcard, size: 20, color: Color(0xFFC4B5FD)),
+                const Icon(
+                  Icons.card_giftcard,
+                  size: 20,
+                  color: Color(0xFFC4B5FD),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -341,7 +534,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.access_time, size: 13, color: Color(0xFFFCD34D)),
+                const Icon(
+                  Icons.access_time,
+                  size: 13,
+                  color: Color(0xFFFCD34D),
+                ),
                 const SizedBox(width: 4),
                 Text(
                   secondsLeft > 0
@@ -358,14 +555,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     if (status == 'REDEEMED' || status == 'CLAIMED') {
       final orderNumber = reward['redeemedOrderNumber']?.toString();
-      final redeemedAt = DateTime.tryParse(reward['redeemedAt']?.toString() ?? '');
+      final redeemedAt = DateTime.tryParse(
+        reward['redeemedAt']?.toString() ?? '',
+      );
       return _rewardsCard(
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.check_circle, size: 20, color: Color(0xFF34D399)),
+                const Icon(
+                  Icons.check_circle,
+                  size: 20,
+                  color: Color(0xFF34D399),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -468,7 +671,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Text(
             text,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.8)),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withValues(alpha: 0.8),
+            ),
           ),
         ],
       ),
@@ -486,11 +693,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Need help?',
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+          Text(
+            'Need help?',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('Having a voucher or payment issue? We\'re here to help.',
-              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70, height: 1.4)),
+          Text(
+            'Having a voucher or payment issue? We\'re here to help.',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.white70,
+              height: 1.4,
+            ),
+          ),
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () => _showContactDialog(),
@@ -504,11 +723,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.mail_outline, size: 14, color: Color(0xFF7C3AED)),
+                  const Icon(
+                    Icons.mail_outline,
+                    size: 14,
+                    color: Color(0xFF7C3AED),
+                  ),
                   const SizedBox(width: 6),
-                  Text('Contact Us',
-                      style: GoogleFonts.poppins(
-                          fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF7C3AED))),
+                  Text(
+                    'Contact Us',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF7C3AED),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -538,18 +766,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.mail_outline, size: 28, color: Colors.white),
+                child: const Icon(
+                  Icons.mail_outline,
+                  size: 28,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
                 'Contact Us',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
               ),
               const SizedBox(height: 12),
               RichText(
                 textAlign: TextAlign.center,
                 text: TextSpan(
-                  style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.5),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                    height: 1.5,
+                  ),
                   children: [
                     const TextSpan(text: 'For any queries, reach out to '),
                     TextSpan(
@@ -568,13 +808,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               RichText(
                 textAlign: TextAlign.center,
                 text: TextSpan(
-                  style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.5),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                    height: 1.5,
+                  ),
                   children: [
                     const TextSpan(
                       text: 'Note: ',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF7C3AED)),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF7C3AED),
+                      ),
                     ),
-                    const TextSpan(text: 'If a transaction was successful but the voucher was not generated, please share the details at '),
+                    const TextSpan(
+                      text:
+                          'If a transaction was successful but the voucher was not generated, please share the details at ',
+                    ),
                     TextSpan(
                       text: 'gift360@gift360.io',
                       style: const TextStyle(
@@ -596,10 +846,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF7C3AED),
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     elevation: 2,
                   ),
-                  child: const Text('Got it', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Got it',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ],
@@ -609,20 +864,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildEditableField(String label, String value, bool isEditing, VoidCallback onEdit) {
+  Widget _buildEditableField(
+    String label,
+    String value,
+    bool isEditing,
+    VoidCallback onEdit,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.white)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: Colors.white,
+              ),
+            ),
             if (isEditing)
               Row(
                 children: [
                   GestureDetector(
                     onTap: _saveDisplayName,
-                    child: const Icon(Icons.check, color: Colors.greenAccent, size: 20),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.greenAccent,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   GestureDetector(
@@ -632,7 +903,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         _nameController.text = value;
                       });
                     },
-                    child: const Icon(Icons.close, color: Colors.redAccent, size: 20),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.redAccent,
+                      size: 20,
+                    ),
                   ),
                 ],
               )
@@ -647,32 +922,64 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         Container(
           height: 44,
           width: double.infinity,
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(7)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(7),
+          ),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 13),
           child: isEditing
               ? TextField(
                   controller: _nameController,
                   autofocus: true,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF333333)),
-                  decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF333333),
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
                 )
-              : Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF333333))),
+              : Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF333333),
+                  ),
+                ),
         ),
       ],
     );
   }
 
-  Widget _buildField(String label, String value, {IconData? icon, Color? iconColor}) {
+  Widget _buildField(
+    String label,
+    String value, {
+    IconData? icon,
+    Color? iconColor,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.white)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: Colors.white,
+          ),
+        ),
         const SizedBox(height: 8),
         Container(
           height: 44,
           width: double.infinity,
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(7)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(7),
+          ),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 13),
           child: Row(
@@ -681,7 +988,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Icon(icon, size: 18, color: iconColor),
                 const SizedBox(width: 8),
               ],
-              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF333333))),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF333333),
+                ),
+              ),
             ],
           ),
         ),
@@ -702,14 +1016,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFF06DA6),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(9),
+            ),
           ),
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.logout, size: 15),
               SizedBox(width: 5),
-              Text('Log Out', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(
+                'Log Out',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
             ],
           ),
         ),

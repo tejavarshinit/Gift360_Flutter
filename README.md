@@ -53,3 +53,26 @@ After sign-in the app registers the current FCM token against the authenticated
 profile's `clientId`. Failed registrations are logged and retried on app
 resume. Logout does not unregister the old token because the backend has no
 unregister endpoint.
+
+## Biometric login
+
+Biometric login is optional and is enabled from the signed-in profile after
+normal OTP authentication. The app uses the HTTPS host configured by
+`BRAND_API_URL` for the ValueDesign `/api/v1/auth/biometric` gateway routes.
+The Android manifest declares `USE_BIOMETRIC`; Android uses AndroidX
+`BiometricPrompt` and a hardware-backed Android Keystore RSA key. iOS uses
+Keychain-protected RSA with the current biometric set and requires a device
+passcode; `NSFaceIDUsageDescription` explains the Face ID prompt. RSA signing
+is unavailable in the iOS Secure Enclave, so the private key is protected by
+Keychain access control and is never exported.
+
+Biometric enrollment is device- and account-bound. Logout retains that
+enrollment; disabling it requires a successful gateway revoke before the
+local key and metadata are removed. A missing or invalidated key requires
+normal OTP login and recovery from the profile.
+
+The gateway deployment must prevent direct client access to the sibling auth
+service's register/revoke routes. Its in-memory challenge store also requires
+challenge issuance and login to reach the same auth-service instance; use
+sticky routing or shared challenge storage in multi-instance deployments.
+The application repository cannot verify these server-side routing guarantees.
