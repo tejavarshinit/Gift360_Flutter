@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1024383081552",
+    "project_id": "gift360-bafac",
+    "storage_bucket": "gift360-bafac.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1024383081552:android:8ee87a9a544428b2d44555",
+        "android_client_info": {
+          "package_name": "com.gift360.gift360"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmkNKOjr0r3r9cuCC6To5KJ-93unhx6rY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:gift360/core/widgets/session_expired_dialog.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/nearby/data/models/nearby_brand.dart';
 import 'package:gift360/features/brands/data/models/brand.dart';
@@ -30,7 +32,14 @@ import 'package:gift360/widgets/nearby_brand_card.dart';
 import 'package:gift360/widgets/nearby_state_widgets.dart';
 import 'package:gift360/widgets/map_card.dart';
 
-enum _LocationStatus { idle, requesting, granted, denied, confirming }
+enum _LocationStatus {
+  idle,
+  requesting,
+  granted,
+  denied,
+  deniedForever,
+  confirming,
+}
 
 class NearbyScreen extends ConsumerStatefulWidget {
   const NearbyScreen({super.key});
@@ -62,75 +71,150 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
   void initState() {
     super.initState();
     _dio = Dio(BaseOptions(baseUrl: AppConfig.storeApiUrl));
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final storage = const FlutterSecureStorage();
+          final token = await storage.read(key: 'auth_token');
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
+      ),
+    );
     _requestLocation();
   }
 
   Future<void> _requestLocation() async {
     setState(() => _locationStatus = _LocationStatus.requesting);
 
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) { setState(() => _locationStatus = _LocationStatus.denied); return; }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) { setState(() => _locationStatus = _LocationStatus.denied); return; }
-    }
-    if (permission == LocationPermission.deniedForever) { setState(() => _locationStatus = _LocationStatus.denied); return; }
-
-    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    setState(() { _position = position; _isGeocoding = true; });
-
     try {
-      final dio = Dio();
-      final res = await dio.get(
-        'https://nominatim.openstreetmap.org/reverse',
-        queryParameters: {
-          'format': 'json',
-          'lat': position.latitude,
-          'lon': position.longitude,
-          'zoom': '18',
-          'addressdetails': '1',
-        },
-        options: Options(headers: {'User-Agent': 'Gift360App/1.0'}),
-      );
-      final data = res.data as Map<String, dynamic>;
-      final address = data['address'] as Map<String, dynamic>? ?? {};
-      final city = address['city'] ?? address['town'] ?? address['village'] ?? address['county'] ?? '';
-      final state = address['state'] ?? '';
-      final country = address['country'] ?? '';
-      final parts = [city, state, country].where((p) => p != null && p.toString().isNotEmpty);
-      _detectedAddress = parts.join(', ');
-    } catch (e, stack) {
-      print('🔥 Geocoding error: $e');
-      print('🔥 Stack: $stack');
-    }
-    setState(() => _isGeocoding = false);
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _locationStatus = _LocationStatus.denied);
+        return;
+      }
 
-    if (_detectedAddress.isNotEmpty) {
-      setState(() { _showConfirmModal = true; _locationStatus = _LocationStatus.confirming; });
-    } else {
-      setState(() => _locationStatus = _LocationStatus.granted);
-      _fetchNearbyBrands();
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _locationStatus = _LocationStatus.deniedForever);
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        setState(() => _locationStatus = _LocationStatus.denied);
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      setState(() {
+        _position = position;
+        _isGeocoding = true;
+      });
+
+      try {
+        final dio = Dio();
+        final res = await dio.get(
+          'https://nominatim.openstreetmap.org/reverse',
+          queryParameters: {
+            'format': 'json',
+            'lat': position.latitude,
+            'lon': position.longitude,
+            'zoom': '18',
+            'addressdetails': '1',
+          },
+          options: Options(headers: {'User-Agent': 'Gift360App/1.0'}),
+        );
+        final data = res.data as Map<String, dynamic>;
+        final address = data['address'] as Map<String, dynamic>? ?? {};
+        final city =
+            address['city'] ??
+            address['town'] ??
+            address['village'] ??
+            address['county'] ??
+            address['state_district'] ??
+            '';
+        final state = address['state'] ?? '';
+        final country = address['country'] ?? '';
+        final parts = [
+          city,
+          state,
+          country,
+        ].where((p) => p != null && p.toString().isNotEmpty);
+        _detectedAddress = parts.join(', ');
+      } catch (e, stack) {
+        debugPrint('Geocoding error: $e');
+        debugPrint('Stack: $stack');
+      }
+      setState(() => _isGeocoding = false);
+
+      if (_detectedAddress.isNotEmpty) {
+        setState(() {
+          _showConfirmModal = true;
+          _locationStatus = _LocationStatus.confirming;
+        });
+      } else {
+        setState(() => _locationStatus = _LocationStatus.granted);
+        _fetchNearbyBrands();
+      }
+    } catch (e) {
+      debugPrint('Location request error: $e');
+      setState(() => _locationStatus = _LocationStatus.denied);
     }
   }
 
   void _onConfirmLocation() {
-    setState(() { _showConfirmModal = false; _locationStatus = _LocationStatus.granted; });
+    setState(() {
+      _showConfirmModal = false;
+      _locationStatus = _LocationStatus.granted;
+    });
     _fetchNearbyBrands();
+  }
+
+  Future<void> _openAppSettings() async {
+    await Geolocator.openAppSettings();
   }
 
   Future<void> _fetchNearbyBrands() async {
     if (_position == null) return;
-    setState(() { _isLoadingBrands = true; _hasError = false; });
+    setState(() {
+      _isLoadingBrands = true;
+      _hasError = false;
+    });
 
     try {
-      final response = await _dio.post('/v1/stores/nearby/brands', data: {'lat': _position!.latitude, 'lng': _position!.longitude, 'category': _selectedCategory});
+      final response = await _dio.post(
+        '/v1/stores/nearby/brands',
+        data: {
+          'lat': _position!.latitude,
+          'lng': _position!.longitude,
+          'category': _selectedCategory,
+        },
+      );
       final data = response.data as Map<String, dynamic>;
-      final brandsList = (data['brands'] as List<dynamic>?)?.map((b) => NearbyBrand.fromJson(b)).toList() ?? [];
-      setState(() { _brands = brandsList; _isLoadingBrands = false; });
+      final brandsList =
+          (data['brands'] as List<dynamic>?)
+              ?.map((b) => NearbyBrand.fromJson(b))
+              .toList() ??
+          [];
+      setState(() {
+        _brands = brandsList;
+        _isLoadingBrands = false;
+      });
     } catch (e) {
-      setState(() { _hasError = true; _isLoadingBrands = false; });
+      debugPrint('Nearby brands fetch error: $e');
+      setState(() {
+        _hasError = true;
+        _isLoadingBrands = false;
+      });
     }
   }
 
@@ -141,7 +225,12 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
 
   void _onBuy(String brandId) {
     if (brandId.isEmpty) return;
-    setState(() { _showPaymentSheet = true; _paymentBrand = null; _paymentLoading = true; _paymentError = null; });
+    setState(() {
+      _showPaymentSheet = true;
+      _paymentBrand = null;
+      _paymentLoading = true;
+      _paymentError = null;
+    });
     _fetchPaymentDetails(brandId);
   }
 
@@ -150,26 +239,77 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       final api = ref.read(brandsApiProvider);
       final details = await api.getBrandById(brandId);
       if (!mounted) return;
-      setState(() { _paymentBrand = details; _paymentError = null; _paymentLoading = false; });
+      setState(() {
+        _paymentBrand = details;
+        _paymentError = null;
+        _paymentLoading = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _paymentError = e.toString(); _paymentLoading = false; });
+      setState(() {
+        _paymentError = e.toString();
+        _paymentLoading = false;
+      });
     }
   }
 
   void _handleAddToCart(Brand brand, double amount, int quantity) {
-    ref.read(cartProvider.notifier).addToCart(AddToCartRequest(brandId: brand.brandId ?? '', brandName: brand.brandName ?? '', quantity: quantity, unitValue: amount, image: brand.resolvedImageUrl));
-    ref.read(notificationProvider.notifier).addNotification(title: 'Added to Cart', message: '${brand.brandName} voucher has been added successfully into cart', type: 'success');
-    setState(() { _showPaymentSheet = false; _paymentLoading = false; _paymentBrand = null; });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${quantity}x ${brand.brandName} voucher(s) of ₹${amount.toInt()} added to cart')));
+    ref
+        .read(cartProvider.notifier)
+        .addToCart(
+          AddToCartRequest(
+            brandId: brand.brandId ?? '',
+            brandName: brand.brandName ?? '',
+            quantity: quantity,
+            unitValue: amount,
+            image: brand.resolvedImageUrl,
+          ),
+        );
+    ref
+        .read(notificationProvider.notifier)
+        .addNotification(
+          title: 'Added to Cart',
+          message:
+              '${brand.brandName} voucher has been added successfully into cart',
+          type: 'success',
+        );
+    setState(() {
+      _showPaymentSheet = false;
+      _paymentLoading = false;
+      _paymentBrand = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${quantity}x ${brand.brandName} voucher(s) of ₹${amount.toInt()} added to cart',
+        ),
+      ),
+    );
   }
 
-  Future<void> _handlePay(Brand brand, double amount, int quantity) async {
+  Future<void> _handlePay(Brand brand, double amount, int quantity, [String? paymentMethod]) async {
     final user = ref.read(authProvider);
-    if (user == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please log in to make a payment'))); return; }
+    if (user == null) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => SessionExpiredDialog(
+          onLoginRedirect: () {
+            Navigator.of(ctx).pop();
+            context.go('/login');
+          },
+        ),
+      );
+      return;
+    }
     final totalAmount = amount * quantity;
     final brandId = brand.brandId ?? '';
-    if (brandId.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Brand ID not available'))); return; }
+    if (brandId.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Brand ID not available')));
+      return;
+    }
 
     final paymentNotifier = ref.read(paymentProvider.notifier);
     try {
@@ -192,35 +332,94 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
         totalAmount: totalAmount,
       );
       if (!mounted) return;
-      if (orderNumber == null) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Failed to create order'))); return; }
+      if (orderNumber == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ref.read(paymentProvider).error ?? 'Failed to create order',
+            ),
+          ),
+        );
+        return;
+      }
 
-      final valid = await paymentNotifier.validateOrder(cartTotal: totalAmount, walletAmount: 0, walletUsed: false);
+      final valid = await paymentNotifier.validateOrder(
+        cartTotal: totalAmount,
+        walletAmount: 0,
+        walletUsed: false,
+      );
       if (!mounted) return;
-      if (!valid) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Order validation failed'))); return; }
+      if (!valid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ref.read(paymentProvider).error ?? 'Order validation failed',
+            ),
+          ),
+        );
+        return;
+      }
 
       // Backend-mediated payment initiation (backend computes net payable).
-      final paymentResponse = await paymentNotifier.initiateBackendPayment();
+      final paymentResponse = await paymentNotifier.initiateBackendPayment(paymentMethod: paymentMethod);
       if (!mounted) return;
-      if (paymentResponse == null) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(paymentProvider).error ?? 'Payment initiation failed'))); return; }
+      if (paymentResponse == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ref.read(paymentProvider).error ?? 'Payment initiation failed',
+            ),
+          ),
+        );
+        return;
+      }
 
-      final paymentUrl = paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
-      if (paymentUrl == null || paymentUrl.toString().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment URL not received from gateway'))); return; }
+      final paymentUrl =
+          paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
+      if (paymentUrl == null || paymentUrl.toString().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment URL not received from gateway'),
+          ),
+        );
+        return;
+      }
 
-      setState(() { _showPaymentSheet = false; _paymentBrand = null; });
-      context.push('/payment-webview', extra: {'paymentUrl': paymentUrl.toString(), 'orderNumber': orderNumber});
+      setState(() {
+        _showPaymentSheet = false;
+        _paymentBrand = null;
+      });
+      context.push(
+        '/payment-webview',
+        extra: {
+          'paymentUrl': paymentUrl.toString(),
+          'orderNumber': orderNumber,
+        },
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment error: ${e.toString()}')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Payment error: ${e.toString()}')));
     }
   }
 
   List<NearbyBrand> get _filteredBrands {
     if (_query.isEmpty) return _brands;
     final q = _query.toLowerCase();
-    return _brands.where((b) => b.brandName.toLowerCase().contains(q) || b.category.toLowerCase().contains(q)).toList();
+    return _brands
+        .where(
+          (b) =>
+              b.brandName.toLowerCase().contains(q) ||
+              b.category.toLowerCase().contains(q),
+        )
+        .toList();
   }
 
-  bool get _showLoading => _locationStatus == _LocationStatus.requesting || _isGeocoding || (_locationStatus == _LocationStatus.granted && _isLoadingBrands);
+  bool get _showLoading =>
+      _locationStatus == _LocationStatus.requesting ||
+      _isGeocoding ||
+      (_locationStatus == _LocationStatus.granted && _isLoadingBrands);
 
   @override
   Widget build(BuildContext context) {
@@ -232,10 +431,19 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
             children: [
               _buildHeader(),
               const SizedBox(height: 12),
-              NearbySearchBar(value: _query, onChanged: (v) => setState(() => _query = v)),
+              NearbySearchBar(
+                value: _query,
+                onChanged: (v) => setState(() => _query = v),
+              ),
               const SizedBox(height: 12),
-              CategoryChips(selected: _selectedCategory, onSelect: _onCategorySelect),
-              if (_locationStatus == _LocationStatus.granted) ...[const SizedBox(height: 12), MapCard(lat: _position?.latitude, lng: _position?.longitude)],
+              CategoryChips(
+                selected: _selectedCategory,
+                onSelect: _onCategorySelect,
+              ),
+              if (_locationStatus == _LocationStatus.granted) ...[
+                const SizedBox(height: 12),
+                MapCard(lat: _position?.latitude, lng: _position?.longitude),
+              ],
               const SizedBox(height: 12),
               Expanded(child: _buildContent()),
             ],
@@ -243,15 +451,30 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
           if (_showLoading && !_showConfirmModal)
             Container(
               color: AppColors.background,
-              child: Center(child: LocationLoadingWidget(text: _isGeocoding ? 'Detecting your location...' : 'Getting your location...')),
+              child: Center(
+                child: LocationLoadingWidget(
+                  text: _isGeocoding
+                      ? 'Detecting your location...'
+                      : 'Getting your location...',
+                ),
+              ),
             ),
-          if (_showConfirmModal) LocationConfirmModal(address: _detectedAddress, onConfirm: _onConfirmLocation),
+          if (_showConfirmModal)
+            LocationConfirmModal(
+              address: _detectedAddress,
+              onConfirm: _onConfirmLocation,
+            ),
           if (_showPaymentSheet)
             PaymentDetailsSheet(
               brand: _paymentBrand,
               loading: _paymentLoading,
               error: _paymentError,
-              onClose: () => setState(() { _showPaymentSheet = false; _paymentLoading = false; _paymentError = null; _paymentBrand = null; }),
+              onClose: () => setState(() {
+                _showPaymentSheet = false;
+                _paymentLoading = false;
+                _paymentError = null;
+                _paymentBrand = null;
+              }),
               onAddToCart: _handleAddToCart,
               onPay: _handlePay,
             ),
@@ -263,7 +486,12 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 8, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        MediaQuery.of(context).padding.top + 8,
+        16,
+        12,
+      ),
       color: AppColors.background,
       child: Row(
         children: [
@@ -272,8 +500,21 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
             child: Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20)]),
-              child: const Icon(Icons.arrow_back, size: 20, color: AppColors.textDarkAlt),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.arrow_back,
+                size: 20,
+                color: AppColors.textDarkAlt,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -282,8 +523,12 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Offers Near You', style: AppTextStyles.pageTitle),
-                if (_locationStatus == _LocationStatus.granted && _detectedAddress.isNotEmpty)
-                  Text(_detectedAddress.split(',').first, style: AppTextStyles.headerSubtitle),
+                if (_locationStatus == _LocationStatus.granted &&
+                    _detectedAddress.isNotEmpty)
+                  Text(
+                    _detectedAddress.split(',').first,
+                    style: AppTextStyles.headerSubtitle,
+                  ),
               ],
             ),
           ),
@@ -294,17 +539,33 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
 
   Widget _buildContent() {
     if (_showLoading || _showConfirmModal) return const SizedBox.shrink();
-    if (_locationStatus == _LocationStatus.denied) return LocationPrompt(onRequest: _requestLocation);
+    if (_locationStatus == _LocationStatus.deniedForever)
+      return LocationDenied(onOpenSettings: _openAppSettings);
+    if (_locationStatus == _LocationStatus.denied)
+      return LocationPrompt(onRequest: _requestLocation);
     if (_hasError) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: const [BoxShadow(color: AppColors.cardShadow, blurRadius: 24, offset: Offset(0, 12))]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.cardShadow,
+              blurRadius: 24,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             const Icon(Icons.error_outline, color: AppColors.red400, size: 16),
             const SizedBox(width: 8),
-            Text('Unable to load nearby stores. Please try again.', style: AppTextStyles.errorText),
+            Text(
+              'Unable to load nearby stores. Please try again.',
+              style: AppTextStyles.errorText,
+            ),
           ],
         ),
       );
@@ -315,7 +576,10 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('${_filteredBrands.length} $_selectedCategory store${_filteredBrands.length != 1 ? 's' : ''} near you', style: AppTextStyles.countText),
+          child: Text(
+            '${_filteredBrands.length} $_selectedCategory store${_filteredBrands.length != 1 ? 's' : ''} near you',
+            style: AppTextStyles.countText,
+          ),
         ),
         const SizedBox(height: 12),
         Expanded(
@@ -323,7 +587,10 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
             padding: const EdgeInsets.only(bottom: 80),
             itemCount: _filteredBrands.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) => NearbyBrandCard(brand: _filteredBrands[index], onBuy: () => _onBuy(_filteredBrands[index].brandId)),
+            itemBuilder: (context, index) => NearbyBrandCard(
+              brand: _filteredBrands[index],
+              onBuy: () => _onBuy(_filteredBrands[index].brandId),
+            ),
           ),
         ),
       ],

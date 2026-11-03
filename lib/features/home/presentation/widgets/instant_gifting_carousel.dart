@@ -1,37 +1,55 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class InstantGiftingCarousel extends StatefulWidget {
+import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/home/presentation/providers/home_providers.dart';
+import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
+import 'package:gift360/features/rewards/presentation/widgets/quiz_modal.dart';
+
+class InstantGiftingCarousel extends ConsumerStatefulWidget {
   final VoidCallback? onExploreBrands;
   final VoidCallback? onPartnerWithUs;
   final ValueChanged<String>? onBrandTap;
+
+  /// Opens the SuperCoin intro modal straight on its convert tab (React
+  /// `ConvertCoinsSlide` → SuperCoinIntroModal initialTab="convert").
+  final VoidCallback? onOpenConvertIntro;
+
+  /// Scrolls home to the matching occasion section (React chip →
+  /// `#occasion-{slug}` scrollIntoView).
+  final ValueChanged<String>? onSelectOccasion;
 
   const InstantGiftingCarousel({
     super.key,
     this.onExploreBrands,
     this.onPartnerWithUs,
     this.onBrandTap,
+    this.onOpenConvertIntro,
+    this.onSelectOccasion,
   });
 
   @override
-  State<InstantGiftingCarousel> createState() => _InstantGiftingCarouselState();
+  ConsumerState<InstantGiftingCarousel> createState() => _InstantGiftingCarouselState();
 }
 
-class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
+class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
     with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
   Timer? _autoTimer;
   bool _userInteracting = false;
   int _currentPage = 0;
 
+  // Matches React InstantGiftingBanner's slide count/order.
+  static const _totalSlides = 7;
   static const _accent = Color(0xFF7C3AED);
   static const _duration = Duration(milliseconds: 450);
   static const _autoInterval = Duration(seconds: 3);
 
   // Brand IDs for the SuperCoin nudge cards (match React InstantGiftingBanner).
-  static const _uberBrandId = '3e4245c1-a17c-48e4-aa41-e8657d2886e4';
   static const _blinkitBrandId = 'a5fea1a3-3e17-414f-a953-407125080d77';
   static const _bataBrandId = '335f53f7-68f6-4eb0-be45-e571c1044cf9';
 
@@ -43,6 +61,17 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
     stops: [0.0, 0.6, 1.0],
   );
 
+  // "Save Save Save" wiggle on the cashback slide (React save-wiggle keyframes).
+  late final AnimationController _wiggleController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  // Quiz slide state (React QuizSlide copy variants).
+  String? _quizNote;
+  bool _quizBusy = false;
+  String? _selectedOccasion;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +81,7 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
   @override
   void dispose() {
     _autoTimer?.cancel();
+    _wiggleController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -60,7 +90,7 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
     _autoTimer?.cancel();
     _autoTimer = Timer.periodic(_autoInterval, (_) {
       if (_userInteracting || !_pageController.hasClients) return;
-      final next = (_currentPage + 1) % 4;
+      final next = (_currentPage + 1) % _totalSlides;
       _pageController.animateToPage(next, duration: _duration, curve: Curves.easeInOut);
     });
   }
@@ -117,7 +147,13 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
                     controller: _pageController,
                     onPageChanged: (i) => setState(() => _currentPage = i),
                     children: [
-                      _buildAnimatedBrandNudge('assets/images/uber (2).png', 'Uber', 250, _uberBrandId),
+                      // Slide order matches React InstantGiftingBanner:
+                      // cashback → convert coins → occasions → quiz →
+                      // Blinkit nudge → Bata nudge → partner.
+                      _buildCashbackSlide(),
+                      _buildConvertSlide(),
+                      _buildOccasionSlide(),
+                      _buildQuizSlide(),
                       _buildAnimatedBrandNudge('assets/images/blinkit.png', 'Blinkit', 150, _blinkitBrandId),
                       _buildAnimatedBrandNudge('assets/images/bataa.png', 'Bata', 150, _bataBrandId),
                       _buildSlide3(padding, isMobile),
@@ -137,15 +173,15 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
   Widget _buildDots() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(4, (i) {
+      children: List.generate(_totalSlides, (i) {
         final active = _currentPage == i;
         return GestureDetector(
           onTap: () => _jumpTo(i),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             margin: const EdgeInsets.symmetric(horizontal: 4),
-            width: active ? 24 : 8,
-            height: 8,
+            width: active ? 20 : 6,
+            height: 6,
             decoration: BoxDecoration(
               color: active ? _accent : const Color(0xFFD1D5DB),
               borderRadius: BorderRadius.circular(4),
@@ -153,6 +189,439 @@ class _InstantGiftingCarouselState extends State<InstantGiftingCarousel>
           ),
         );
       }),
+    );
+  }
+
+  // ─── Shared slide bits (React label chips / pill buttons) ───
+  Widget _slideLabelChip(String text, {Color bg = _accent, Color fg = Colors.white}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: const [BoxShadow(color: Color(0x597C3AED), blurRadius: 6, offset: Offset(0, 2))],
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.poppins(
+          fontSize: 8,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
+  Widget _slidePillButton(String label, {Color bg = Colors.white, Color fg = const Color(0xFF5B2B99), VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2))],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: fg)),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_forward, size: 12, color: fg),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Slide 1: Cashback banner (React cashhbanner slide) ───
+  Widget _buildCashbackSlide() {
+    return GestureDetector(
+      // React: /brands?discount=Up to 5%&discount=5% - 15%
+      onTap: () =>
+          context.push('/brands?discount=Up%20to%205%25&discount=5%25%20-%2015%25'),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/images/cashhbanner.png',
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+          ),
+          // Left column only — keeps the right-side art clear (React max-w-56%).
+          Positioned.fill(
+            child: FractionallySizedBox(
+              widthFactor: 0.56,
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 6, 0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < 3; i++) ...[
+                          if (i > 0) const SizedBox(width: 6),
+                          _wiggleSaveWord(i),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Save upto 30% with Cashback wallet points',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                        color: const Color(0xFF5B2B99),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _slidePillButton('Shop Now'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _wiggleSaveWord(int index) {
+    // Phased rotation (React save-wiggle keyframes with 0.16s/0.32s delays).
+    final delay = index * 0.114;
+    return AnimatedBuilder(
+      animation: _wiggleController,
+      builder: (context, child) {
+        final t = (_wiggleController.value + delay) % 1.0;
+        return Transform.rotate(angle: sin(t * 2 * pi) * 0.09, child: child);
+      },
+      child: Text(
+        'Save',
+        style: GoogleFonts.poppins(
+          fontSize: 21,
+          fontStyle: FontStyle.italic,
+          fontWeight: FontWeight.w900,
+          height: 1,
+          letterSpacing: -0.5,
+          color: index.isEven ? const Color(0xFF4C1D95) : _accent,
+          shadows: const [
+            Shadow(color: Color(0xF2FFFFFF), blurRadius: 1, offset: Offset(0, 1)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Slide 2: Convert coins (React ConvertCoinsSlide → intro modal convert tab) ───
+  Widget _buildConvertSlide() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF5B2B99), Color(0xFF7C3AED)],
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _slideLabelChip('CONVERT COINS', bg: const Color(0xFFF7D46B), fg: const Color(0xFF5B2B99)),
+                const SizedBox(height: 6),
+                Text(
+                  'Turn SuperCoins into gift vouchers',
+                  style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white, height: 1.15),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'See how converting coins cuts what you pay \u2014 the full step-by-step guide.',
+                  style: GoogleFonts.poppins(fontSize: 10, height: 1.3, color: Colors.white.withValues(alpha: 0.85)),
+                ),
+                const SizedBox(height: 8),
+                _slidePillButton('View guide', onTap: widget.onOpenConvertIntro),
+              ],
+            ),
+          ),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 40, height: 40),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Slide 3: Occasions (React OccasionSlide → scroll to section) ───
+  Widget _buildOccasionSlide() {
+    final occasionsAsync = ref.watch(occasionsProvider);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset('assets/images/occasion.png', fit: BoxFit.cover, alignment: Alignment.center),
+        Positioned.fill(
+          child: FractionallySizedBox(
+            widthFactor: 0.5,
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 4, 0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _slideLabelChip('OCCASIONS'),
+                  const SizedBox(height: 6),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Offers for ',
+                          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF111827), height: 1.15),
+                        ),
+                        TextSpan(
+                          text: 'every occasion',
+                          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: _accent, height: 1.15),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Pick one \u2014 jump straight to its picks.',
+                    style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF4B5563)),
+                  ),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 76),
+                    child: SingleChildScrollView(
+                      child: occasionsAsync.when(
+                        loading: () => Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: List.generate(
+                            4,
+                            (_) => Container(
+                              width: 64,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE5E7EB),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        ),
+                        error: (_, __) => Text(
+                          'Loading occasions\u2026',
+                          style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF9CA3AF)),
+                        ),
+                        data: (all) {
+                          final list = all
+                              .where((o) => o.trim().toLowerCase() != 'top brands')
+                              .toList();
+                          if (list.isEmpty) {
+                            return Text(
+                              'Loading occasions\u2026',
+                              style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF9CA3AF)),
+                            );
+                          }
+                          return Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: list.map((occasion) {
+                              final active = _selectedOccasion == occasion;
+                              return GestureDetector(
+                                onTap: () {
+                                  _onUserInteract();
+                                  setState(() => _selectedOccasion = occasion);
+                                  widget.onSelectOccasion?.call(occasion);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    gradient: active
+                                        ? const LinearGradient(colors: [Color(0xFF9747FF), Color(0xFF7C3AED)])
+                                        : null,
+                                    color: active ? null : Colors.white,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: active ? null : Border.all(color: const Color(0xFFE2D9FF)),
+                                    boxShadow: const [BoxShadow(color: Color(0x1A7C3AED), blurRadius: 6, offset: Offset(0, 2))],
+                                  ),
+                                  child: Text(
+                                    occasion,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: active ? Colors.white : _accent,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Slide 4: Quiz (React QuizSlide + start-from-banner flow) ───
+  Future<void> _playQuiz() async {
+    final user = ref.read(authProvider);
+    if (user == null) {
+      context.push('/login');
+      return;
+    }
+    final status =
+        (ref.read(rewardStatusProvider).valueOrNull?['status'] ?? '').toString().toUpperCase();
+    if (status == 'PENDING') {
+      context.push('/supercoin-voucher');
+      return;
+    }
+    setState(() {
+      _quizBusy = true;
+      _quizNote = null;
+    });
+    try {
+      final result =
+          await ref.read(rewardsApiProvider).startFromBanner(user.clientId);
+      final st = (result['status'] ?? '').toString().toUpperCase();
+      final publicId = (result['publicId'] ?? '').toString();
+      final startExpires = (result['quizStartExpiresAt'] ?? '').toString();
+      if (!mounted) return;
+      setState(() => _quizBusy = false);
+      if (st == 'PENDING') {
+        context.push('/supercoin-voucher');
+        return;
+      }
+      if (publicId.isNotEmpty &&
+          startExpires.isNotEmpty &&
+          (st == 'AVAILABLE' || st == 'IN_PROGRESS')) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.transparent,
+          builder: (_) => QuizModal(
+            clientId: user.clientId,
+            publicId: publicId,
+            onClose: () => Navigator.of(context, rootNavigator: true).pop(),
+            onFinished: (_) => ref.invalidate(rewardStatusProvider),
+          ),
+        );
+      } else {
+        setState(() =>
+            _quizNote = 'You have used your quiz attempts for today. Try again tomorrow.');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _quizBusy = false;
+        _quizNote = 'The quiz is not available right now. Please try again.';
+      });
+    }
+  }
+
+  Widget _buildQuizSlide() {
+    final reward = ref.watch(rewardStatusProvider).valueOrNull;
+    final status = (reward?['status'] ?? '').toString().toUpperCase();
+    final expiresAt = DateTime.tryParse((reward?['expiresAt'] ?? '').toString());
+    final quizEarned = status == 'REDEEMED' || status == 'CLAIMED';
+    final quizWon = status == 'PENDING' &&
+        expiresAt != null &&
+        expiresAt.isAfter(DateTime.now());
+
+    final String title;
+    final String sub;
+    final String? cta;
+    if (quizEarned) {
+      title = 'Quiz reward earned';
+      sub = 'Your 5 bonus SuperCoins have been credited. Thanks for playing.';
+      cta = null;
+    } else if (quizWon) {
+      title = 'You won! Buy now to get 5 SuperCoins';
+      sub = 'Complete a purchase within 5 minutes of your win and 5 bonus '
+          'SuperCoins are credited after your voucher is issued.';
+      cta = 'Buy now';
+    } else {
+      title = 'Answer 5 questions, win 5 SuperCoins';
+      sub = _quizNote ??
+          'Get all 5 right, then buy within 5 minutes and we credit 5 bonus SuperCoins.';
+      cta = 'Play now';
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF7C3AED), Color(0xFF5B2B99)],
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _slideLabelChip('QUIZ', bg: const Color(0xFFF7D46B), fg: const Color(0xFF5B2B99)),
+                const SizedBox(height: 6),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white, height: 1.15),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  sub,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(fontSize: 10, height: 1.3, color: Colors.white.withValues(alpha: 0.85)),
+                ),
+                if (cta != null) ...[
+                  const SizedBox(height: 8),
+                  _slidePillButton(
+                    _quizBusy ? 'Opening\u2026' : cta,
+                    onTap: _quizBusy ? null : _playQuiz,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Icon(Icons.monetization_on, size: 40, color: Color(0xFFF7D46B)),
+          ),
+        ],
+      ),
     );
   }
 

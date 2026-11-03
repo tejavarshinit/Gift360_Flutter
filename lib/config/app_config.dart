@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppConfig {
@@ -13,6 +14,42 @@ class AppConfig {
   static String get storeApiUrl => dotenv.env['STORE_API_URL'] ?? '';
   static String get supercoinApiUrl => dotenv.env['SUPERCOIN_API_URL'] ?? '';
   static String get giftingApiUrl => dotenv.env['GIFTING_API_URL'] ?? '';
+  static String get notificationApiBaseUrl {
+    const configuredUrl = String.fromEnvironment('NOTIFICATION_API_URL');
+    final url = configuredUrl.trim().isNotEmpty
+        ? configuredUrl
+        : dotenv.env['NOTIFICATION_API_URL'] ?? '';
+    return url.trim().isEmpty ? 'http://localhost:8081' : url.trim();
+  }
+
+  static String get firebaseWebVapidKey =>
+      dotenv.env['FIREBASE_WEB_VAPID_KEY'] ?? '';
+  static FirebaseOptions? get firebaseWebOptions {
+    final apiKey = dotenv.env['FIREBASE_WEB_API_KEY']?.trim() ?? '';
+    final appId = dotenv.env['FIREBASE_WEB_APP_ID']?.trim() ?? '';
+    final messagingSenderId =
+        dotenv.env['FIREBASE_MESSAGING_SENDER_ID']?.trim() ?? '';
+    final projectId = dotenv.env['FIREBASE_PROJECT_ID']?.trim() ?? '';
+    if (apiKey.isEmpty ||
+        appId.isEmpty ||
+        messagingSenderId.isEmpty ||
+        projectId.isEmpty) {
+      return null;
+    }
+    return FirebaseOptions(
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      authDomain: dotenv.env['FIREBASE_AUTH_DOMAIN'],
+      storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'],
+      measurementId: dotenv.env['FIREBASE_MEASUREMENT_ID'],
+    );
+  }
+
+  /// Notifications/mail service (React `VITE_MAIL_URL`) — voucher emails
+  /// (`/mail/send`) are posted straight to it.
+  static String get mailApiUrl => dotenv.env['MAIL_URL'] ?? '';
   static String get imageBaseUrl => dotenv.env['IMAGE_BASE_URL'] ?? '';
   static String get encryptionKey => dotenv.env['ENCRYPTION_KEY'] ?? '';
   static String get encryptionIv => dotenv.env['ENCRYPTION_IV'] ?? '';
@@ -53,6 +90,13 @@ class AppConfig {
     return double.tryParse(raw ?? '') ?? 10;
   }
 
+  static int get upiPollIntervalMs {
+    final configured = int.tryParse(
+      dotenv.env['VITE_UPI_POLL_INTERVAL_MS'] ?? '',
+    );
+    return configured == null || configured < 500 ? 2000 : configured;
+  }
+
   static const bool enableLogging = true;
 }
 
@@ -73,12 +117,16 @@ class SuperCoinConversionConfig {
 
   /// Flipkart B2C brand id pre-selected when the header icon is tapped.
   /// Matches React's SUPERCOIN_FEATURED_BRAND_ID in SuperCoinsBrandModal.tsx.
-  static const String featuredBrandId = 'e6f0e8e0-784a-4877-9c95-826d53cbdf84';
+  static const String featuredBrandId = 'c1ae829e-0e78-4dfe-8432-c4c1ac9360e1';
 
-  /// Rupee → coin conversion ratio (default 1.25, matches React).
+  /// SKU whose SuperCoin rules drive the convert flow (matches React's
+  /// VITE_SUPERCOIN_VOUCHER_SKU default).
+  static const String voucherSku = 'EGCGBFKC002';
+
+  /// Rupee → coin conversion ratio (default 1.00, matches React's VITE_SUPERCOIN_BURN_RATIO).
   /// Reads from .env at runtime so changing the ratio doesn't require rebuild.
   static double get burnRatio {
     final raw = dotenv.env['SUPERCOIN_BURN_RATIO'];
-    return double.tryParse(raw ?? '') ?? 1.25;
+    return double.tryParse(raw ?? '') ?? 1.0;
   }
 }

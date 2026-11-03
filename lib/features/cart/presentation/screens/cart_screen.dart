@@ -15,6 +15,7 @@ import 'package:gift360/features/cart/presentation/widgets/cart_item_card.dart';
 import 'package:gift360/features/cart/presentation/widgets/cart_tabs.dart';
 import 'package:gift360/features/cart/presentation/widgets/order_summary_section.dart';
 import 'package:gift360/features/cart/presentation/widgets/supercoin_otp_modal.dart';
+import 'package:gift360/features/cart/presentation/widgets/supercoin_redeemed_modal.dart';
 import 'package:gift360/features/cart/presentation/widgets/payment_flow_sheet.dart';
 import 'package:gift360/features/cart/presentation/widgets/delete_confirm_dialog.dart';
 
@@ -30,6 +31,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   String? _itemToDeleteId;
   String? _itemToDeleteName;
   bool _showSuperCoinOtp = false;
+  bool _showSuperCoinRedeemed = false;
   bool _showPaymentSheet = false;
 
   @override
@@ -44,7 +46,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final cart = ref.read(cartProvider);
     if (cart != null && cart.items.isNotEmpty) {
       final brandsApi = ref.read(brandsApiProvider);
-      ref.read(cartCheckoutProvider.notifier).fetchBrandDiscounts(cart.items, brandsApi);
+      ref
+          .read(cartCheckoutProvider.notifier)
+          .fetchBrandDiscounts(cart.items, brandsApi);
     }
   }
 
@@ -66,29 +70,66 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       }
     });
 
-    final hasPopulatedCart = user != null && cart != null && cart.items.isNotEmpty;
+    final hasPopulatedCart =
+        user != null && cart != null && cart.items.isNotEmpty;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Aurora background
-          Positioned.fill(
-            child: Image.asset('assets/images/ganeshbackdrop.png', fit: BoxFit.cover),
-          ),
-          // Main content
-          Column(
-            children: [
-              if (hasPopulatedCart) _buildHeader(cart),
-              Expanded(
-                child: _buildBody(user, cart, checkout),
+    return PopScope(
+      // While the SuperCoins OTP modal is open, back closes the modal first.
+      canPop: !_showSuperCoinOtp,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          // Leaving the cart in SuperCoins mode releases any active hold
+          // (matches React: back/unload never keeps coins reserved).
+          _unholdSuperCoinOnExit();
+          return;
+        }
+        if (_showSuperCoinOtp) {
+          setState(() => _showSuperCoinOtp = false);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            // Background matching React: #f3f5f9 (replaced ganeshbackdrop.png)
+            Positioned.fill(child: const SizedBox.shrink()),
+            // Main content
+            Column(
+              children: [
+                if (hasPopulatedCart) _buildHeader(cart),
+                Expanded(child: _buildBody(user, cart, checkout)),
+              ],
+            ),
+            // SuperCoins OTP modal — overlays the full screen like a real popup.
+            if (_showSuperCoinOtp) _buildSuperCoinOtpModal(),
+            if (_showSuperCoinRedeemed)
+              Positioned.fill(
+                child: SuperCoinRedeemedModal(
+                  open: _showSuperCoinRedeemed,
+                  onContinue: () =>
+                      setState(() => _showSuperCoinRedeemed = false),
+                ),
               ),
-            ],
-          ),
-          // SuperCoins OTP modal — overlays the full screen like a real popup.
-          if (_showSuperCoinOtp) _buildSuperCoinOtpModal(),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  /// Unhold the active SuperCoin hold when the user backs out of the cart.
+  /// Guarded by `isProcessing` so a hold that is already backing a payment in
+  /// flight (gateway redirect) is never released — mirrors React's
+  /// `paymentInFlightRef` guard in its beforeunload unhold.
+  void _unholdSuperCoinOnExit() {
+    try {
+      final checkout = ref.read(cartCheckoutProvider);
+      if (checkout.isProcessing ||
+          !checkout.superCoinAuthorized ||
+          checkout.superCoinHoldContext == null) {
+        return;
+      }
+      ref.read(cartCheckoutProvider.notifier).cancelSuperCoinHold();
+    } catch (_) {}
   }
 
   // ─────────────────────────────────────────────
@@ -192,7 +233,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   Widget _buildBody(dynamic user, Cart? cart, CartCheckoutState checkout) {
     if (user == null) return _buildLoginPrompt();
     if (cart == null) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7)));
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF6C5CE7)),
+      );
     }
     if (cart.items.isEmpty) return _buildEmptyCart();
     return _buildCartContent(cart, checkout);
@@ -212,22 +255,40 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)]),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)],
+                ),
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: const Icon(Icons.shopping_bag_outlined, size: 40, color: Colors.white),
+              child: const Icon(
+                Icons.shopping_bag_outlined,
+                size: 40,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 20),
-            Text('Please Login', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
+            Text(
+              'Please Login',
+              style: GoogleFonts.poppins(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('You need to be logged in to view your cart', style: GoogleFonts.poppins(color: const Color(0xFF6B7280))),
+            Text(
+              'You need to be logged in to view your cart',
+              style: GoogleFonts.poppins(color: const Color(0xFF6B7280)),
+            ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () => context.push('/login'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6C5CE7),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
               ),
               child: const Text('Login to Continue'),
             ),
@@ -261,7 +322,11 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.shopping_cart_outlined, size: 64, color: Color(0xFF9747FF)),
+            const Icon(
+              Icons.shopping_cart_outlined,
+              size: 64,
+              color: Color(0xFF9747FF),
+            ),
             const SizedBox(height: 16),
             Text(
               'Your cart is empty',
@@ -331,23 +396,27 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             child: Column(
               children: [
                 // Cart Items
-                ...cart.items.map((item) => CartItemCard(
-                      itemId: item.itemId,
-                      brandName: item.brandName,
-                      image: item.image,
-                      quantity: item.quantity,
-                      unitValue: item.unitValue,
-                      lineTotal: item.lineTotal,
-                      onQuantityChange: (itemId, qty) {
-                        ref.read(cartProvider.notifier).updateQuantity(itemId, qty);
-                      },
-                      onRemove: (itemId) {
-                        setState(() {
-                          _itemToDeleteId = itemId;
-                          _itemToDeleteName = item.brandName;
-                        });
-                      },
-                    )),
+                ...cart.items.map(
+                  (item) => CartItemCard(
+                    itemId: item.itemId,
+                    brandName: item.brandName,
+                    image: item.image,
+                    quantity: item.quantity,
+                    unitValue: item.unitValue,
+                    lineTotal: item.lineTotal,
+                    onQuantityChange: (itemId, qty) {
+                      ref
+                          .read(cartProvider.notifier)
+                          .updateQuantity(itemId, qty);
+                    },
+                    onRemove: (itemId) {
+                      setState(() {
+                        _itemToDeleteId = itemId;
+                        _itemToDeleteName = item.brandName;
+                      });
+                    },
+                  ),
+                ),
                 const SizedBox(height: 12),
                 // Order Summary
                 OrderSummarySection(
@@ -398,26 +467,34 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final user = ref.read(authProvider);
     final breakdown = ref.read(paymentBreakdownProvider);
     final paymentState = ref.read(paymentProvider);
-    final orderNumber = checkout.superCoinOrderNumber ??
+    final orderNumber =
+        checkout.superCoinOrderNumber ??
         paymentState.orderNumber ??
         _generateOrderNumber();
 
     return SuperCoinOTPModal(
       merchantWalletId: AppConfig.supercoinMerchantWalletId,
       orderNumber: orderNumber,
-      displayName: (user?.name?.isNotEmpty == true) ? user!.name! : 'Gift360 Checkout',
+      displayName: (user?.name?.isNotEmpty == true)
+          ? user!.name!
+          : 'Gift360 Checkout',
       preloadedBalance: superCoinState.balance,
       maxRedeemable: breakdown.maxSuperCoinRedeemable,
+      initialCoinAmount: checkout.selectedSuperCoinCoins,
       onAuthorized: (holdContext) {
-        ref.read(cartCheckoutProvider.notifier).onSuperCoinAuthorized(holdContext, orderNumber);
-        setState(() => _showSuperCoinOtp = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('SuperCoins applied successfully!')),
-        );
+        ref
+            .read(cartCheckoutProvider.notifier)
+            .onSuperCoinAuthorized(holdContext, orderNumber);
+        setState(() {
+          _showSuperCoinOtp = false;
+          _showSuperCoinRedeemed = true;
+        });
       },
       onSwitchToCashback: () {
         setState(() => _showSuperCoinOtp = false);
-        ref.read(cartCheckoutProvider.notifier).setRewardMode(RewardMode.cashbackWallet);
+        ref
+            .read(cartCheckoutProvider.notifier)
+            .setRewardMode(RewardMode.cashbackWallet);
       },
       onClose: () => setState(() => _showSuperCoinOtp = false),
     );
@@ -445,18 +522,22 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final existing = ref.read(paymentProvider).orderNumber;
     if (existing != null) return existing;
 
-    final orderItems = cart.items.map((item) => {
-      'brandId': item.brandId,
-      'quantity': item.quantity,
-      'unitValue': item.unitValue,
-      'lineTotal': item.lineTotal,
-      'meta': jsonEncode({
-        'brand_id': item.brandId,
-        'brand_name': item.brandName,
-        'image_url': item.image,
-        'redeem_steps': <String>[],
-      }),
-    }).toList();
+    final orderItems = cart.items
+        .map(
+          (item) => {
+            'brandId': item.brandId,
+            'quantity': item.quantity,
+            'unitValue': item.unitValue,
+            'lineTotal': item.lineTotal,
+            'meta': jsonEncode({
+              'brand_id': item.brandId,
+              'brand_name': item.brandName,
+              'image_url': item.image,
+              'redeem_steps': <String>[],
+            }),
+          },
+        )
+        .toList();
 
     final cartSignature = PaymentNotifier.cartSignatureFor(orderItems);
 
@@ -466,8 +547,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       totalAmount: cart.totalAmount,
       walletUsed: checkout.useWalletBalance,
       walletAmount: breakdown.walletDeduction,
-      superCoinDeduction: breakdown.superCoinDeduction,
-      superCoinAmount: checkout.superCoinHoldContext?.amount ?? 0,
       earnCashback: checkout.rewardMode != RewardMode.superCoins,
       cartSignature: cartSignature,
     );
@@ -475,7 +554,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     if (orderNumber == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to start SuperCoins. Please try again.')),
+          const SnackBar(
+            content: Text('Unable to start SuperCoins. Please try again.'),
+          ),
         );
       }
       return null;
@@ -485,8 +566,11 @@ class _CartScreenState extends ConsumerState<CartScreen> {
 
   String _generateOrderNumber() {
     final now = DateTime.now();
-    final yymmdd = '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final random = DateTime.now().microsecondsSinceEpoch.toRadixString(16).toUpperCase();
+    final yymmdd =
+        '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final random = DateTime.now().microsecondsSinceEpoch
+        .toRadixString(16)
+        .toUpperCase();
     return 'ORD$yymmdd${random.substring(0, random.length.clamp(0, 12))}';
   }
 
@@ -494,10 +578,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   /// getCartCheckoutSignature: sorted "itemId:quantity:unitValue" joined by "|").
   String _cartSignature(List<CartItem> items) {
     if (items.isEmpty) return '';
-    final sigs = items
-        .map((i) => '${i.itemId}:${i.quantity}:${i.unitValue}')
-        .toList()
-      ..sort();
+    final sigs =
+        items.map((i) => '${i.itemId}:${i.quantity}:${i.unitValue}').toList()
+          ..sort();
     return sigs.join('|');
   }
 }

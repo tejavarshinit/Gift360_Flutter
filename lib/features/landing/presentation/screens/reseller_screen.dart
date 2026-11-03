@@ -135,6 +135,18 @@ class _ResellerScreenState extends State<ResellerScreen> {
           ),
           const Spacer(),
           GestureDetector(
+            onTap: () => context.push('/reseller/login'),
+            child: Text(
+              'Login',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF523DA9),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          GestureDetector(
             onTap: () => setState(() => _showMenu = !_showMenu),
             child: Text('⋮', style: GoogleFonts.poppins(fontSize: 18, color: const Color(0xFF374151))),
           ),

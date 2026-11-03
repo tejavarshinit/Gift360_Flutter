@@ -4,9 +4,11 @@ import 'package:intl/intl.dart';
 
 import 'package:gift360/core/widgets/brand_image.dart';
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
+import 'package:gift360/features/orders/data/voucher_state_store.dart';
 import 'package:gift360/features/orders/presentation/widgets/redeem_sheet.dart';
 import 'package:gift360/features/orders/presentation/widgets/scratch_card.dart';
 import 'package:gift360/features/gifting/presentation/providers/gifting_provider.dart';
+import 'package:gift360/features/feedback/presentation/feedback_orchestrator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Voucher card — matches React Orders.tsx OrderCard layout exactly:
@@ -41,6 +43,12 @@ class _VoucherCardState extends ConsumerState<VoucherCard> {
   @override
   void initState() {
     super.initState();
+    // The terminal-state floor must be in memory before the first
+    // extractVouchers() call so a revealed/gifted card never renders as
+    // "Tap to reveal" on a cold build.
+    VoucherTerminalStore.ensureLoaded().then((_) {
+      if (mounted) setState(() {});
+    });
     _loadCardItems();
   }
 
@@ -54,6 +62,7 @@ class _VoucherCardState extends ConsumerState<VoucherCard> {
   }
 
   Future<void> _loadCardItems() async {
+    await VoucherTerminalStore.ensureLoaded();
     final items = widget.order['items'];
     if (items is! List) return;
     final api = ref.read(giftingApiProvider);
@@ -72,6 +81,14 @@ class _VoucherCardState extends ConsumerState<VoucherCard> {
       }
     }
     if (mounted) setState(() => _cardItemsByOrderItem = loaded);
+
+    // The vouchers just arrived from the backend — this is the "fetched"
+    // moment. Prompt for feedback now, before the customer reveals/gifts
+    // (matches React Orders.tsx `promptFeedback("voucher-fetched")`).
+    final fetchedAny = loaded.values.any((cards) => cards.isNotEmpty);
+    if (fetchedAny && mounted) {
+      FeedbackOrchestrator.prompt(context, ref, 'voucher-fetched');
+    }
   }
 
   @override
@@ -92,7 +109,11 @@ class _VoucherCardState extends ConsumerState<VoucherCard> {
       if (d != null) dateStr = DateFormat('MM/yyyy - hh:mma').format(d);
     }
     final orderNumber = widget.order['order_number']?.toString() ?? '';
-    final anyRevealed = vouchers.any((v) => _revealedKeys.contains(v.key));
+    // Redeem appears once any card is REVEALED (matches React:
+    // vouchers.some(v => v.isScratched)) — gifted cards don't count.
+    final anyRevealed = vouchers.any(
+      (v) => v.isScratched || _revealedKeys.contains(v.key),
+    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -296,10 +317,15 @@ class _VoucherCardState extends ConsumerState<VoucherCard> {
                           orderNumber: orderNumber,
                           index: i,
                           onStateChange: (state) {
-                            if (state != VoucherState.pending) {
+                            if (state == VoucherState.scratched) {
                               setState(
                                 () => _revealedKeys.add(vouchers[i].key),
                               );
+                            } else if (state == VoucherState.gifted) {
+                              // A gifted card is terminal too: keep it out of
+                              // the reveal buffer, but force a rebuild so the
+                              // gifted overlay sticks immediately.
+                              setState(() {});
                             }
                           },
                         ),

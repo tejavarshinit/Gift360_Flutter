@@ -59,18 +59,28 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
     final isFixed = (brand.brandType ?? '').toLowerCase() == 'fixed';
     final minPrice = brand.effectiveStartingPrice;
     final maxPrice = brand.maxPrice ?? 0;
-    final denominations = _parseDenominations(brand.denominationList ?? brand.denomination);
+    final denominations = _parseDenominations(
+      brand.denominationList ?? brand.denomination,
+    );
 
     // Auto-select when minPrice == maxPrice (single fixed price)
-    if (minPrice > 0 && minPrice == maxPrice && (_selectedAmount == null || _selectedAmount!.isEmpty)) {
+    if (minPrice > 0 &&
+        minPrice == maxPrice &&
+        (_selectedAmount == null || _selectedAmount!.isEmpty)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _selectedAmount = minPrice.toInt().toString());
+        if (mounted)
+          setState(() => _selectedAmount = minPrice.toInt().toString());
       });
     }
     // Auto-select first denomination for Fixed brands
-    if (isFixed && denominations.isNotEmpty && (_selectedAmount == null || _selectedAmount!.isEmpty)) {
+    if (isFixed &&
+        denominations.isNotEmpty &&
+        (_selectedAmount == null || _selectedAmount!.isEmpty)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _selectedAmount = denominations.first.toInt().toString());
+        if (mounted)
+          setState(
+            () => _selectedAmount = denominations.first.toInt().toString(),
+          );
       });
     }
 
@@ -86,19 +96,28 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
               ),
               flexibleSpace: FlexibleSpaceBar(
-                  background: brand.resolvedImageUrl != null
-                      ? BrandImage(
-                          imageUrl: brand.resolvedImageUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (_, s) => Container(color: const Color(0xFFE8E0F0)),
-                          errorWidget: (_, s, e) => Container(
-                            color: const Color(0xFFE8E0F0),
-                            child: const Icon(Icons.store, size: 64, color: Color(0xFF94A3B8)),
+                background: brand.resolvedImageUrl != null
+                    ? BrandImage(
+                        imageUrl: brand.resolvedImageUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (_, s) =>
+                            Container(color: const Color(0xFFE8E0F0)),
+                        errorWidget: (_, s, e) => Container(
+                          color: const Color(0xFFE8E0F0),
+                          child: const Icon(
+                            Icons.store,
+                            size: 64,
+                            color: Color(0xFF94A3B8),
                           ),
-                        )
-                      : Container(
+                        ),
+                      )
+                    : Container(
                         color: const Color(0xFFE8E0F0),
-                        child: const Icon(Icons.store, size: 64, color: Color(0xFF94A3B8)),
+                        child: const Icon(
+                          Icons.store,
+                          size: 64,
+                          color: Color(0xFF94A3B8),
+                        ),
                       ),
               ),
             ),
@@ -113,42 +132,86 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                         Expanded(
                           child: Text(
                             brand.brandName ?? 'Brand',
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF111827),
+                            ),
                           ),
                         ),
-                        if (brand.discount != null && brand.discount!.isNotEmpty)
+                        if (brand.discount != null &&
+                            brand.discount!.isNotEmpty)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)]),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)],
+                              ),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               '${brand.discount}% Cashback',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                       ],
                     ),
-                    if (brand.category != null && brand.category!.isNotEmpty) ...[
+                    if (brand.category != null &&
+                        brand.category!.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF3F0FF),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(brand.category!, style: const TextStyle(fontSize: 12, color: Color(0xFF6C5CE7))),
+                        child: Text(
+                          brand.category!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6C5CE7),
+                          ),
+                        ),
                       ),
                     ],
                     const SizedBox(height: 20),
-                    if (brand.description != null && brand.description!.isNotEmpty) ...[
-                      const Text('About', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    if (brand.description != null &&
+                        brand.description!.isNotEmpty) ...[
+                      const Text(
+                        'About',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 8),
-                      Text(brand.description!, style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.5)),
+                      Text(
+                        brand.description!,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF6B7280),
+                          height: 1.5,
+                        ),
+                      ),
                       const SizedBox(height: 20),
                     ],
-                    _buildPurchaseSection(brand, isFixed, minPrice, maxPrice, denominations),
+                    _buildPurchaseSection(
+                      brand,
+                      isFixed,
+                      minPrice,
+                      maxPrice,
+                      denominations,
+                    ),
                     const SizedBox(height: 20),
                     _buildInfoButtons(brand),
                     const SizedBox(height: 100),
@@ -163,29 +226,48 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
     );
   }
 
-  Widget _buildPurchaseSection(Brand brand, bool isFixed, double minPrice, double maxPrice, List<double> denominations) {
+  Widget _buildPurchaseSection(
+    Brand brand,
+    bool isFixed,
+    double minPrice,
+    double maxPrice,
+    List<double> denominations,
+  ) {
     final isValid = _isValidAmount(brand);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Purchase Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Purchase Details',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           if (isFixed) ...[
-            const Text('Select a denomination', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+            const Text(
+              'Select a denomination',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
             const SizedBox(height: 12),
             denominations.isNotEmpty
                 ? Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: denominations.map((d) {
-                      final isSelected = _selectedAmount == d.toInt().toString();
+                      final isSelected =
+                          _selectedAmount == d.toInt().toString();
                       return GestureDetector(
                         onTap: () => setState(() {
                           _selectedAmount = d.toInt().toString();
@@ -198,16 +280,31 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             gradient: isSelected
-                                ? const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)])
+                                ? const LinearGradient(
+                                    colors: [
+                                      Color(0xFF7C3AED),
+                                      Color(0xFF3B82F6),
+                                    ],
+                                  )
                                 : null,
                             color: isSelected ? null : Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isSelected ? const Color(0xFF7C3AED) : const Color(0xFFE5E7EB),
+                              color: isSelected
+                                  ? const Color(0xFF7C3AED)
+                                  : const Color(0xFFE5E7EB),
                               width: 2,
                             ),
                             boxShadow: isSelected
-                                ? [BoxShadow(color: const Color(0xFF7C3AED).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF7C3AED,
+                                      ).withValues(alpha: 0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
                                 : [],
                           ),
                           child: Text(
@@ -215,16 +312,24 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: isSelected ? Colors.white : const Color(0xFF111827),
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF111827),
                             ),
                           ),
                         ),
-                       );
+                      );
                     }).toList(),
                   )
-                : const Text('No denominations available', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                : const Text(
+                    'No denominations available',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  ),
           ] else ...[
-            Text('₹${minPrice.toInt()} - ₹${maxPrice.toInt()}', style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+            Text(
+              '₹${minPrice.toInt()} - ₹${maxPrice.toInt()}',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
             const SizedBox(height: 12),
             TextField(
               keyboardType: TextInputType.number,
@@ -246,8 +351,13 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
               decoration: InputDecoration(
                 prefixText: '₹ ',
                 hintText: '${minPrice.toInt()} - ${maxPrice.toInt()}',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
@@ -255,16 +365,29 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.error_outline, size: 16, color: Color(0xFFEF4444)),
+                const Icon(
+                  Icons.error_outline,
+                  size: 16,
+                  color: Color(0xFFEF4444),
+                ),
                 const SizedBox(width: 6),
-                Text(_error, style: const TextStyle(fontSize: 12, color: Color(0xFFEF4444))),
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
               ],
             ),
           ],
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('Quantity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const Text(
+                'Quantity',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
               const Spacer(),
               _buildQuantityButton(Icons.remove, () {
                 if (_quantity > 1) setState(() => _quantity--);
@@ -272,10 +395,18 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
               Container(
                 width: 48,
                 margin: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text('$_quantity', textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                child: Text(
+                  '$_quantity',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               _buildQuantityButton(Icons.add, () {
-                if (_quantity < _maxQuantityPerItem) setState(() => _quantity++);
+                if (_quantity < _maxQuantityPerItem)
+                  setState(() => _quantity++);
               }),
             ],
           ),
@@ -312,7 +443,9 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)]),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+        ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF6EE7B7)),
       ),
@@ -321,7 +454,10 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
           Container(
             width: 44,
             height: 44,
-            decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: Color(0xFF10B981),
+              shape: BoxShape.circle,
+            ),
             child: const Icon(Icons.trending_up, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 12),
@@ -329,9 +465,24 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('CASHBACK EARNED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF059669), letterSpacing: 0.5)),
+                const Text(
+                  'CASHBACK EARNED',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF059669),
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('$cashback Points', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF059669))),
+                Text(
+                  '$cashback Points',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF059669),
+                  ),
+                ),
               ],
             ),
           ),
@@ -346,8 +497,22 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('${discount.toInt()}%', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF059669))),
-                const Text('CASH', style: TextStyle(fontSize: 6, fontWeight: FontWeight.w700, color: Color(0xFF059669))),
+                Text(
+                  '${discount.toInt()}%',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF059669),
+                  ),
+                ),
+                const Text(
+                  'CASH',
+                  style: TextStyle(
+                    fontSize: 6,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF059669),
+                  ),
+                ),
               ],
             ),
           ),
@@ -362,23 +527,49 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           if (brand.description != null)
-            _buildInfoButton(Icons.info_outline, 'About', 'about', const Color(0xFF6C5CE7)),
+            _buildInfoButton(
+              Icons.info_outline,
+              'About',
+              'about',
+              const Color(0xFF6C5CE7),
+            ),
           if (brand.howToUse != null)
-            _buildInfoButton(Icons.book_outlined, 'Redeem', 'redeem', const Color(0xFF6C5CE7)),
+            _buildInfoButton(
+              Icons.book_outlined,
+              'Redeem',
+              'redeem',
+              const Color(0xFF6C5CE7),
+            ),
           if (brand.terms != null)
-            _buildInfoButton(Icons.description_outlined, 'T & C', 'terms', const Color(0xFF3B82F6)),
+            _buildInfoButton(
+              Icons.description_outlined,
+              'T & C',
+              'terms',
+              const Color(0xFF3B82F6),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoButton(IconData icon, String label, String tab, Color color) {
+  Widget _buildInfoButton(
+    IconData icon,
+    String label,
+    String tab,
+    Color color,
+  ) {
     return GestureDetector(
       onTap: () => setState(() {
         _infoTab = tab;
@@ -395,7 +586,10 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
           children: [
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 4),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            ),
           ],
         ),
       ),
@@ -406,7 +600,11 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
     final tabs = [
       {'key': 'about', 'label': 'About', 'icon': Icons.info_outline},
       {'key': 'redeem', 'label': 'How to Redeem', 'icon': Icons.redeem},
-      {'key': 'instructions', 'label': 'Instructions', 'icon': Icons.warning_amber_outlined},
+      {
+        'key': 'instructions',
+        'label': 'Instructions',
+        'icon': Icons.warning_amber_outlined,
+      },
       {'key': 'terms', 'label': 'T&C', 'icon': Icons.description_outlined},
     ];
 
@@ -430,15 +628,28 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                     margin: const EdgeInsets.only(top: 12),
                     width: 40,
                     height: 4,
-                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Brand Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        IconButton(onPressed: () => setState(() => _showInfoModal = false), icon: const Icon(Icons.close)),
+                        const Text(
+                          'Brand Information',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () =>
+                              setState(() => _showInfoModal = false),
+                          icon: const Icon(Icons.close),
+                        ),
                       ],
                     ),
                   ),
@@ -450,27 +661,42 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                         final isActive = _infoTab == tab['key'];
                         return Expanded(
                           child: GestureDetector(
-                            onTap: () => setState(() => _infoTab = tab['key'] as String),
+                            onTap: () =>
+                                setState(() => _infoTab = tab['key'] as String),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 border: Border(
                                   bottom: BorderSide(
-                                    color: isActive ? const Color(0xFF523DA9) : Colors.transparent,
+                                    color: isActive
+                                        ? const Color(0xFF523DA9)
+                                        : Colors.transparent,
                                     width: 2,
                                   ),
                                 ),
                               ),
                               child: Column(
                                 children: [
-                                  Icon(tab['icon'] as IconData, size: 18,
-                                      color: isActive ? const Color(0xFF523DA9) : Colors.grey),
+                                  Icon(
+                                    tab['icon'] as IconData,
+                                    size: 18,
+                                    color: isActive
+                                        ? const Color(0xFF523DA9)
+                                        : Colors.grey,
+                                  ),
                                   const SizedBox(height: 4),
-                                  Text(tab['label'] as String,
-                                      style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                                          color: isActive ? const Color(0xFF523DA9) : Colors.grey)),
+                                  Text(
+                                    tab['label'] as String,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: isActive
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                      color: isActive
+                                          ? const Color(0xFF523DA9)
+                                          : Colors.grey,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -498,17 +724,52 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
   Widget _buildInfoContent(Brand brand) {
     switch (_infoTab) {
       case 'about':
-        return Text(brand.description ?? 'No description available.', style: const TextStyle(fontSize: 14, height: 1.6, color: Color(0xFF4B5563)));
+        return Text(
+          brand.description ?? 'No description available.',
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.6,
+            color: Color(0xFF4B5563),
+          ),
+        );
       case 'redeem':
-        return Text(brand.howToUse ?? 'No redemption steps available.', style: const TextStyle(fontSize: 14, height: 1.6, color: Color(0xFF4B5563)));
+        return Text(
+          brand.howToUse ?? 'No redemption steps available.',
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.6,
+            color: Color(0xFF4B5563),
+          ),
+        );
       case 'instructions':
         final instructions = brand.importantInstruction;
         if (instructions == null || instructions.toString().trim().isEmpty) {
-          return const Text('No special instructions for this brand.', style: TextStyle(fontSize: 14, height: 1.6, color: Color(0xFF4B5563)));
+          return const Text(
+            'No special instructions for this brand.',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.6,
+              color: Color(0xFF4B5563),
+            ),
+          );
         }
-        return Text(instructions.toString(), style: const TextStyle(fontSize: 14, height: 1.6, color: Color(0xFF4B5563)));
+        return Text(
+          instructions.toString(),
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.6,
+            color: Color(0xFF4B5563),
+          ),
+        );
       case 'terms':
-        return Text(brand.terms ?? 'No terms available.', style: const TextStyle(fontSize: 14, height: 1.6, color: Color(0xFF4B5563)));
+        return Text(
+          brand.terms ?? 'No terms available.',
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.6,
+            color: Color(0xFF4B5563),
+          ),
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -517,21 +778,42 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
   Widget _buildBottomBar(Brand brand) {
     final amount = double.tryParse(_selectedAmount ?? '0') ?? 0;
     final total = amount * _quantity;
-    final isValid = _selectedAmount != null && _selectedAmount!.isNotEmpty && _error.isEmpty;
+    final isValid =
+        _selectedAmount != null &&
+        _selectedAmount!.isNotEmpty &&
+        _error.isEmpty;
 
     // Guard rail check
-    final guardRailAsync = ref.watch(brandGuardRailProvider(brand.brandId ?? ''));
+    final guardRailAsync = ref.watch(
+      brandGuardRailProvider(brand.brandId ?? ''),
+    );
     final guardRail = guardRailAsync.valueOrNull;
-    final wouldExceed = guardRail != null && guardRail.hasGuardRail &&
+    final wouldExceed =
+        guardRail != null &&
+        guardRail.hasGuardRail &&
         (guardRail.currentUsage + total) > guardRail.monthlyLimit;
-    final nearLimit = guardRail != null && guardRail.hasGuardRail &&
-        guardRail.remaining > 0 && guardRail.remaining <= guardRail.monthlyLimit * 0.2;
+    final nearLimit =
+        guardRail != null &&
+        guardRail.hasGuardRail &&
+        guardRail.remaining > 0 &&
+        guardRail.remaining <= guardRail.monthlyLimit * 0.2;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        MediaQuery.of(context).padding.bottom + 12,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 10,
+            offset: Offset(0, -2),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -543,16 +825,34 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
               padding: const EdgeInsets.all(10),
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
-                color: wouldExceed ? const Color(0xFFFEF2F2) : nearLimit ? const Color(0xFFFFFBEB) : const Color(0xFFF0FDF4),
+                color: wouldExceed
+                    ? const Color(0xFFFEF2F2)
+                    : nearLimit
+                    ? const Color(0xFFFFFBEB)
+                    : const Color(0xFFF0FDF4),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: wouldExceed ? const Color(0xFFFECACA) : nearLimit ? const Color(0xFFFDE68A) : const Color(0xFFBBF7D0)),
+                border: Border.all(
+                  color: wouldExceed
+                      ? const Color(0xFFFECACA)
+                      : nearLimit
+                      ? const Color(0xFFFDE68A)
+                      : const Color(0xFFBBF7D0),
+                ),
               ),
               child: Row(
                 children: [
                   Icon(
-                    wouldExceed ? Icons.warning_amber_rounded : nearLimit ? Icons.info_outline : Icons.check_circle_outline,
+                    wouldExceed
+                        ? Icons.warning_amber_rounded
+                        : nearLimit
+                        ? Icons.info_outline
+                        : Icons.check_circle_outline,
                     size: 16,
-                    color: wouldExceed ? const Color(0xFFDC2626) : nearLimit ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                    color: wouldExceed
+                        ? const Color(0xFFDC2626)
+                        : nearLimit
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF16A34A),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -560,11 +860,15 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                       wouldExceed
                           ? 'Guard rail limit exceeded. Remaining: ₹${guardRail.remaining.toInt()}'
                           : nearLimit
-                              ? 'Guard rail limit low. Remaining: ₹${guardRail.remaining.toInt()} of ₹${guardRail.monthlyLimit.toInt()}'
-                              : 'Guard rail: ₹${guardRail.currentUsage.toInt()} used of ₹${guardRail.monthlyLimit.toInt()}',
+                          ? 'Guard rail limit low. Remaining: ₹${guardRail.remaining.toInt()} of ₹${guardRail.monthlyLimit.toInt()}'
+                          : 'Guard rail: ₹${guardRail.currentUsage.toInt()} used of ₹${guardRail.monthlyLimit.toInt()}',
                       style: TextStyle(
                         fontSize: 11,
-                        color: wouldExceed ? const Color(0xFFDC2626) : nearLimit ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                        color: wouldExceed
+                            ? const Color(0xFFDC2626)
+                            : nearLimit
+                            ? const Color(0xFFD97706)
+                            : const Color(0xFF16A34A),
                       ),
                     ),
                   ),
@@ -576,19 +880,28 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: (isValid && !wouldExceed) ? () => _handleAddToCart(brand, amount) : null,
+              onPressed: (isValid && !wouldExceed)
+                  ? () => _handleAddToCart(brand, amount)
+                  : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: (isValid && !wouldExceed) ? const Color(0xFF6C5CE7) : const Color(0xFFD1D5DB),
+                backgroundColor: (isValid && !wouldExceed)
+                    ? const Color(0xFF6C5CE7)
+                    : const Color(0xFFD1D5DB),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: Text(
                 wouldExceed
                     ? 'Guard Rail Limit Exceeded'
                     : isValid
-                        ? 'Add ₹${total.toInt()} to Cart'
-                        : 'Select Amount',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ? 'Add ₹${total.toInt()} to Cart'
+                    : 'Select Amount',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -607,13 +920,17 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
 
     final isAuthenticated = ref.read(authProvider) != null;
 
-    ref.read(cartProvider.notifier).addToCart(AddToCartRequest(
-          brandId: brand.brandId ?? '',
-          brandName: brand.brandName ?? '',
-          quantity: _quantity,
-          unitValue: amount,
-          image: brand.resolvedImageUrl,
-        ));
+    ref
+        .read(cartProvider.notifier)
+        .addToCart(
+          AddToCartRequest(
+            brandId: brand.brandId ?? '',
+            brandName: brand.brandName ?? '',
+            quantity: _quantity,
+            unitValue: amount,
+            image: brand.resolvedImageUrl,
+          ),
+        );
 
     final quantity = _quantity;
     final brandName = brand.brandName ?? 'voucher';
@@ -641,10 +958,19 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
         children: [
           const Icon(Icons.error_outline, size: 64, color: Color(0xFFEF4444)),
           const SizedBox(height: 16),
-          const Text('Could not load brand details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Could not load brand details',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           ElevatedButton(
-            onPressed: () => context.go('/brands'),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/brands');
+              }
+            },
             child: const Text('Go Back to Brands'),
           ),
         ],
@@ -654,7 +980,11 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
 
   List<double> _parseDenominations(String? denomination) {
     if (denomination == null || denomination.isEmpty) return [];
-    return denomination.split(',').map((e) => double.tryParse(e.trim()) ?? 0).where((e) => e > 0).toList();
+    return denomination
+        .split(',')
+        .map((e) => double.tryParse(e.trim()) ?? 0)
+        .where((e) => e > 0)
+        .toList();
   }
 
   bool _isValidAmount(Brand brand) {
@@ -663,7 +993,9 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
     if (amount == null || amount <= 0) return false;
     final isFixed = (brand.brandType ?? '').toLowerCase() == 'fixed';
     if (isFixed) {
-      final denominations = _parseDenominations(brand.denominationList ?? brand.denomination);
+      final denominations = _parseDenominations(
+        brand.denominationList ?? brand.denomination,
+      );
       return denominations.any((d) => d.toInt() == amount.toInt());
     }
     final minPrice = brand.effectiveStartingPrice;

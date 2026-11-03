@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:gift360/core/widgets/session_expired_dialog.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/widgets/brand_image.dart';
 import 'package:gift360/core/utils/encryption.dart';
@@ -18,12 +19,26 @@ import 'package:gift360/features/brands/presentation/providers/filter_meta_provi
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
+import 'package:gift360/core/widgets/site_footer.dart';
+import 'package:gift360/features/supercoin/data/supercoin_excluded_brands.dart';
 
 class BrandsScreen extends ConsumerStatefulWidget {
   final String? initialSearch;
   final String? initialCategory;
+  final bool initialSuperCoinsOnly;
 
-  const BrandsScreen({super.key, this.initialSearch, this.initialCategory});
+  /// Pre-applied discount-range labels from the URL (e.g. the instant-gifting
+  /// cashback slide pushes `?discount=Up to 5%&discount=5% - 15%`, matching
+  /// React's Offers/Brands handoff).
+  final List<String> initialDiscountRanges;
+
+  const BrandsScreen({
+    super.key,
+    this.initialSearch,
+    this.initialCategory,
+    this.initialSuperCoinsOnly = false,
+    this.initialDiscountRanges = const [],
+  });
 
   @override
   ConsumerState<BrandsScreen> createState() => _BrandsScreenState();
@@ -41,6 +56,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
   String _sortBy = 'Popularity';
   List<String> _discountRanges = [];
   bool _showFilterSidebar = false;
+  bool _superCoinsOnly = false;
 
   // Voucher modal state
   bool _showVoucherModal = false;
@@ -70,12 +86,17 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     if (widget.initialCategory != null) {
       _categories = [widget.initialCategory!];
     }
+    _superCoinsOnly = widget.initialSuperCoinsOnly;
+    if (widget.initialDiscountRanges.isNotEmpty) {
+      _discountRanges = List.of(widget.initialDiscountRanges);
+    }
   }
 
   @override
   void didUpdateWidget(BrandsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialCategory != oldWidget.initialCategory && widget.initialCategory != null) {
+    if (widget.initialCategory != oldWidget.initialCategory &&
+        widget.initialCategory != null) {
       setState(() => _categories = [widget.initialCategory!]);
     }
   }
@@ -190,23 +211,27 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         : allBrandsAsync;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Aurora background
-          Positioned.fill(
-            child: Image.asset('assets/images/ganeshbackdrop.png', fit: BoxFit.cover),
-          ),
+          // Background matching React: #f3f5f9 (replaced ganeshbackdrop.png)
+          Positioned.fill(child: const SizedBox.shrink()),
           // Main content
           Column(
             children: [
               _buildHeader(),
               _buildSearchBar(),
-              if (_categories.isNotEmpty || _brands.isNotEmpty || _discountRanges.isNotEmpty || _priceRange != 'all')
+              if (_categories.isNotEmpty ||
+                  _brands.isNotEmpty ||
+                  _discountRanges.isNotEmpty ||
+                  _priceRange != 'all')
                 _buildFilterChips(),
               Expanded(
                 child: brandsAsync.when(
                   data: (brands) => _buildBrandsContent(brands),
-                  loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF6C5CE7)),
+                  ),
                   error: (e, _) => _buildErrorState(),
                 ),
               ),
@@ -225,9 +250,18 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                   availableBrands: filterMeta?.brands.isNotEmpty == true
                       ? filterMeta!.brands
                       : _deriveBrands(allBrands),
-                  availablePriceRanges: const ['All', 'Under ₹50', '₹50 - ₹100', '₹100 - ₹250', '₹250+'],
-                  availableDiscountRanges: filterMeta?.discountRanges.map((d) => d.label).toList() ?? _deriveDiscountRanges(allBrands),
-                  availableSortOptions: filterMeta?.sortOptions ?? const ['Popularity'],
+                  availablePriceRanges: const [
+                    'All',
+                    'Under ₹50',
+                    '₹50 - ₹100',
+                    '₹100 - ₹250',
+                    '₹250+',
+                  ],
+                  availableDiscountRanges:
+                      filterMeta?.discountRanges.map((d) => d.label).toList() ??
+                      _deriveDiscountRanges(allBrands),
+                  availableSortOptions:
+                      filterMeta?.sortOptions ?? const ['Popularity'],
                 );
               },
             ),
@@ -265,16 +299,23 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                 _paymentBrand = null;
               }),
               onAddToCart: (brand, amount, quantity) {
-                ref.read(cartProvider.notifier).addToCart(AddToCartRequest(
-                      brandId: brand.brandId ?? '',
-                      brandName: brand.brandName ?? '',
-                      quantity: quantity,
-                      unitValue: amount,
-                      image: brand.resolvedImageUrl,
-                    ));
-                ref.read(notificationProvider.notifier).addNotification(
+                ref
+                    .read(cartProvider.notifier)
+                    .addToCart(
+                      AddToCartRequest(
+                        brandId: brand.brandId ?? '',
+                        brandName: brand.brandName ?? '',
+                        quantity: quantity,
+                        unitValue: amount,
+                        image: brand.resolvedImageUrl,
+                      ),
+                    );
+                ref
+                    .read(notificationProvider.notifier)
+                    .addNotification(
                       title: 'Added to Cart',
-                      message: '${brand.brandName} voucher has been added successfully into cart',
+                      message:
+                          '${brand.brandName} voucher has been added successfully into cart',
                       type: 'success',
                     );
                 setState(() {
@@ -285,10 +326,15 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                   _paymentBrand = null;
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${quantity}x ${brand.brandName} voucher(s) of ₹${amount.toInt()} added to cart')),
+                  SnackBar(
+                    content: Text(
+                      '${quantity}x ${brand.brandName} voucher(s) of ₹${amount.toInt()} added to cart',
+                    ),
+                  ),
                 );
               },
-              onPay: (brand, amount, quantity) => _handlePay(brand, amount, quantity),
+              onPay: (brand, amount, quantity, paymentMethod) =>
+                  _handlePay(brand, amount, quantity, paymentMethod),
             ),
         ],
       ),
@@ -355,12 +401,14 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: const BoxDecoration(
           color: Colors.white,
-          border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1)),
+          border: Border(
+            bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+          ),
         ),
         child: Row(
           children: [
             GestureDetector(
-              onTap: () => Navigator.pop(context),
+              onTap: () => context.go('/'),
               child: Container(
                 width: 40,
                 height: 40,
@@ -431,11 +479,18 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                       ),
                       prefixIcon: const Padding(
                         padding: EdgeInsets.only(left: 12, right: 4),
-                        child: Icon(Icons.search, size: 18, color: Color(0xFF9CA3AF)),
+                        child: Icon(
+                          Icons.search,
+                          size: 18,
+                          color: Color(0xFF9CA3AF),
+                        ),
                       ),
                       prefixIconConstraints: const BoxConstraints(minWidth: 36),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                     style: GoogleFonts.poppins(
                       fontSize: 14,
@@ -474,7 +529,11 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                 ),
               ],
             ),
-            child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+            child: const Icon(
+              Icons.tune_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
           if (_activeFiltersCount > 0)
             Positioned(
@@ -516,7 +575,13 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
             final query = _searchController.text.trim().toLowerCase();
             final filtered = query.isEmpty
                 ? brands.take(8).toList()
-                : brands.where((b) => (b.brandName ?? '').toLowerCase().contains(query)).take(8).toList();
+                : brands
+                      .where(
+                        (b) =>
+                            (b.brandName ?? '').toLowerCase().contains(query),
+                      )
+                      .take(8)
+                      .toList();
             if (filtered.isEmpty) return const SizedBox.shrink();
             return Container(
               margin: const EdgeInsets.only(top: 8),
@@ -544,7 +609,12 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                     child: Container(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                       decoration: const BoxDecoration(
-                        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 0.5)),
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Color(0xFFF3F4F6),
+                            width: 0.5,
+                          ),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -557,7 +627,8 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                               color: const Color(0xFF111827),
                             ),
                           ),
-                          if (brand.category != null && brand.category!.isNotEmpty) ...[
+                          if (brand.category != null &&
+                              brand.category!.isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(
                               brand.category!,
@@ -596,10 +667,18 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          ..._categories.map((cat) => _buildChip(cat, () => setState(() => _categories = []))),
-          ..._brands.map((b) => _buildChip(b, () => setState(() => _brands = []))),
-          ..._discountRanges.map((dr) => _buildChip('$dr%+', () => setState(() => _discountRanges = []))),
-          if (_priceRange != 'all') _buildChip(_priceRange, () => setState(() => _priceRange = 'all')),
+          ..._categories.map(
+            (cat) => _buildChip(cat, () => setState(() => _categories = [])),
+          ),
+          ..._brands.map(
+            (b) => _buildChip(b, () => setState(() => _brands = [])),
+          ),
+          ..._discountRanges.map(
+            (dr) =>
+                _buildChip('$dr%+', () => setState(() => _discountRanges = [])),
+          ),
+          if (_priceRange != 'all')
+            _buildChip(_priceRange, () => setState(() => _priceRange = 'all')),
         ],
       ),
     );
@@ -645,19 +724,39 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
           .toList();
     }
 
+    if (_superCoinsOnly) {
+      displayBrands = displayBrands
+          .where(
+            (b) =>
+                isSuperCoinEligible(brandId: b.brandId, brandName: b.brandName),
+          )
+          .toList();
+    }
+
     if (displayBrands.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              query.isNotEmpty ? 'No brands found for "$query"' : 'No brands available',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+      return Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    query.isNotEmpty
+                        ? 'No brands found for "$query"'
+                        : _superCoinsOnly
+                        ? 'No SuperCoins eligible brands matched your current search or filters.'
+                        : 'No brands available',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+          const SiteFooter(),
+        ],
       );
     }
 
@@ -676,82 +775,105 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Results count
           Padding(
-            padding: const EdgeInsets.only(bottom: 24),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Showing ',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: const Color(0xFF374151),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Results count
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Showing ',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: const Color(0xFF374151),
+                          ),
+                        ),
+                        TextSpan(
+                          text: '${displayBrands.length}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF111827),
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' brands',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: const Color(0xFF374151),
+                          ),
+                        ),
+                        if (_superCoinsOnly)
+                          TextSpan(
+                            text: '  (SuperCoins eligible only)',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFB45309),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  TextSpan(
-                    text: '${displayBrands.length}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF111827),
+                ),
+                // Section header + arrows
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Brands',
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF101010),
+                      ),
                     ),
-                  ),
-                  TextSpan(
-                    text: ' brands',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: const Color(0xFF374151),
+                    Row(
+                      children: [
+                        _buildArrowButton(
+                          Icons.chevron_left,
+                          () => _scrollRow1.jumpTo(
+                            (_scrollRow1.offset - 200).clamp(
+                              0.0,
+                              _scrollRow1.position.maxScrollExtent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildArrowButton(
+                          Icons.chevron_right,
+                          () => _scrollRow1.jumpTo(
+                            (_scrollRow1.offset + 200).clamp(
+                              0.0,
+                              _scrollRow1.position.maxScrollExtent,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // 3 rows of brand cards
+                if (row1.isNotEmpty) _buildBrandScrollRow(row1, _scrollRow1),
+                const SizedBox(height: 12),
+                if (row2.isNotEmpty) _buildBrandScrollRow(row2, _scrollRow2),
+                const SizedBox(height: 12),
+                if (row3.isNotEmpty) _buildBrandScrollRow(row3, _scrollRow3),
+              ],
             ),
           ),
-          // Section header + arrows
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Brands',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF101010),
-                ),
-              ),
-              Row(
-                children: [
-                  _buildArrowButton(
-                    Icons.chevron_left,
-                    () => _scrollRow1.jumpTo(
-                      (_scrollRow1.offset - 200).clamp(0.0, _scrollRow1.position.maxScrollExtent),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildArrowButton(
-                    Icons.chevron_right,
-                    () => _scrollRow1.jumpTo(
-                      (_scrollRow1.offset + 200).clamp(0.0, _scrollRow1.position.maxScrollExtent),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // 3 rows of brand cards
-          if (row1.isNotEmpty) _buildBrandScrollRow(row1, _scrollRow1),
-          const SizedBox(height: 12),
-          if (row2.isNotEmpty) _buildBrandScrollRow(row2, _scrollRow2),
-          const SizedBox(height: 12),
-          if (row3.isNotEmpty) _buildBrandScrollRow(row3, _scrollRow3),
+          const SiteFooter(),
         ],
       ),
     );
@@ -839,7 +961,8 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                           imageUrl: imageUrl,
                           fit: BoxFit.contain,
                           placeholder: (_, s) => const SizedBox(),
-                          errorWidget: (_, s, e) => const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                          errorWidget: (_, s, e) =>
+                              const Icon(Icons.store, color: Color(0xFF94A3B8)),
                         )
                       : const Icon(Icons.store, color: Color(0xFF94A3B8)),
                 ),
@@ -863,14 +986,23 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                 top: 4,
                 left: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF5A4BD1)]),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6C5CE7), Color(0xFF5A4BD1)],
+                    ),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     '${discountValue.toStringAsFixed(0)}%',
-                    style: GoogleFonts.poppins(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white),
+                    style: GoogleFonts.poppins(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -915,7 +1047,9 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -929,7 +1063,8 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
-                          onPressed: () => setState(() => _showFilterSidebar = false),
+                          onPressed: () =>
+                              setState(() => _showFilterSidebar = false),
                         ),
                       ],
                     ),
@@ -952,13 +1087,28 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _buildSectionLabel('Sort Brands'),
-                                ...availableSortOptions.map((option) =>
-                                  _buildRadioOption(option, option, _sortBy, (v) => setState(() => _sortBy = v)),
+                                ...availableSortOptions.map(
+                                  (option) => _buildRadioOption(
+                                    option,
+                                    option,
+                                    _sortBy,
+                                    (v) => setState(() => _sortBy = v),
+                                  ),
                                 ),
                                 const SizedBox(height: 12),
                                 _buildSectionLabel('Discount'),
-                                _buildRadioOption('High to Low', 'discount-high-low', _sortBy, (v) => setState(() => _sortBy = v)),
-                                _buildRadioOption('Low to High', 'discount-low-high', _sortBy, (v) => setState(() => _sortBy = v)),
+                                _buildRadioOption(
+                                  'High to Low',
+                                  'discount-high-low',
+                                  _sortBy,
+                                  (v) => setState(() => _sortBy = v),
+                                ),
+                                _buildRadioOption(
+                                  'Low to High',
+                                  'discount-low-high',
+                                  _sortBy,
+                                  (v) => setState(() => _sortBy = v),
+                                ),
                               ],
                             ),
                           ),
@@ -979,10 +1129,22 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildRadioOption('All Prices', 'all', _priceRange, (v) => setState(() => _priceRange = v)),
-                                ...availablePriceRanges.where((l) => l != 'All').map(
-                                  (label) => _buildRadioOption(label, label, _priceRange, (v) => setState(() => _priceRange = v)),
+                                _buildRadioOption(
+                                  'All Prices',
+                                  'all',
+                                  _priceRange,
+                                  (v) => setState(() => _priceRange = v),
                                 ),
+                                ...availablePriceRanges
+                                    .where((l) => l != 'All')
+                                    .map(
+                                      (label) => _buildRadioOption(
+                                        label,
+                                        label,
+                                        _priceRange,
+                                        (v) => setState(() => _priceRange = v),
+                                      ),
+                                    ),
                               ],
                             ),
                           ),
@@ -991,17 +1153,23 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                             title: 'Discount Ranges',
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: availableDiscountRanges.map((d) =>
-                                _buildCheckboxOption(d, _discountRanges.contains(d), (v) {
-                                  setState(() {
-                                    if (v) {
-                                      _discountRanges.add(d);
-                                    } else {
-                                      _discountRanges.remove(d);
-                                    }
-                                  });
-                                }),
-                              ).toList(),
+                              children: availableDiscountRanges
+                                  .map(
+                                    (d) => _buildCheckboxOption(
+                                      d,
+                                      _discountRanges.contains(d),
+                                      (v) {
+                                        setState(() {
+                                          if (v) {
+                                            _discountRanges.add(d);
+                                          } else {
+                                            _discountRanges.remove(d);
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  )
+                                  .toList(),
                             ),
                           ),
                           // Categories
@@ -1015,7 +1183,9 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                                 itemBuilder: (_, i) => _buildRadioOption(
                                   availableCategories[i],
                                   availableCategories[i],
-                                  _categories.isNotEmpty ? _categories.first : '',
+                                  _categories.isNotEmpty
+                                      ? _categories.first
+                                      : '',
                                   (v) => setState(() {
                                     _categories = [v];
                                   }),
@@ -1037,10 +1207,13 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
-                        onPressed: () => setState(() => _showFilterSidebar = false),
+                        onPressed: () =>
+                            setState(() => _showFilterSidebar = false),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF6C5CE7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         child: Text(
                           'Apply Filters',
@@ -1118,7 +1291,12 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     );
   }
 
-  Widget _buildRadioOption(String label, String value, String groupValue, ValueChanged<String> onChanged) {
+  Widget _buildRadioOption(
+    String label,
+    String value,
+    String groupValue,
+    ValueChanged<String> onChanged,
+  ) {
     final isSelected = value == groupValue;
     return Row(
       children: [
@@ -1144,7 +1322,11 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     );
   }
 
-  Widget _buildCheckboxOption(String label, bool isChecked, ValueChanged<bool> onChanged) {
+  Widget _buildCheckboxOption(
+    String label,
+    bool isChecked,
+    ValueChanged<bool> onChanged,
+  ) {
     return Row(
       children: [
         Checkbox(
@@ -1189,14 +1371,16 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
   }
 
   String? _resolveCanonicalBrandId(Brand brand, List<Brand> allBrands) {
-    String normalize(String? s) => (s ?? '').trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    String normalize(String? s) =>
+        (s ?? '').trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
 
     final name = normalize(brand.brandName);
     final category = normalize(brand.category);
     final code = normalize(brand.brandCode);
 
     for (final c in allBrands) {
-      if (normalize(c.brandName) == name && (category.isEmpty || normalize(c.category) == category)) {
+      if (normalize(c.brandName) == name &&
+          (category.isEmpty || normalize(c.category) == category)) {
         return c.brandId;
       }
     }
@@ -1210,7 +1394,9 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     }
     for (final c in allBrands) {
       final cName = normalize(c.brandName);
-      if (cName.isNotEmpty && name.isNotEmpty && (cName.contains(name) || name.contains(cName))) {
+      if (cName.isNotEmpty &&
+          name.isNotEmpty &&
+          (cName.contains(name) || name.contains(cName))) {
         return c.brandId;
       }
     }
@@ -1227,10 +1413,14 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
       // For vouchers with minPrice=0 and no denominationList, fetch full details
       final enriched = <Brand>[];
       for (final voucher in details) {
-        final needsDetails = (voucher.minPrice == null || voucher.minPrice == 0) &&
+        final needsDetails =
+            (voucher.minPrice == null || voucher.minPrice == 0) &&
             (voucher.maxPrice == null || voucher.maxPrice == 0) &&
-            (voucher.denominationList == null || voucher.denominationList!.isEmpty);
-        if (needsDetails && voucher.brandId != null && voucher.brandId!.isNotEmpty) {
+            (voucher.denominationList == null ||
+                voucher.denominationList!.isEmpty);
+        if (needsDetails &&
+            voucher.brandId != null &&
+            voucher.brandId!.isNotEmpty) {
           try {
             final full = await api.getBrandById(voucher.brandId!);
             enriched.add(full);
@@ -1283,11 +1473,23 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     }
   }
 
-  Future<void> _handlePay(Brand brand, double amount, int quantity) async {
+  Future<void> _handlePay(
+    Brand brand,
+    double amount,
+    int quantity, [
+    String? paymentMethod,
+  ]) async {
     final user = ref.read(authProvider);
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to make a payment')),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => SessionExpiredDialog(
+          onLoginRedirect: () {
+            Navigator.of(ctx).pop();
+            context.go('/login');
+          },
+        ),
       );
       return;
     }
@@ -1295,9 +1497,9 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     final totalAmount = amount * quantity;
     final brandId = brand.brandId ?? '';
     if (brandId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Brand ID not available')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Brand ID not available')));
       return;
     }
 
@@ -1327,7 +1529,9 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
       if (orderNumber == null) {
         final err = ref.read(paymentProvider).error ?? 'Failed to create order';
         setState(() => _paymentProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(err)));
         return;
       }
 
@@ -1338,27 +1542,38 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
       );
       if (!mounted) return;
       if (!valid) {
-        final err = ref.read(paymentProvider).error ?? 'Order validation failed';
+        final err =
+            ref.read(paymentProvider).error ?? 'Order validation failed';
         setState(() => _paymentProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(err)));
         return;
       }
 
       // Backend-mediated payment initiation (backend computes net payable).
-      final paymentResponse = await paymentNotifier.initiateBackendPayment();
+      final paymentResponse = await paymentNotifier.initiateBackendPayment(
+        paymentMethod: paymentMethod,
+      );
       if (!mounted) return;
       if (paymentResponse == null) {
-        final err = ref.read(paymentProvider).error ?? 'Payment initiation failed';
+        final err =
+            ref.read(paymentProvider).error ?? 'Payment initiation failed';
         setState(() => _paymentProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(err)));
         return;
       }
 
-      final paymentUrl = paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
+      final paymentUrl =
+          paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
       if (paymentUrl == null || paymentUrl.toString().isEmpty) {
         setState(() => _paymentProcessing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment URL not received from gateway')),
+          const SnackBar(
+            content: Text('Payment URL not received from gateway'),
+          ),
         );
         return;
       }
@@ -1369,16 +1584,19 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         _paymentBrand = null;
       });
 
-      context.push('/payment-webview', extra: {
-        'paymentUrl': paymentUrl.toString(),
-        'orderNumber': orderNumber,
-      });
+      context.push(
+        '/payment-webview',
+        extra: {
+          'paymentUrl': paymentUrl.toString(),
+          'orderNumber': orderNumber,
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _paymentProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment error: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Payment error: ${e.toString()}')));
     }
   }
 
@@ -1389,9 +1607,15 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         children: [
           const Icon(Icons.error_outline, size: 64, color: Color(0xFFEF4444)),
           const SizedBox(height: 16),
-          const Text('Failed to load brands', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Failed to load brands',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          const Text('Please try again later', style: TextStyle(color: Color(0xFF6B7280))),
+          const Text(
+            'Please try again later',
+            style: TextStyle(color: Color(0xFF6B7280)),
+          ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => ref.invalidate(brandsProvider),
@@ -1451,7 +1675,9 @@ class _FilterAccordionState extends State<_FilterAccordion> {
                   ),
                 ),
                 Icon(
-                  _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  _isExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
                   size: 16,
                   color: const Color(0xFF6B7280),
                 ),

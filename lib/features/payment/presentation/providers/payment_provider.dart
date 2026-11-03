@@ -73,15 +73,25 @@ class PaymentState {
     return PaymentState(
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
-      validationResponse: clearValidation ? null : (validationResponse ?? this.validationResponse),
-      couponResponse: clearCoupon ? null : (couponResponse ?? this.couponResponse),
-      orderDetails: clearOrderDetails ? null : (orderDetails ?? this.orderDetails),
+      validationResponse: clearValidation
+          ? null
+          : (validationResponse ?? this.validationResponse),
+      couponResponse: clearCoupon
+          ? null
+          : (couponResponse ?? this.couponResponse),
+      orderDetails: clearOrderDetails
+          ? null
+          : (orderDetails ?? this.orderDetails),
       orderNumber: clearOrder ? null : (orderNumber ?? this.orderNumber),
       orderId: clearOrder ? null : (orderId ?? this.orderId),
       reservationId: clearOrder ? null : (reservationId ?? this.reservationId),
       orderCreated: clearOrder ? false : (orderCreated ?? this.orderCreated),
-      orderValidated: clearOrder ? false : (orderValidated ?? this.orderValidated),
-      paymentInitiated: clearOrder ? false : (paymentInitiated ?? this.paymentInitiated),
+      orderValidated: clearOrder
+          ? false
+          : (orderValidated ?? this.orderValidated),
+      paymentInitiated: clearOrder
+          ? false
+          : (paymentInitiated ?? this.paymentInitiated),
       cartSignature: clearOrder ? null : (cartSignature ?? this.cartSignature),
     );
   }
@@ -93,7 +103,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   final CouponApi _couponApi;
 
   PaymentNotifier(this._orderApi, this._validateOrderApi, this._couponApi)
-      : super(PaymentState());
+    : super(PaymentState());
 
   Future<String?> createOrder({
     required String clientId,
@@ -101,8 +111,6 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     required double totalAmount,
     bool walletUsed = false,
     double walletAmount = 0,
-    double superCoinDeduction = 0,
-    double superCoinAmount = 0,
     bool earnCashback = true,
     String? cartSignature,
   }) async {
@@ -120,9 +128,13 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final now = DateTime.now();
-      final yymmdd = '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      final yymmdd =
+          '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
       final random = Random.secure();
-      final uuid = List.generate(12, (_) => random.nextInt(16).toRadixString(16)).join().toUpperCase();
+      final uuid = List.generate(
+        12,
+        (_) => random.nextInt(16).toRadixString(16),
+      ).join().toUpperCase();
       final orderNumber = 'ORD$yymmdd$uuid';
 
       final data = {
@@ -134,15 +146,14 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
           'status': 'PENDING',
           'walletUsed': walletUsed,
           'walletAmount': walletAmount,
-          if (superCoinDeduction > 0) 'superCoinDeduction': superCoinDeduction,
-          if (superCoinAmount > 0) 'superCoinAmount': superCoinAmount,
           'earnCashback': earnCashback,
         },
         'items': items,
       };
 
       final response = await _orderApi.createOrder(data);
-      final returnedOrderNumber = response['orderNumber'] as String? ?? orderNumber;
+      final returnedOrderNumber =
+          response['orderNumber'] as String? ?? orderNumber;
       state = state.copyWith(
         isLoading: false,
         orderCreated: true,
@@ -186,7 +197,9 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     }
   }
 
-  Future<CouponValidateResponse?> validateCoupon(CouponValidateRequest request) async {
+  Future<CouponValidateResponse?> validateCoupon(
+    CouponValidateRequest request,
+  ) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final response = await _couponApi.validateCoupon(request);
@@ -210,10 +223,9 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     final reservationId = state.reservationId;
     if (reservationId == null) return;
     try {
-      await _couponApi.confirmCoupon(CouponConfirmRequest(
-        reservationId: reservationId,
-        orderId: orderId,
-      ));
+      await _couponApi.confirmCoupon(
+        CouponConfirmRequest(reservationId: reservationId, orderId: orderId),
+      );
       // Clear persisted reservation after successful confirm
       if (state.orderNumber != null) {
         await _clearReservation(state.orderNumber!);
@@ -225,7 +237,9 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     final reservationId = state.reservationId;
     if (reservationId == null) return;
     try {
-      await _couponApi.releaseCoupon(CouponReleaseRequest(reservationId: reservationId));
+      await _couponApi.releaseCoupon(
+        CouponReleaseRequest(reservationId: reservationId),
+      );
       state = state.copyWith(reservationId: null, clearCoupon: true);
       // Clear persisted reservation after release
       if (state.orderNumber != null) {
@@ -235,7 +249,10 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   }
 
   /// Persist coupon reservation to SharedPreferences (mirrors React's sessionStorage).
-  Future<void> _persistReservation(String orderNumber, String reservationId) async {
+  Future<void> _persistReservation(
+    String orderNumber,
+    String reservationId,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('coupon_reservation_$orderNumber', reservationId);
@@ -285,7 +302,10 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   /// status update will silently fail to update the real order, and any
   /// subsequent coupon generation will run against an order still stuck
   /// at PENDING.
-  Future<bool> updateOrderStatus(String status, {required String encryptedOrderRef}) async {
+  Future<bool> updateOrderStatus(
+    String status, {
+    required String encryptedOrderRef,
+  }) async {
     if (encryptedOrderRef.isEmpty) return false;
     try {
       await _orderApi.updateOrderStatus(encryptedOrderRef, status);
@@ -311,7 +331,10 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   /// can be marked PAID but never get its `gift_voucher_item_coupon_details`
   /// populated, so it will show up in the Orders "Vouchers" tab stuck on
   /// "Vouchers are being generated" indefinitely.
-  Future<bool> fetchCoupons({required String clientId, required String orderNumber}) async {
+  Future<bool> fetchCoupons({
+    required String clientId,
+    required String orderNumber,
+  }) async {
     try {
       await _couponApi.fetchCoupons({
         'clientId': clientId,
@@ -331,10 +354,11 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   /// Compute a cart checkout signature (matches React's getCartCheckoutSignature:
   /// sorted "itemId:quantity:unitValue" joined by "|"). Used for order reuse.
   static String cartSignatureFor(List<Map<String, dynamic>> items) {
-    final sigs = items
-        .map((i) => '${i['brandId']}:${i['quantity']}:${i['unitValue']}')
-        .toList()
-      ..sort();
+    final sigs =
+        items
+            .map((i) => '${i['brandId']}:${i['quantity']}:${i['unitValue']}')
+            .toList()
+          ..sort();
     return sigs.join('|');
   }
 
@@ -349,15 +373,19 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   /// so the frontend never sends an amount or token to the gateway directly.
   /// This is the primary payment flow used in the React reference project.
   /// Uses the giftcards API (matching React's giftcardApiClient).
-  Future<Map<String, dynamic>?> initiateBackendPayment() async {
+  Future<Map<String, dynamic>?> initiateBackendPayment({
+    String? paymentMethod,
+    List<String>? paymentModes,
+  }) async {
     if (state.orderNumber == null) return null;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final response = await _orderApi.initiateBackendPayment(state.orderNumber!);
-      state = state.copyWith(
-        isLoading: false,
-        paymentInitiated: true,
+      final response = await _orderApi.initiateBackendPayment(
+        state.orderNumber!,
+        paymentMethod: paymentMethod,
+        paymentModes: paymentModes,
       );
+      state = state.copyWith(isLoading: false, paymentInitiated: true);
       return response;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -366,7 +394,9 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   }
 }
 
-final paymentProvider = StateNotifierProvider<PaymentNotifier, PaymentState>((ref) {
+final paymentProvider = StateNotifierProvider<PaymentNotifier, PaymentState>((
+  ref,
+) {
   final orderApi = ref.watch(orderApiProvider);
   final validateOrderApi = ref.watch(validateOrderApiProvider);
   final couponApi = ref.watch(couponApiProvider);

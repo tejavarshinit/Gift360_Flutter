@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
+import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
 import 'package:gift360/features/support/presentation/providers/support_ticket_provider.dart';
 import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,6 +25,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isEditingName = false;
   late TextEditingController _nameController;
   int _selectedTab = 0; // 0 = Profile, 1 = Rewards
+  Timer? _rewardsTimer;
+  int _rewardsTick = 0;
 
   @override
   void initState() {
@@ -28,6 +34,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.read(authProvider);
     _nameController = TextEditingController(text: user?.name ?? '');
     _restoreDisplayName(user);
+
+    // Rewards tab: 1s countdown refresh + 10s status re-fetch (matches React).
+    _rewardsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _selectedTab != 1) return;
+      setState(() => _rewardsTick++);
+      if (_rewardsTick % 10 == 0) {
+        ref.invalidate(rewardStatusProvider);
+      }
+    });
   }
 
   Future<void> _restoreDisplayName(dynamic user) async {
@@ -42,6 +57,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   void dispose() {
+    _rewardsTimer?.cancel();
     _nameController.dispose();
     super.dispose();
   }
@@ -227,78 +243,232 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Widget _buildRewardsTab() {
+    final rewardAsync = ref.watch(rewardStatusProvider);
     return SingleChildScrollView(
+      child: rewardAsync.when(
+        loading: () => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            'Loading rewards.',
+            style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+          ),
+        ),
+        error: (_, __) => _rewardsEmptyState(),
+        data: (reward) {
+          if (reward == null || reward['hasReward'] != true) {
+            return _rewardsEmptyState();
+          }
+          return _rewardsStatusCard(reward);
+        },
+      ),
+    );
+  }
+
+  Widget _rewardsEmptyState() {
+    return Column(
+      children: [
+        const SizedBox(height: 40),
+        Icon(Icons.card_giftcard, size: 48, color: Colors.white.withValues(alpha: 0.5)),
+        const SizedBox(height: 16),
+        Text(
+          'No rewards yet',
+          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'A Dussehra quiz offer appears after a payment cancellation.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+        ),
+      ],
+    );
+  }
+
+  int _remainingSeconds(String? iso) {
+    final deadline = DateTime.tryParse(iso ?? '');
+    if (deadline == null) return 0;
+    final diff = deadline.difference(DateTime.now()).inSeconds;
+    return diff > 0 ? diff : 0;
+  }
+
+  String _formatCountdown(int totalSeconds) {
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '${minutes}m ${seconds}s';
+  }
+
+  Widget _rewardsStatusCard(Map<String, dynamic> reward) {
+    final status = (reward['status'] ?? '').toString().toUpperCase();
+    final coins = (reward['coinReward'] as num?)?.toInt() ?? 5;
+    final secondsLeft = _remainingSeconds(
+      status == 'PENDING'
+          ? reward['expiresAt']?.toString()
+          : reward['quizStartExpiresAt']?.toString(),
+    );
+
+    final countdownStyle = GoogleFonts.poppins(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: const Color(0xFFFCD34D),
+    );
+
+    if (status == 'PENDING') {
+      return _rewardsCard(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.card_giftcard, size: 20, color: Color(0xFFC4B5FD)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$coins bonus SuperCoins available',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Complete a new purchase in this window; the bonus is added automatically after successful payment and voucher fulfillment.',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.access_time, size: 13, color: Color(0xFFFCD34D)),
+                const SizedBox(width: 4),
+                Text(
+                  secondsLeft > 0
+                      ? 'Purchase within ${_formatCountdown(secondsLeft)}'
+                      : 'Bonus window expired',
+                  style: countdownStyle,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (status == 'REDEEMED' || status == 'CLAIMED') {
+      final orderNumber = reward['redeemedOrderNumber']?.toString();
+      final redeemedAt = DateTime.tryParse(reward['redeemedAt']?.toString() ?? '');
+      return _rewardsCard(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.check_circle, size: 20, color: Color(0xFF34D399)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$coins SuperCoins earned',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${orderNumber != null && orderNumber.isNotEmpty ? 'Credited with order $orderNumber' : 'Your reward has been credited.'}'
+              '${redeemedAt != null ? ' • ${DateFormat('d MMM yyyy, h:mm a').format(redeemedAt.toLocal())}' : ''}',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (status == 'EXPIRED') {
+      return _rewardsCentered(
+        icon: Icons.access_time,
+        text: 'Your Dussehra quiz reward expired unused.',
+      );
+    }
+
+    if (status == 'LOST') {
+      return _rewardsCentered(
+        icon: Icons.sentiment_dissatisfied,
+        text: 'All answers must be correct to earn the $coins SuperCoins.',
+      );
+    }
+
+    return _rewardsCard(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.access_time, size: 20, color: Color(0xFFFCD34D)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Dussehra quiz offer is active',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Return to the payment result to start or continue the quiz.',
+            style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${_formatCountdown(secondsLeft)} remaining',
+            style: countdownStyle,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rewardsCard(Widget child) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _rewardsCentered({required IconData icon, required String text}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+      ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.emoji_events, size: 48, color: Colors.amber),
-                const SizedBox(height: 12),
-                Text('Rewards & Quiz',
-                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 8),
-                Text('Complete quizzes and earn cashback rewards!',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70)),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    // Navigate to spin wheel or quiz
-                    context.push('/spin-wheel');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  ),
-                  child: const Text('Spin & Win'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Feedback section
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.feedback_outlined, color: Colors.white70),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Share Feedback', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-                      Text('Help us improve Gift360', style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70)),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => Dialog(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        clipBehavior: Clip.antiAlias,
-                        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
-                        child: const FeedbackForm(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.chevron_right, color: Colors.white70),
-                ),
-              ],
-            ),
+          Icon(icon, size: 24, color: Colors.white.withValues(alpha: 0.7)),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.8)),
           ),
         ],
       ),
@@ -309,29 +479,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Need help?', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-          const SizedBox(height: 8),
+          Text('Need help?',
+              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+          const SizedBox(height: 4),
+          Text('Having a voucher or payment issue? We\'re here to help.',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70, height: 1.4)),
+          const SizedBox(height: 12),
           GestureDetector(
             onTap: () => _showContactDialog(),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              height: 40,
+              width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(9),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.mail_outline, size: 20, color: Colors.white70),
-                  const SizedBox(width: 12),
-                  Text('Contact Us', style: GoogleFonts.poppins(fontSize: 14, color: Colors.white)),
-                  const Spacer(),
-                  const Icon(Icons.chevron_right, color: Colors.white70),
+                  const Icon(Icons.mail_outline, size: 14, color: Color(0xFF7C3AED)),
+                  const SizedBox(width: 6),
+                  Text('Contact Us',
+                      style: GoogleFonts.poppins(
+                          fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF7C3AED))),
                 ],
               ),
             ),
@@ -344,31 +521,90 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void _showContactDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Contact Us'),
-        content: const Text('For any transaction issues or support, please email us at:\n\nsupport@sabbpe.com'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF7C3AED), Color(0xFF6366F1)],
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.mail_outline, size: 28, color: Colors.white),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Contact Us',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+              ),
+              const SizedBox(height: 12),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.5),
+                  children: [
+                    const TextSpan(text: 'For any queries, reach out to '),
+                    TextSpan(
+                      text: 'gift360@gift360.io',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF7C3AED),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.5),
+                  children: [
+                    const TextSpan(
+                      text: 'Note: ',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF7C3AED)),
+                    ),
+                    const TextSpan(text: 'If a transaction was successful but the voucher was not generated, please share the details at '),
+                    TextSpan(
+                      text: 'gift360@gift360.io',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF7C3AED),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    const TextSpan(text: ' for quick action on the issue.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C3AED),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
+                  child: const Text('Got it', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              final uri = Uri.parse('mailto:support@sabbpe.com');
-              try {
-                await launchUrl(uri);
-              } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Unable to open email client')),
-                  );
-                }
-              }
-            },
-            child: const Text('Email Us'),
-          ),
-        ],
+        ),
       ),
     );
   }

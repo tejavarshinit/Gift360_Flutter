@@ -7,6 +7,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:gift360/core/widgets/session_expired_dialog.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -24,6 +25,7 @@ import 'package:gift360/features/home/presentation/providers/recently_used_provi
 import 'package:gift360/features/home/data/repositories/recently_used_api.dart';
 import 'package:gift360/features/brands/presentation/providers/filter_meta_provider.dart';
 import 'package:gift360/features/brands/presentation/widgets/brand_voucher_modal.dart';
+import 'package:gift360/features/payment/data/models/payment_method_fee.dart';
 import 'package:gift360/features/payment/presentation/widgets/payment_details_sheet.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 import 'package:gift360/features/payment/data/models/payment.dart';
@@ -32,14 +34,16 @@ import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
 import 'package:gift360/config/app_config.dart';
-import 'package:gift360/features/home/presentation/providers/home_providers.dart';
-import 'package:gift360/features/support/presentation/widgets/support_chat_widget.dart';
 import 'package:gift360/features/supercoin/presentation/widgets/supercoin_buy_sheet.dart';
+import 'package:gift360/features/home/presentation/providers/home_providers.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/supercoin_buy_sheet.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/supercoin_intro_modal.dart';
+import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/features/supercoin/data/supercoin_excluded_brands.dart';
 import 'package:gift360/features/feedback/presentation/providers/feedback_provider.dart';
 import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
-import 'package:gift360/core/widgets/react_backdrop.dart';
 import 'package:gift360/core/widgets/gift_header.dart';
+import 'package:gift360/core/widgets/site_footer.dart';
 
 class _FeedbackToast extends StatelessWidget {
   const _FeedbackToast();
@@ -144,6 +148,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Feedback prompt: show toast after 15s for logged-in users who haven't submitted/been prompted
     _scheduleFeedbackPrompt();
     _loadDisplayName();
+    // SuperCoin intro modal: consume the post-login flag and show it after a
+    // short delay (mirrors React Home.tsx useEffect with a 700ms timeout).
+    _maybeShowSuperCoinIntro();
+  }
+
+  bool _scIntroOpen = false;
+  String _scIntroTab = 'brands';
+  Timer? _scIntroTimer;
+
+  /// Anchors the occasion sections so the banner's occasion chip can scroll
+  /// straight to its block (React: `#occasion-{slug}` scrollIntoView).
+  final Map<String, GlobalKey> _occasionKeys = {};
+
+  void _openIntroModal(String tab) {
+    setState(() {
+      _scIntroTab = tab;
+      _scIntroOpen = true;
+    });
+  }
+
+  void _scrollToOccasion(String occasion) {
+    final key = _occasionKeys.putIfAbsent(occasion, () => GlobalKey());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = key.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+        alignment: 0,
+      );
+    });
+  }
+
+  Future<void> _maybeShowSuperCoinIntro() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('showSuperCoinIntro') != true) return;
+      if (!mounted) return;
+      _scIntroTimer = Timer(const Duration(milliseconds: 700), () {
+        if (!mounted) return;
+        // Consume the flag only once the modal actually opens: if this Home
+        // state is disposed inside the 700ms window (shell rebuild/redirect),
+        // the flag survives and the next mount retries instead of silently
+        // swallowing it.
+        prefs.remove('showSuperCoinIntro');
+        setState(() => _scIntroOpen = true);
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadDisplayName() async {
@@ -174,6 +227,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _floatController.dispose();
     _feedbackPromptTimer?.cancel();
     _feedbackToastTimer?.cancel();
+    _scIntroTimer?.cancel();
     super.dispose();
   }
 
@@ -208,7 +262,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Stack(
       children: [
-        const Positioned.fill(child: ReactBackdrop(child: SizedBox.shrink())),
+        // Background matching React: #f3f5f9 (replaced ganeshbackdrop.png)
+        Positioned.fill(child: const SizedBox.shrink()),
         GestureDetector(
           onTap: () => _searchFocusNode.unfocus(),
           child: SingleChildScrollView(
@@ -235,17 +290,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     onExploreBrands: () => context.push('/brands'),
                     onPartnerWithUs: () => context.push('/distributor'),
                     onBrandTap: _openInstantGiftingBrand,
+                    onOpenConvertIntro: () => _openIntroModal('convert'),
+                    onSelectOccasion: _scrollToOccasion,
                   ),
                 ),
 
-                _buildRakhiPromoBanner(),
+                // ── Banner card (commented out, matching React reference) ──
+                // _buildRakhiPromoBanner(),
 
                 // ── Personal Picks (AI recommendations) ──
                 _PersonalPicksSection(onBuy: _openPaymentSheet),
 
                 // ── RecommendedList ──
                 // ── Occasion-based sections ──
-                _OccasionSections(onBuy: _openTopBrandModal),
+                _OccasionSections(
+                  onBuy: _openTopBrandModal,
+                  occasionKeys: _occasionKeys,
+                ),
 
                 // ── TopBrandsGrid ──
                 _TopBrandsSection(onBrandTap: _openTopBrandModal),
@@ -256,7 +317,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 // ── Social Media Links ──
                 _buildSocialMediaLinks(),
 
-                const SizedBox(height: 84),
+                // ── Site Footer (matches React Footer.tsx) ──
+                const SiteFooter(),
               ],
             ),
           ),
@@ -310,8 +372,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             right: 16,
             child: _FeedbackToast(),
           ),
-        // ── Support Chat Widget (floating) ──
-        const Positioned(bottom: 72, right: 16, child: SupportChatWidget()),
+        // ── SuperCoin intro modal (shown once after login/register) ──
+        if (_scIntroOpen)
+          Positioned.fill(
+            child: SuperCoinIntroModal(
+              open: _scIntroOpen,
+              initialTab: _scIntroTab,
+              onClose: () => setState(() => _scIntroOpen = false),
+            ),
+          ),
       ],
     );
   }
@@ -331,21 +400,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       padding: const EdgeInsets.fromLTRB(21, 40, 21, 0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Hi ${_greetingName(user)}!',
-            style: GoogleFonts.poppins(
-              fontSize: 23,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
+          Expanded(
+            child: Text(
+              'Hi ${_greetingName(user)}!',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 23,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              SuperCoinHeaderIcon(onTap: () => openSuperCoinBuySheet(context)),
-              const SizedBox(width: 14),
+              SuperCoinHeaderIcon(
+                onTap: () {
+                  if (SuperCoinConversionConfig.paused) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(SuperCoinConversionConfig.pausedMessage),
+                      ),
+                    );
+                    return;
+                  }
+                  context.push('/supercoin-voucher');
+                },
+              ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => context.push('/notifications'),
                 child: const SizedBox(
@@ -358,7 +444,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => context.push('/profile'),
                 child: Container(
@@ -392,7 +478,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     double screenWidth,
   ) {
     return SizedBox(
-      height: 212,
+      height: 246,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -422,7 +508,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return SizedBox(
       width: cardWidth,
-      height: 156,
+      height: 130,
       child: AnimatedBuilder(
         animation: _floatAnimation,
         builder: (context, child) => Transform.translate(
@@ -436,8 +522,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
+                // Background matching React: Dussehracard.png (giftCARD in Home.tsx)
                 Image.asset(
-                  'assets/images/ganeshwalletpoints.png',
+                  'assets/images/Dussehracard.png',
                   fit: BoxFit.cover,
                 ),
                 Padding(
@@ -484,7 +571,77 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               ),
                             ],
                           ),
+                          if (walletAsync.hasError)
+                            GestureDetector(
+                              onTap: () =>
+                                  ref.invalidate(walletBalanceProvider),
+                              child: const Padding(
+                                padding: EdgeInsets.only(top: 6),
+                                child: Text(
+                                  "Couldn't load your balance. Tap to retry",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF5B3FFF),
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x1F000000),
+                                blurRadius: 3,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/images/SuperCOin-removebg-preview.png',
+                                width: 13,
+                                height: 13,
+                              ),
+                              const SizedBox(width: 3),
+                              const Text(
+                                'SuperCoins balance:',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xB3000000),
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                _balanceVisible
+                                    ? ref
+                                          .watch(supercoinProvider)
+                                          .balance
+                                          .toStringAsFixed(0)
+                                    : '\u2022\u2022\u2022\u2022',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF5B3FFF),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       Positioned(
                         right: 0,
@@ -845,7 +1002,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // ─────────────────────────────────────────────
   Widget _buildActionGrid() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(21, 26, 21, 0),
+      padding: const EdgeInsets.fromLTRB(21, 4, 21, 0),
       child: Row(
         children: [
           Expanded(
@@ -855,7 +1012,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onTap: _showCategoriesBottomSheet,
             ),
           ),
-          const SizedBox(width: 17),
+          const SizedBox(width: 8),
           Expanded(
             child: _buildActionItem(
               icon: Icons.send,
@@ -863,20 +1020,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onTap: () => context.push('/nearby'),
             ),
           ),
-          const SizedBox(width: 17),
+          const SizedBox(width: 8),
           Expanded(
             child: _buildActionItem(
-              icon: Icons.inventory_2,
-              label: 'Orders',
+              icon: Icons.inventory_2_outlined,
+              label: 'Vouchers',
               onTap: () => context.push('/orders'),
             ),
           ),
-          const SizedBox(width: 17),
+          const SizedBox(width: 8),
           Expanded(
             child: _buildActionItem(
               icon: Icons.person_add_alt_1,
               label: 'Partner with Us',
               onTap: () => context.push('/distributor'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildActionItem(
+              icon: Icons.monetization_on_outlined,
+              label: 'Rewards',
+              onTap: () => context.push('/rewards'),
             ),
           ),
         ],
@@ -916,17 +1081,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: Icon(icon, size: 27, color: AppColors.actionIconColor),
                 ),
                 if (label == 'Offers Near You')
-                  Positioned(top: -9, left: 12, child: _buildTryNowBadge()),
+                  Positioned(
+                    top: -9,
+                    left: 0,
+                    right: 0,
+                    child: Center(child: _buildTryNowBadge()),
+                  ),
               ],
             ),
             const SizedBox(height: 7),
             SizedBox(
-              height: 18,
+              height: 26,
               child: Text(
                 label,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
-                  fontSize: 8,
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
                   color: const Color(0xFF161616),
                   height: 1.1,
@@ -1572,11 +1742,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  Future<void> _handlePay(Brand brand, double amount, int quantity) async {
+  Future<void> _handlePay(
+    Brand brand,
+    double amount,
+    int quantity, [
+    String? paymentMethod,
+  ]) async {
     final user = ref.read(authProvider);
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to make a payment')),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => SessionExpiredDialog(
+          onLoginRedirect: () {
+            Navigator.of(ctx).pop();
+            context.go('/login');
+          },
+        ),
       );
       return;
     }
@@ -1638,8 +1820,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         return;
       }
 
-      // Backend-mediated payment initiation (backend computes net payable).
-      final paymentResponse = await paymentNotifier.initiateBackendPayment();
+      // Backend-mediated payment initiation (backend computes net payable and
+      // freezes the selected method's fee).
+      final feeMethods =
+          ref.read(paymentMethodFeesProvider).valueOrNull ??
+          const <PaymentMethodFee>[];
+      final paymentResponse = await paymentNotifier.initiateBackendPayment(
+        paymentMethod:
+            paymentMethod ??
+            (feeMethods.isEmpty ? null : feeMethods.first.code),
+        paymentModes: feeMethods.isEmpty
+            ? null
+            : feeMethods.map((m) => m.code).toList(),
+      );
       if (!mounted) return;
       if (paymentResponse == null) {
         final err =
@@ -1966,7 +2159,13 @@ class _SuperCoinCtaWidgetState extends State<_SuperCoinCtaWidget>
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
       onTap: () {
-        openSuperCoinBuySheet(context);
+        if (SuperCoinConversionConfig.paused) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(SuperCoinConversionConfig.pausedMessage)),
+          );
+          return;
+        }
+        context.push('/supercoin-voucher');
       },
       child: AnimatedScale(
         scale: _pressed ? 0.96 : 1.0,
@@ -2055,35 +2254,32 @@ class _PersonalPicksSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Section title inside white pill (matching React)
             Padding(
-              padding: const EdgeInsets.fromLTRB(21, 24, 21, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Picks for You',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF1A1A1A),
-                    ),
+              padding: const EdgeInsets.fromLTRB(21, 26, 21, 0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                child: Text(
+                  'Picks for You',
+                  style: GoogleFonts.poppins(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    height: 1.2,
                   ),
-                  GestureDetector(
-                    onTap: () => context.push('/brands'),
-                    child: Text(
-                      'See All',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF6C5CE7),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
+            const SizedBox(height: 11),
             SizedBox(
-              height: 140,
+              height: 96,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 21),
@@ -2091,62 +2287,113 @@ class _PersonalPicksSection extends ConsumerWidget {
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final brand = brands[index];
+                  final discountValue =
+                      double.tryParse(brand.discount ?? '0') ?? 0;
                   return GestureDetector(
                     onTap: () => onBuy(brand.brandId ?? ''),
                     child: Container(
-                      width: 120,
+                      width: 88,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            color: Color(0x0D000000),
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      child: Stack(
+                        clipBehavior: Clip.none,
                         children: [
-                          if (brand.resolvedImageUrl != null)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: BrandImage(
-                                imageUrl: brand.resolvedImageUrl!,
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.contain,
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 36,
+                                height: 36,
+                                child: brand.resolvedImageUrl != null
+                                    ? BrandImage(
+                                        imageUrl: brand.resolvedImageUrl!,
+                                        width: 36,
+                                        height: 36,
+                                        fit: BoxFit.contain,
+                                      )
+                                    : const Icon(
+                                        Icons.store,
+                                        size: 24,
+                                        color: Color(0xFF94A3B8),
+                                      ),
                               ),
-                            )
-                          else
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(12),
+                              const SizedBox(height: 4),
+                              SizedBox(
+                                width: 68,
+                                child: Text(
+                                  brand.brandName ?? '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF101010),
+                                    height: 1.1,
+                                  ),
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.store,
-                                size: 32,
-                                color: Colors.grey,
+                              const SizedBox(height: 2),
+                              SizedBox(
+                                width: 68,
+                                child: Text(
+                                  discountValue > 0
+                                      ? '${discountValue.toStringAsFixed(0)}% Cashback'
+                                      : (brand.category ?? 'Gift Voucher'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF888888),
+                                  ),
+                                ),
                               ),
-                            ),
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              brand.brandName ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            ],
                           ),
+                          if (discountValue > 0)
+                            Positioned(
+                              top: -4,
+                              left: -4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF6C5CE7),
+                                      Color(0xFF5A4BD1),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${discountValue.toStringAsFixed(0)}%',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -2168,8 +2415,9 @@ class _PersonalPicksSection extends ConsumerWidget {
 // ═══════════════════════════════════════════════
 class _OccasionSections extends ConsumerWidget {
   final void Function(String brandId) onBuy;
+  final Map<String, GlobalKey> occasionKeys;
 
-  const _OccasionSections({required this.onBuy});
+  const _OccasionSections({required this.onBuy, required this.occasionKeys});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2186,7 +2434,11 @@ class _OccasionSections extends ConsumerWidget {
         if (filteredOccasions.isEmpty) return const SizedBox.shrink();
         return Column(
           children: filteredOccasions.map((occasion) {
-            return _OccasionSection(occasion: occasion, onBuy: onBuy);
+            return _OccasionSection(
+              key: occasionKeys.putIfAbsent(occasion, () => GlobalKey()),
+              occasion: occasion,
+              onBuy: onBuy,
+            );
           }).toList(),
         );
       },
@@ -2200,7 +2452,11 @@ class _OccasionSection extends ConsumerWidget {
   final String occasion;
   final void Function(String brandId) onBuy;
 
-  const _OccasionSection({required this.occasion, required this.onBuy});
+  const _OccasionSection({
+    super.key,
+    required this.occasion,
+    required this.onBuy,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2226,7 +2482,7 @@ class _OccasionSection extends ConsumerWidget {
                 child: Text(
                   occasion,
                   style: GoogleFonts.poppins(
-                    fontSize: 13,
+                    fontSize: 17,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF1A1A1A),
                   ),
@@ -2247,50 +2503,46 @@ class _OccasionSection extends ConsumerWidget {
                     child: Container(
                       width: 88,
                       height: 96,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            color: Color(0x0D000000),
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
                           ),
                         ],
                       ),
                       child: Stack(
+                        clipBehavior: Clip.none,
                         children: [
                           Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              if (brand.resolvedImageUrl != null)
-                                Center(
-                                  child: SizedBox(
-                                    width: 60,
-                                    height: 42,
-                                    child: BrandImage(
-                                      imageUrl: brand.resolvedImageUrl!,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                )
-                              else
-                                const Center(
-                                  child: SizedBox(
-                                    width: 60,
-                                    height: 42,
-                                    child: Icon(
-                                      Icons.store,
-                                      size: 24,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 6),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
+                              SizedBox(
+                                width: 40,
+                                height: 40,
+                                child: brand.resolvedImageUrl != null
+                                    ? BrandImage(
+                                        imageUrl: brand.resolvedImageUrl!,
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.contain,
+                                      )
+                                    : const Icon(
+                                        Icons.store,
+                                        size: 24,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: 68,
                                 child: Text(
                                   brand.brandName ?? '',
                                   maxLines: 1,
@@ -2299,6 +2551,8 @@ class _OccasionSection extends ConsumerWidget {
                                   style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF101010),
+                                    height: 1.1,
                                   ),
                                 ),
                               ),
@@ -2306,8 +2560,8 @@ class _OccasionSection extends ConsumerWidget {
                           ),
                           if ((double.tryParse(brand.discount ?? '0') ?? 0) > 0)
                             Positioned(
-                              top: 4,
-                              left: 4,
+                              top: -4,
+                              left: -4,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 5,
@@ -2444,7 +2698,7 @@ class _RecommendedSection extends ConsumerWidget {
       child: Container(
         width: 120,
         height: 80,
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
@@ -2645,8 +2899,6 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
   final ScrollController _row1Scroll = ScrollController();
   final ScrollController _row2Scroll = ScrollController();
   bool _userTouching = false;
-  Timer? _autoScrollTimer1;
-  Timer? _autoScrollTimer2;
 
   @override
   void initState() {
@@ -2658,32 +2910,51 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
   void dispose() {
     _row1Scroll.dispose();
     _row2Scroll.dispose();
-    _autoScrollTimer1?.cancel();
-    _autoScrollTimer2?.cancel();
     super.dispose();
   }
 
   void _startAutoScroll() {
-    _autoScrollTimer1 = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (_userTouching || !_row1Scroll.hasClients) return;
-      final maxScroll = _row1Scroll.position.maxScrollExtent;
-      final current = _row1Scroll.offset;
-      if (current >= maxScroll) {
-        _row1Scroll.jumpTo(0);
-      } else {
-        _row1Scroll.jumpTo(current + 0.5);
+    unawaited(_autoScrollRow(_row1Scroll));
+    unawaited(_autoScrollRow(_row2Scroll));
+  }
+
+  Future<void> _autoScrollRow(ScrollController controller) async {
+    while (mounted) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+      if (_userTouching || !controller.hasClients) continue;
+
+      final position = controller.position;
+      if (!position.hasContentDimensions) continue;
+      final maxScroll = position.maxScrollExtent;
+      if (maxScroll <= 1) continue;
+
+      final remaining = maxScroll - position.pixels;
+      if (remaining <= 1) {
+        if (!_userTouching && controller.hasClients) controller.jumpTo(0);
+        continue;
       }
-    });
-    _autoScrollTimer2 = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (_userTouching || !_row2Scroll.hasClients) return;
-      final maxScroll = _row2Scroll.position.maxScrollExtent;
-      final current = _row2Scroll.offset;
-      if (current >= maxScroll) {
-        _row2Scroll.jumpTo(0);
-      } else {
-        _row2Scroll.jumpTo(current + 0.5);
+
+      // Animate once across the row instead of issuing 20 jumpTo calls a
+      // second. This avoids web layout races while retaining the marquee.
+      final durationMs = (remaining * 100).round().clamp(1000, 120000);
+      try {
+        await controller.animateTo(
+          maxScroll,
+          duration: Duration(milliseconds: durationMs),
+          curve: Curves.linear,
+        );
+      } catch (_) {
+        // A resize or user drag can interrupt the scroll animation.
       }
-    });
+
+      if (!mounted) return;
+      if (!_userTouching &&
+          controller.hasClients &&
+          controller.position.hasContentDimensions) {
+        controller.jumpTo(0);
+      }
+    }
   }
 
   @override
@@ -2842,7 +3113,7 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
       child: Container(
         width: 88,
         height: 96,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -2860,8 +3131,8 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: 40,
-                  height: 40,
+                  width: 36,
+                  height: 36,
                   child: imageUrl != null
                       ? BrandImage(
                           imageUrl: imageUrl,
@@ -2872,7 +3143,7 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
                         )
                       : const Icon(Icons.store, color: Color(0xFF94A3B8)),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Text(
                   brand.brandName ?? '',
                   textAlign: TextAlign.center,
@@ -2885,7 +3156,7 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
                     height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   meta,
                   textAlign: TextAlign.center,
@@ -3014,12 +3285,22 @@ class _RecentlyUsedSection extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Recently Used',
-                style: GoogleFonts.poppins(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                child: Text(
+                  'Recently Used',
+                  style: GoogleFonts.poppins(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -3056,7 +3337,7 @@ class _RecentlyUsedSection extends ConsumerWidget {
       child: Container(
         width: 120,
         height: 80,
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
@@ -3114,15 +3395,15 @@ class _RecentlyUsedSection extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 3),
             Container(height: 1, color: const Color(0xFFE5E7EB)),
-            const SizedBox(height: 5),
+            const SizedBox(height: 2),
             Align(
               alignment: Alignment.centerRight,
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                  horizontal: 8,
+                  vertical: 3,
                 ),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
@@ -3133,7 +3414,7 @@ class _RecentlyUsedSection extends ConsumerWidget {
                 child: Text(
                   'Buy Again',
                   style: GoogleFonts.poppins(
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),

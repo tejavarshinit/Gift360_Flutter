@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:gift360/features/brands/data/models/brand.dart';
+import 'package:gift360/features/supercoin/data/hidden_catalog_brands.dart';
 
 class TopBrandsApi {
   final Dio _dio;
@@ -19,7 +20,7 @@ class TopBrandsApi {
     }
     return items
         .map((e) => Brand.fromJson(e as Map<String, dynamic>))
-        .where((b) => b.brandId != null && b.brandId!.isNotEmpty && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandId!.isNotEmpty && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 }

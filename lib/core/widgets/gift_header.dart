@@ -10,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/feedback/presentation/providers/feedback_provider.dart';
 import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
-import 'package:gift360/features/supercoin/presentation/widgets/supercoin_buy_sheet.dart';
 
 const _coachmarkKey = 'sc_header_coachmark_seen';
 
@@ -86,9 +85,13 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
 
             // ── Theme toggle ──
             _iconButton(
-              icon: themeMode == ThemeMode.light ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+              icon: themeMode == ThemeMode.light
+                  ? Icons.dark_mode_outlined
+                  : Icons.light_mode_outlined,
               onTap: () => ref.read(themeModeProvider.notifier).state =
-                  themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light,
+                  themeMode == ThemeMode.light
+                  ? ThemeMode.dark
+                  : ThemeMode.light,
             ),
 
             // ── Hamburger menu ──
@@ -102,7 +105,11 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _iconButton({required IconData icon, VoidCallback? onTap, bool badge = false}) {
+  Widget _iconButton({
+    required IconData icon,
+    VoidCallback? onTap,
+    bool badge = false,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -125,7 +132,9 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
                   decoration: const BoxDecoration(
                     color: Color(0xFFEF4444),
                     shape: BoxShape.circle,
-                    border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
+                    border: Border.fromBorderSide(
+                      BorderSide(color: Colors.white, width: 1.5),
+                    ),
                   ),
                 ),
               ),
@@ -147,8 +156,10 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
         child: const SizedBox.shrink(),
       ),
       transitionBuilder: (ctx, anim1, anim2, child) {
-        final offset = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-            .animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic));
+        final offset = Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic));
         return Align(
           alignment: Alignment.centerRight,
           child: SlideTransition(
@@ -169,7 +180,8 @@ class _FeedbackIconButton extends ConsumerStatefulWidget {
   const _FeedbackIconButton({required this.isAuthenticated});
 
   @override
-  ConsumerState<_FeedbackIconButton> createState() => _FeedbackIconButtonState();
+  ConsumerState<_FeedbackIconButton> createState() =>
+      _FeedbackIconButtonState();
 }
 
 class _FeedbackIconButtonState extends ConsumerState<_FeedbackIconButton> {
@@ -216,7 +228,11 @@ class _FeedbackIconButtonState extends ConsumerState<_FeedbackIconButton> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            const Icon(Icons.message_outlined, size: 20, color: Color(0xFF1A1A1A)),
+            const Icon(
+              Icons.message_outlined,
+              size: 20,
+              color: Color(0xFF1A1A1A),
+            ),
             if (_showBadge)
               Positioned(
                 top: -1,
@@ -227,7 +243,9 @@ class _FeedbackIconButtonState extends ConsumerState<_FeedbackIconButton> {
                   decoration: const BoxDecoration(
                     color: Color(0xFFEF4444),
                     shape: BoxShape.circle,
-                    border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
+                    border: Border.fromBorderSide(
+                      BorderSide(color: Colors.white, width: 1.5),
+                    ),
                   ),
                 ),
               ),
@@ -248,7 +266,8 @@ class SuperCoinHeaderIcon extends StatefulWidget {
   State<SuperCoinHeaderIcon> createState() => SuperCoinHeaderIconState();
 }
 
-class SuperCoinHeaderIconState extends State<SuperCoinHeaderIcon> with SingleTickerProviderStateMixin {
+class SuperCoinHeaderIconState extends State<SuperCoinHeaderIcon>
+    with SingleTickerProviderStateMixin {
   bool _expanded = false;
   bool _spinning = false;
   bool _showCoachmark = false;
@@ -305,7 +324,10 @@ class SuperCoinHeaderIconState extends State<SuperCoinHeaderIcon> with SingleTic
   }
 
   void _doExpand() {
-    setState(() { _expanded = true; _spinning = true; });
+    setState(() {
+      _expanded = true;
+      _spinning = true;
+    });
     Timer(const Duration(milliseconds: 600), () {
       if (mounted) setState(() => _spinning = false);
     });
@@ -329,29 +351,49 @@ class SuperCoinHeaderIconState extends State<SuperCoinHeaderIcon> with SingleTic
             curve: Curves.easeInOut,
             width: _expanded ? 110 : 28,
             height: 28,
-            padding: _expanded ? const EdgeInsets.symmetric(horizontal: 10) : EdgeInsets.zero,
             decoration: BoxDecoration(
-              color: _expanded ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+              color: _expanded
+                  ? Colors.white.withValues(alpha: 0.15)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedRotation(
-                  turns: _spinning ? 1 : 0,
-                  duration: const Duration(milliseconds: 600),
-                  child: Image.asset(
-                    'assets/images/SuperCOin-removebg-preview.png',
-                    width: 18,
-                    height: 18,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                if (_expanded) ...[
-                  const SizedBox(width: 4),
-                  Text('Convert coins', style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.white)),
-                ],
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableWidth = constraints.maxWidth;
+                final iconSize = availableWidth < 18 ? availableWidth : 18.0;
+                final showLabel = _expanded && availableWidth >= 90;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedRotation(
+                      turns: _spinning ? 1 : 0,
+                      duration: const Duration(milliseconds: 600),
+                      child: Image.asset(
+                        'assets/images/SuperCOin-removebg-preview.png',
+                        width: iconSize,
+                        height: iconSize,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    if (showLabel) ...[
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Convert coins',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
           if (_showCoachmark)
@@ -372,12 +414,19 @@ class SuperCoinHeaderIconState extends State<SuperCoinHeaderIcon> with SingleTic
                       children: [
                         Container(
                           width: 180,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: const [
-                              BoxShadow(color: Color(0x26000000), blurRadius: 20, offset: Offset(0, 4)),
+                              BoxShadow(
+                                color: Color(0x26000000),
+                                blurRadius: 20,
+                                offset: Offset(0, 4),
+                              ),
                             ],
                           ),
                           child: Text(
@@ -403,7 +452,13 @@ class SuperCoinHeaderIconState extends State<SuperCoinHeaderIcon> with SingleTic
                                 shape: BoxShape.circle,
                               ),
                               child: const Center(
-                                child: Text('✕', style: TextStyle(fontSize: 8, color: Color(0xFF6B7280))),
+                                child: Text(
+                                  '✕',
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -462,7 +517,11 @@ class _MenuPanel extends StatelessWidget {
                       ).createShader(bounds),
                       child: const Text(
                         'Gift360',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                     IconButton(
@@ -473,24 +532,65 @@ class _MenuPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _navTile(context, 'Home', Icons.home_outlined, '/'),
-                _navTile(context, 'Brands', Icons.storefront_outlined, '/brands'),
+                _navTile(
+                  context,
+                  'Brands',
+                  Icons.storefront_outlined,
+                  '/brands',
+                ),
                 if (isAuthenticated) ...[
                   const Divider(height: 24),
-                  _navTile(context, 'Orders', Icons.receipt_long_outlined, '/orders'),
-                  _navTile(context, 'Notifications', Icons.notifications_none_rounded, '/notifications'),
-                  _navTile(context, 'Profile', Icons.person_outline, '/profile'),
+                  _navTile(
+                    context,
+                    'Orders',
+                    Icons.receipt_long_outlined,
+                    '/my-orders',
+                  ),
+                  _navTile(
+                    context,
+                    'Vouchers',
+                    Icons.local_mall_outlined,
+                    '/orders',
+                  ),
+                  _navTile(
+                    context,
+                    'Notifications',
+                    Icons.notifications_none_rounded,
+                    '/notifications',
+                  ),
+                  _navTile(
+                    context,
+                    'Profile',
+                    Icons.person_outline,
+                    '/profile',
+                  ),
                 ],
                 const Divider(height: 24),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   child: Text(
                     'PARTNER WITH US',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1, color: Color(0xFF888888)),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                      color: Color(0xFF888888),
+                    ),
                   ),
                 ),
-                _navTile(context, 'Distributor', Icons.local_shipping_outlined, '/distributor'),
+                _navTile(
+                  context,
+                  'Distributor',
+                  Icons.local_shipping_outlined,
+                  '/distributor',
+                ),
                 _navTile(context, 'Reseller', Icons.storefront, '/reseller'),
-                _navTile(context, 'Corporate', Icons.apartment_outlined, '/corporate'),
+                _navTile(
+                  context,
+                  'Corporate',
+                  Icons.apartment_outlined,
+                  '/corporate',
+                ),
                 const Spacer(),
                 if (!isAuthenticated)
                   SizedBox(
@@ -504,9 +604,14 @@ class _MenuPanel extends StatelessWidget {
                         backgroundColor: const Color(0xFF7B5CFF),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                      child: const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
               ],
@@ -517,7 +622,12 @@ class _MenuPanel extends StatelessWidget {
     );
   }
 
-  Widget _navTile(BuildContext context, String label, IconData icon, String route) {
+  Widget _navTile(
+    BuildContext context,
+    String label,
+    IconData icon,
+    String route,
+  ) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () {
@@ -530,7 +640,14 @@ class _MenuPanel extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: const Color(0xFF1A1A1A)),
             const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
           ],
         ),
       ),
@@ -548,7 +665,8 @@ class _OnlineIndicator extends StatefulWidget {
   State<_OnlineIndicator> createState() => _OnlineIndicatorState();
 }
 
-class _OnlineIndicatorState extends State<_OnlineIndicator> with SingleTickerProviderStateMixin {
+class _OnlineIndicatorState extends State<_OnlineIndicator>
+    with SingleTickerProviderStateMixin {
   final _random = Random();
   late int _count;
   Timer? _timer;
@@ -560,7 +678,10 @@ class _OnlineIndicatorState extends State<_OnlineIndicator> with SingleTickerPro
   void initState() {
     super.initState();
     _count = _randomBetween(150, 500);
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
     _scheduleNext();
   }
 
@@ -612,14 +733,19 @@ class _OnlineIndicatorState extends State<_OnlineIndicator> with SingleTickerPro
                       child: Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFF34D399).withValues(alpha: 0.75 * opacity),
+                          color: const Color(
+                            0xFF34D399,
+                          ).withValues(alpha: 0.75 * opacity),
                         ),
                       ),
                     ),
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF10B981)),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF10B981),
+                      ),
                     ),
                   ],
                 ),
@@ -629,7 +755,11 @@ class _OnlineIndicatorState extends State<_OnlineIndicator> with SingleTickerPro
           const SizedBox(width: 4),
           Text(
             '$_count online',
-            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF059669)),
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF059669),
+            ),
           ),
         ],
       ),

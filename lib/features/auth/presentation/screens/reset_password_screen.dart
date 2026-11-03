@@ -5,11 +5,17 @@ import 'package:gift360/core/constants/app_colors.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
-  const ResetPasswordScreen({super.key});
+  /// One-time reset token from the email link (`/reset-password?token=...`).
+  final String? token;
+
+  const ResetPasswordScreen({super.key, this.token});
 
   @override
   ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
+
+/// React `TokenStatus`: loading | valid | invalid | expired | used.
+enum _ResetTokenStatus { loading, valid, invalid, expired, used }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _newPasswordController = TextEditingController();
@@ -20,6 +26,40 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   String _error = '';
   String _passwordError = '';
   bool _success = false;
+
+  _ResetTokenStatus _tokenStatus = _ResetTokenStatus.loading;
+  String _token = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _token = (widget.token ?? '').trim();
+    _validateResetToken();
+  }
+
+  /// Validate the link BEFORE showing the form (React `useValidateResetToken`
+  /// → POST /forgot-password/validate).
+  Future<void> _validateResetToken() async {
+    if (_token.isEmpty) {
+      if (mounted) setState(() => _tokenStatus = _ResetTokenStatus.invalid);
+      return;
+    }
+    try {
+      final data = await ref.read(authApiProvider).validateResetToken(_token);
+      final status = (data['status'] ?? '').toString().toUpperCase();
+      if (!mounted) return;
+      setState(() {
+        _tokenStatus = switch (status) {
+          'VALID' => _ResetTokenStatus.valid,
+          'EXPIRED' => _ResetTokenStatus.expired,
+          'ALREADY_USED' => _ResetTokenStatus.used,
+          _ => _ResetTokenStatus.invalid,
+        };
+      });
+    } catch (_) {
+      if (mounted) setState(() => _tokenStatus = _ResetTokenStatus.invalid);
+    }
+  }
 
   @override
   void dispose() {
@@ -56,9 +96,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       return;
     }
 
-    // Get token from route query params
-    final uri = Uri.base;
-    final token = uri.queryParameters['token'] ?? '';
+    // Use the token the route was opened with (works on mobile deep links too —
+    // `Uri.base` only reflects a browser URL).
+    final token = _token;
 
     if (token.isEmpty) {
       setState(() => _error = 'Invalid reset link');
@@ -99,6 +139,38 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final validating = _tokenStatus == _ResetTokenStatus.loading;
+    final invalid = !validating && _tokenStatus != _ResetTokenStatus.valid;
+    final IconData icon = _success
+        ? Icons.check_circle_rounded
+        : validating
+            ? Icons.hourglass_top_rounded
+            : invalid
+                ? Icons.error_outline_rounded
+                : Icons.key_rounded;
+    final String title = _success
+        ? 'Password Reset!'
+        : validating
+            ? 'Validating reset link...'
+            : _tokenStatus == _ResetTokenStatus.expired
+                ? 'Link Expired'
+                : _tokenStatus == _ResetTokenStatus.used
+                    ? 'Link Already Used'
+                    : invalid
+                        ? 'Invalid Reset Link'
+                        : 'Reset Your Password';
+    final String subtitle = _success
+        ? 'Your password has been updated'
+        : validating
+            ? 'Please wait while we check your link'
+            : _tokenStatus == _ResetTokenStatus.expired
+                ? 'This reset link has expired. Please request a new one.'
+                : _tokenStatus == _ResetTokenStatus.used
+                    ? 'This reset link has already been used.'
+                    : invalid
+                        ? 'This password reset link is invalid or has expired.'
+                        : 'Enter your new password below';
+
     return Scaffold(
       body: Stack(
         children: [
@@ -150,7 +222,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                         boxShadow: [BoxShadow(color: AppColors.gold.withValues(alpha: 0.8), blurRadius: 8, spreadRadius: 1)],
                       ),
                       child: Icon(
-                        _success ? Icons.check_circle_rounded : Icons.key_rounded,
+                        icon,
                         size: 36,
                         color: AppColors.goldLight,
                       ),
@@ -161,13 +233,14 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                         colors: [AppColors.gold, AppColors.goldLight],
                       ).createShader(bounds),
                       child: Text(
-                        _success ? 'Password Reset!' : 'Reset Your Password',
+                        title,
                         style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _success ? 'Your password has been updated' : 'Enter your new password below',
+                      subtitle,
+                      textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.7)),
                     ),
                     const SizedBox(height: 28),
@@ -180,7 +253,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
-                      child: _success ? _buildSuccessView() : _buildFormView(),
+                      child: _success
+                          ? _buildSuccessView()
+                          : validating
+                              ? _buildValidatingView()
+                              : invalid
+                                  ? _buildInvalidView(context)
+                                  : _buildFormView(),
                     ),
                   ],
                 ),
@@ -189,6 +268,65 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildValidatingView() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 36,
+            height: 36,
+            child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.goldLight),
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Validating reset link...',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvalidView(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 4),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            onPressed: () => context.go('/forgot-password'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: const Text('Request New Reset Link',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton(
+            onPressed: () => context.go('/login'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: const Text('Back to Login',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
     );
   }
 

@@ -60,7 +60,7 @@ class _SuperCoinBuySheetState extends ConsumerState<SuperCoinBuySheet> {
     context.go('/cart');
   }
 
-  void _handlePay(Brand brand, double amount, int quantity) {
+  void _handlePay(Brand brand, double amount, int quantity, [String? paymentMethod]) {
     // Standard payment flow — reuse the home screen's payment logic via cart.
     _handleAddToCart(brand, amount, quantity);
   }

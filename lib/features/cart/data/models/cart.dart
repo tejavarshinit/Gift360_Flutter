@@ -7,6 +7,7 @@ class CartItem {
   final double lineTotal;
   final String? image;
   final double? discount;
+  final bool hasDiscountField;
 
   const CartItem({
     required this.itemId,
@@ -17,6 +18,7 @@ class CartItem {
     required this.lineTotal,
     this.image,
     this.discount,
+    this.hasDiscountField = false,
   });
 
   factory CartItem.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class CartItem {
       lineTotal: (json['lineTotal'] ?? 0).toDouble(),
       image: json['image'] as String?,
       discount: (json['discount'])?.toDouble(),
+      hasDiscountField: json.containsKey('discount'),
     );
   }
 
@@ -51,6 +54,7 @@ class CartItem {
       lineTotal: lineTotal ?? this.lineTotal,
       image: image ?? this.image,
       discount: discount ?? this.discount,
+      hasDiscountField: hasDiscountField,
     );
   }
 
@@ -85,7 +89,8 @@ class Cart {
   factory Cart.fromJson(Map<String, dynamic> json) {
     return Cart(
       clientId: json['clientId'] as String? ?? '',
-      items: (json['items'] as List?)
+      items:
+          (json['items'] as List?)
               ?.map((e) => CartItem.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],

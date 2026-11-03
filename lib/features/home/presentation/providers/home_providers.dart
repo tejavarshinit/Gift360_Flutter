@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gift360/features/brands/data/models/brand.dart';
 import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
+import 'package:gift360/features/payment/data/models/payment_method_fee.dart';
 
 /// Fetches personalized brand recommendations for the user.
 final personalRecommendationsProvider = FutureProvider<List<Brand>>((ref) async {
@@ -40,7 +41,24 @@ final platformFeeConfigProvider = FutureProvider<Map<String, dynamic>>((ref) asy
   try {
     return await api.getPlatformFeeConfig();
   } catch (_) {
-    // Match React Cart.tsx defaults (feePercent 0.02, feeMax 20).
-    return {'feePercent': 0.02, 'feeMax': 20.0};
+    // Match React Cart.tsx defaults (feePercent 0.02, feeMax 20, cash same).
+    return {
+      'feePercent': 0.02,
+      'feeMax': 20.0,
+      'feePercentCash': 0.02,
+      'feeMaxCash': 20.0,
+    };
+  }
+});
+
+/// Active cash payment methods (UPI/DC/CC/NB) with their platform fee from the
+/// DB-backed /v1/payment-method-fees endpoint. Empty when it cannot load, in
+/// which case the app falls back to the legacy platform fee.
+final paymentMethodFeesProvider = FutureProvider<List<PaymentMethodFee>>((ref) async {
+  final api = ref.watch(brandsApiProvider);
+  try {
+    return await api.getPaymentMethodFees();
+  } catch (_) {
+    return const [];
   }
 });

@@ -1,66 +1,115 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:gift360/core/constants/app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_constants.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
-
+  final bool isSessionExpired;
+  const LoginScreen({super.key, this.isSessionExpired = false});
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _mobileController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _otpController = TextEditingController();
+  final List<TextEditingController> _otpControllers =
+      List.generate(4, (_) => TextEditingController());
+  final List<FocusNode> _otpFocusNodes = List.generate(4, (_) => FocusNode());
 
   bool _otpSent = false;
   bool _isLoading = false;
   String _otpMessage = '';
   String _error = '';
+  String _mobileError = '';
+
+  // Brand logos for marquee (matching React)
+  static const _brandLogos = [
+    'assets/images/amazon.png',
+    'assets/images/flipkart.png',
+    'assets/images/myntra.png',
+    'assets/images/nike.png',
+    'assets/images/puma.png',
+    'assets/images/bata.png',
+    'assets/images/levis.png',
+    'assets/images/tatacliq.png',
+    'assets/images/ajio.png',
+    'assets/images/zomato.png',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _mobileController.addListener(() => setState(() {}));
-    _otpController.addListener(() => setState(() {}));
+    if (widget.isSessionExpired) {
+      _error = 'Your session has expired. Please login again.';
+    }
   }
 
   @override
   void dispose() {
     _mobileController.dispose();
-    _emailController.dispose();
-    _otpController.dispose();
+    for (final c in _otpControllers) {
+      c.dispose();
+    }
+    for (final f in _otpFocusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
+  bool _validateMobile(String m) => AppConstants.mobileRegex.hasMatch(m);
+  bool _validateOtp() =>
+      _otpControllers.every((c) => c.text.length == 1);
+
+  String get _otpString => _otpControllers.map((c) => c.text).join();
+
+  void _clearErrors() {
+    setState(() {
+      _error = '';
+      _mobileError = '';
+    });
+  }
+
+  void _handleOtpInput(int index, String value) {
+    if (!RegExp(r'^[0-9]?$').hasMatch(value)) return;
+    setState(() {});
+    if (value.isNotEmpty && index < 3) {
+      _otpFocusNodes[index + 1].requestFocus();
+    }
+    if (value.isEmpty && index > 0) {
+      _otpFocusNodes[index - 1].requestFocus();
+    }
+  }
+
+  Future<void> _handleSendOtp() async {
     final mobile = _mobileController.text.trim();
-    if (!AppConstants.mobileRegex.hasMatch(mobile)) {
-      setState(() => _error = 'Please enter a valid 10-digit mobile number');
+    _clearErrors();
+    setState(() {
+      _otpMessage = '';
+      _otpSent = false;
+      for (final c in _otpControllers) {
+        c.clear();
+      }
+    });
+
+    if (mobile.isEmpty) {
+      setState(() => _mobileError = 'Mobile number is required');
+      return;
+    }
+    if (!_validateMobile(mobile)) {
+      setState(
+          () => _mobileError = 'Please enter a valid 10-digit mobile number');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _error = '';
-      _otpMessage = '';
-      _otpSent = false;
-    });
-
+    setState(() => _isLoading = true);
     try {
       final response = await ref.read(authProvider.notifier).sendOtp(
-        SendOtpRequest(
-          mobileNumber: mobile,
-          email: _emailController.text.trim(),
-        ),
-      );
-
+            SendOtpRequest(mobileNumber: mobile),
+          );
       if (response.notRegistered == true) {
         setState(() {
           _error = 'Mobile number not registered. Please register first.';
@@ -68,21 +117,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         });
         return;
       }
-
       if (response.success) {
         setState(() {
           _otpSent = true;
           _otpMessage = response.message;
           _isLoading = false;
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response.message),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
       }
     } catch (e) {
       setState(() {
@@ -92,49 +132,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _verifyOtp() async {
+  Future<void> _handleOtpLogin() async {
     final mobile = _mobileController.text.trim();
-    final otp = _otpController.text.trim();
+    final otp = _otpString;
+    _clearErrors();
 
-    if (!AppConstants.mobileRegex.hasMatch(mobile)) {
+    if (!_validateMobile(mobile)) {
       setState(() => _error = 'Please enter a valid mobile number');
       return;
     }
-    if (!AppConstants.otpRegex.hasMatch(otp)) {
-      setState(() => _error = 'Please enter a valid OTP');
+    if (!_validateOtp()) {
+      setState(() => _error = 'Please enter a valid 4-digit OTP');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _error = '';
-    });
-
+    setState(() => _isLoading = true);
     try {
       final response = await ref.read(authProvider.notifier).loginWithOtp(
-        LoginWithOtpRequest(
-          mobileNumber: mobile,
-          otp: otp,
-          email: _emailController.text.trim(),
-        ),
-      );
-
-      if (response.success && response.token != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Welcome back!'),
-              backgroundColor: AppColors.success,
+            LoginWithOtpRequest(
+              mobileNumber: mobile,
+              otp: otp,
             ),
           );
+      if (response.success && response.token != null) {
+        if (mounted) {
           await Future.delayed(const Duration(milliseconds: 400));
           if (mounted) context.go('/');
         }
       } else {
         setState(() {
-          _error = response.message.isNotEmpty
-              ? response.message
-              : 'OTP verification failed';
+          _error =
+              response.message.isNotEmpty ? response.message : 'OTP login failed';
           _isLoading = false;
         });
       }
@@ -148,15 +176,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   String _friendlyError(Object e) {
     final msg = e.toString();
-    if (msg.contains('connection error') || msg.contains('No internet') || msg.contains('SocketException')) {
+    if (msg.contains('connection error') ||
+        msg.contains('No internet') ||
+        msg.contains('SocketException')) {
       return 'No internet connection. Please check your network and try again.';
     }
-    if (msg.contains('connection timeout') || msg.contains('receive timeout')) {
+    if (msg.contains('connection timeout') ||
+        msg.contains('receive timeout')) {
       return 'Connection timed out. Please try again.';
     }
     if (msg.contains('404')) return 'Service not found. Please try again later.';
     if (msg.contains('500')) return 'Server error. Please try again later.';
-    if (msg.contains('401') || msg.contains('403')) return 'Session expired. Please try again.';
+    if (msg.contains('401') || msg.contains('403')) {
+      return 'Session expired. Please try again.';
+    }
     if (msg.length > 120) return 'Something went wrong. Please try again.';
     return msg;
   }
@@ -166,382 +199,619 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: SizedBox.expand(
         child: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset('assets/images/ganeshauth.png', fit: BoxFit.cover, alignment: Alignment.topCenter),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).size.height * 0.42, 20, 24),
+          children: [
+            // ── 1. Background image (matching React DiwaliAuthShell's diwali-bg) ──
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/diwali-bg.jpg',
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+              ),
+            ),
+
+            // ── 2. Content ──
+            SafeArea(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.90),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: AppColors.gold.withValues(alpha: 0.18),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          blurRadius: 40,
-                          offset: const Offset(0, 18),
+                  const SizedBox(height: 24),
+                  // Logo
+                  Center(
+                    child: Image.asset(
+                      'assets/images/gift360full.png',
+                      width: 140,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Heading
+                  Center(
+                    child: Column(
+                      children: [
+                        RichText(
+                          text: TextSpan(
+                            style: GoogleFonts.poppins(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                              height: 1.3,
+                            ),
+                            children: const [
+                              TextSpan(text: 'India #1 Destination for '),
+                              TextSpan(
+                                text: 'Gifting',
+                                style: TextStyle(color: Color(0xFF7C3AED)),
+                              ),
+                            ],
+                          ),
                         ),
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'Access 400+ brands Vouchers. Delivered instantly, and gift feeling',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: const Color(0xFF1E1E1E),
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.auto_awesome,
-                                size: 16, color: AppColors.goldLight),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                            color: const Color(0xFF351265),
+                  ),
+
+                  // ── Spacer pushes card to bottom ──
+                  const Spacer(),
+
+                  // ── White card ──
+                  Center(
+                    child: Container(
+                      width: 342,
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFC9C9C9)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x40000000),
+                            blurRadius: 4,
+                            offset: Offset(4, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Get Started',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Enter your mobile number to continue',
+                            style: GoogleFonts.poppins(
+                              fontSize: 9,
+                              color: const Color(0xFF4E4E4E),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Session expired alert
+                          if (widget.isSessionExpired && _error.isNotEmpty)
+                            _buildAlert(
+                              _error,
+                              isAmber: true,
+                            ),
+
+                          // Error alert
+                          if (_error.isNotEmpty && !widget.isSessionExpired)
+                            _buildAlert(_error),
+
+                          // ── Mobile input ──
+                          _buildMobileInput(),
+                          if (_mobileError.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                _mobileError,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 9,
+                                  color: Colors.red[500],
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        if (_error.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              color: AppColors.error.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.error.withValues(alpha: 0.3),
+
+                          const SizedBox(height: 12),
+
+                          // ── Send OTP / OTP section ──
+                          if (!_otpSent)
+                            _buildSendOtpButton()
+                          else
+                            _buildOtpSection(),
+
+                          // OTP success message
+                          if (_otpMessage.isNotEmpty && _otpSent)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '✓ $_otpMessage',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 9,
+                                  color: const Color(0xFF16a34a),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
+
+                          const SizedBox(height: 10),
+                          // Secure note
+                          Center(
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.error_outline,
-                                    size: 16, color: AppColors.error),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _error,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.error,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                const Icon(
+                                  Icons.verified_user_outlined,
+                                  size: 12,
+                                  color: Color(0xFF7C3AED),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  "we'll send a secure OTP to verify your number",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF4E4E4E),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        Text(
-                          'MOBILE NUMBER',
-                          style: TextStyle(
-                            fontSize: 10,
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // ── Sign up link ──
+                  GestureDetector(
+                    onTap: () => context.push('/register'),
+                    child: Center(
+                      child: RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF625A70),
-                            letterSpacing: 1.2,
+                            color: const Color(0xFF1E1E1E),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
                           children: [
-                            Expanded(
-                              child: _buildTextField(
-                                controller: _mobileController,
-                                hint: '10-digit mobile',
-                                keyboardType: TextInputType.phone,
-                                enabled: !_otpSent,
-                                prefixWidget: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.smartphone,
-                                        size: 20,
-                                        color: AppColors.goldLight.withValues(alpha: 0.8)),
-                                    const SizedBox(width: 4),
-                                    const Text(
-                                      '+91',
-                                      style: TextStyle(
-                                        color: const Color(0xFF24184B),
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                            const TextSpan(text: "Don't have an account? "),
+                            TextSpan(
+                              text: 'Sign up',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF7C3AED),
+                                decoration: TextDecoration.underline,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _buildSendOtpButton(),
                           ],
                         ),
-                        if (_otpSent && _otpMessage.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              '✓ $_otpMessage',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.success,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ── TRUSTED BY 400+ BRANDS ──
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: const Color(0xFFC9C9C9),
                           ),
-                        if (_otpSent) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            'ENTER OTP',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF625A70),
-                              letterSpacing: 1.2,
-                            ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'TRUSTED BY 400+ BRANDS',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF35009A),
                           ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: _otpController,
-                                  hint: '• • • • • •',
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 6,
-                                  textAlign: TextAlign.center,
-                                  letterSpacing: 6,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              _buildVerifyButton(),
-                            ],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: const Color(0xFFC9C9C9),
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Don't have an account? ",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => context.push('/register'),
-                        child: const Text(
-                          'Sign up',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 8),
+
+                  // ── Brand logos marquee ──
+                  SizedBox(
+                    height: 28,
+                    child: _buildBrandMarquee(),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'By continuing, you agree to our Terms and Privacy Policy',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.black,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(height: 8),
+
+                  // ── Terms ──
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text.rich(
+                        TextSpan(
+                          style: GoogleFonts.poppins(
+                            fontSize: 7,
+                            color: const Color(0xFF4E4E4E),
+                          ),
+                          children: [
+                            const TextSpan(
+                                text: 'By continuing, you agree to our '),
+                            TextSpan(
+                              text: 'Terms & Conditions',
+                              style: GoogleFonts.poppins(
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                            const TextSpan(text: ' and '),
+                            TextSpan(
+                              text: 'Privacy Policy',
+                              style: GoogleFonts.poppins(
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 16),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Mobile Input ──
+  Widget _buildMobileInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 36,
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFD9D9D9)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              // Country code prefix
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F7FA),
+                  border: Border(
+                    right: BorderSide(color: Color(0xFFEBEBEB)),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '🇮🇳',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '+91',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 10,
+                      color: Color(0xFFA1A1A1),
+                    ),
+                  ],
+                ),
+              ),
+              // Mobile number input
+              Expanded(
+                child: TextField(
+                  controller: _mobileController,
+                  keyboardType: TextInputType.phone,
+                  maxLength: 10,
+                  enabled: !_otpSent,
+                  onChanged: (_) => _clearErrors(),
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: Colors.black,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Enter mobile number',
+                    hintStyle: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: const Color(0xFFA6A4A4),
+                    ),
+                    counterText: '',
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Send OTP Button ──
+  Widget _buildSendOtpButton() {
+    final isValid = _validateMobile(_mobileController.text);
+    return GestureDetector(
+      onTap: (_isLoading || !isValid) ? null : _handleSendOtp,
+      child: Opacity(
+        opacity: (!isValid || _isLoading) ? 0.5 : 1.0,
+        child: Container(
+          width: double.infinity,
+          height: 36,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF7B3DC3), Color(0xFF5537BE)],
+            ),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40B78AF3),
+                blurRadius: 8,
+                offset: Offset(2, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _isLoading ? 'Sending...' : 'Send OTP',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                if (!_isLoading) ...[
+                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.send_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── OTP Section ──
+  Widget _buildOtpSection() {
+    return Column(
+      children: [
+        // 4-digit OTP boxes
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(4, (i) {
+            return Container(
+              width: 52,
+              height: 52,
+              margin: EdgeInsets.only(right: i < 3 ? 12 : 0),
+              child: TextField(
+                controller: _otpControllers[i],
+                focusNode: _otpFocusNodes[i],
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                maxLength: 1,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+                decoration: InputDecoration(
+                  counterText: '',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                        color: Color(0xFF7C3AED), width: 1.5),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                onChanged: (v) => _handleOtpInput(i, v),
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 12),
+        // Verify button
+        GestureDetector(
+          onTap: (_isLoading || !_validateOtp()) ? null : _handleOtpLogin,
+          child: Opacity(
+            opacity: (!_validateOtp() || _isLoading) ? 0.5 : 1.0,
+            child: Container(
+              width: double.infinity,
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF7B3DC3), Color(0xFF5537BE)],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x40B78AF3),
+                    blurRadius: 8,
+                    offset: Offset(2, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _isLoading ? 'Verifying...' : 'Verify',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    if (!_isLoading) ...[
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.check_circle_outline,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Resend OTP
+        Center(
+          child: Text.rich(
+            TextSpan(
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                color: const Color(0xFF4E4E4E),
+              ),
+              children: [
+                const TextSpan(text: "Didn't Receive? "),
+                WidgetSpan(
+                  child: GestureDetector(
+                    onTap: _handleSendOtp,
+                    child: Text(
+                      'Resend OTP',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF7C3AED),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Alert Widget ──
+  Widget _buildAlert(String message, {bool isAmber = false}) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isAmber ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isAmber
+              ? const Color(0xFFFDE68A).withValues(alpha: 0.3)
+              : const Color(0xFFFCA5A5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isAmber ? Icons.warning_amber_rounded : Icons.error_outline,
+            size: 14,
+            color: isAmber ? const Color(0xFFF59E0B) : Colors.red[600],
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: isAmber ? const Color(0xFF92400E) : Colors.red[600],
               ),
             ),
           ),
         ],
-        ),
       ),
     );
   }
 
-  Widget _auroraBlob({
-    double? top,
-    double? left,
-    double? right,
-    double? bottom,
-    required double size,
-    required Color color,
-    double alpha = 0.30,
-  }) {
-    return Positioned(
-      top: top,
-      left: left,
-      right: right,
-      bottom: bottom,
-      child: IgnorePointer(
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 45, sigmaY: 45),
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  color.withValues(alpha: alpha),
-                  color.withValues(alpha: 0),
-                ],
-                stops: const [0.0, 0.7],
-              ),
-            ),
+  // ── Brand Marquee ──
+  Widget _buildBrandMarquee() {
+    final allLogos = [..._brandLogos, ..._brandLogos];
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: allLogos.length,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Image.asset(
+            allLogos[index],
+            height: 22,
+            fit: BoxFit.contain,
+            opacity: const AlwaysStoppedAnimation(0.70),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    TextInputType? keyboardType,
-    bool enabled = true,
-    int? maxLength,
-    TextAlign? textAlign,
-    double? letterSpacing,
-    IconData? prefixIcon,
-    Widget? prefixWidget,
-  }) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFDFDBE3)),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        enabled: enabled,
-        maxLength: maxLength,
-        textAlign: textAlign ?? TextAlign.start,
-        autofillHints: const [],
-        style: TextStyle(
-          color: const Color(0xFF24184B),
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-          letterSpacing: letterSpacing ?? 0,
-        ),
-        decoration: InputDecoration(
-          filled: false,
-          hintText: hint,
-          hintStyle: TextStyle(
-            color: const Color(0xFF9C96A6),
-            fontWeight: FontWeight.w400,
-          ),
-          counterText: '',
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          prefixIcon: prefixWidget ??
-              (prefixIcon != null
-                  ? Icon(prefixIcon, size: 20, color: AppColors.goldLight)
-                  : null),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSendOtpButton() {
-    final isValid = AppConstants.mobileRegex.hasMatch(_mobileController.text);
-    return GestureDetector(
-      onTap: (_isLoading || _otpSent || !isValid) ? null : _sendOtp,
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          gradient: _otpSent
-              ? null
-              : const LinearGradient(
-                  colors: [AppColors.gold, AppColors.goldLight],
-                ),
-          color: _otpSent ? AppColors.success.withValues(alpha: 0.2) : null,
-          borderRadius: BorderRadius.circular(16),
-          border: _otpSent
-              ? Border.all(color: AppColors.success.withValues(alpha: 0.4))
-              : null,
-          boxShadow: _otpSent
-              ? null
-              : [
-                  BoxShadow(
-                    color: AppColors.gold.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-        ),
-        child: Center(
-          child: Text(
-            _isLoading ? 'Sending...' : _otpSent ? '✓ Sent' : 'Send OTP',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: _otpSent
-                  ? AppColors.success
-                  : const Color(0xFF1A0D00),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVerifyButton() {
-    final isValid = AppConstants.otpRegex.hasMatch(_otpController.text);
-    return GestureDetector(
-      onTap: (_isLoading || !isValid) ? null : _verifyOtp,
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.gold, AppColors.goldLight],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.gold.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Verify',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A0D00),
-              ),
-            ),
-            SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 20, color: Color(0xFF1A0D00)),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

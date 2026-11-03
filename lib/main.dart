@@ -1,22 +1,52 @@
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'core/navigation/app_router.dart';
+import 'core/navigation/app_navigator.dart';
+import 'core/widgets/global_support_chat_overlay.dart';
 import 'core/network/dio_client.dart';
 import 'core/providers/notification_provider.dart';
 import 'core/widgets/gift_header.dart';
+import 'core/widgets/session_expired_dialog.dart';
 import 'config/app_config.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/auth/data/models/auth_user.dart';
+import 'features/notifications/data/repositories/device_token_api.dart';
+import 'features/notifications/presentation/services/push_notification_service.dart';
 import 'features/supercoin/presentation/providers/supercoin_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
-  
+
+  var firebaseAvailable = false;
+  try {
+    if (kIsWeb) {
+      final options = AppConfig.firebaseWebOptions;
+      if (options == null) {
+        throw StateError(
+          'Web Firebase options are missing from the app environment.',
+        );
+      }
+      await Firebase.initializeApp(options: options);
+    } else {
+      await Firebase.initializeApp();
+    }
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    firebaseAvailable = true;
+  } catch (error, stackTrace) {
+    debugPrint('[FCM] Firebase initialization failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
   // Debug: verify env loaded
   assert(() {
     print('ENV DEBUG: AUTH_API_URL = ${AppConfig.authApiUrl}');
@@ -33,12 +63,24 @@ void main() async {
     onboardingComplete = false;
   }
 
+  final pushNotificationService = PushNotificationService(
+    firebaseAvailable: firebaseAvailable,
+    deviceTokenApi: DeviceTokenApi(baseUrl: AppConfig.notificationApiBaseUrl),
+  );
+
   runApp(
     ProviderScope(
       overrides: [
-        onboardingCompleteProvider.overrideWith((ref) => OnboardingNotifier(onboardingComplete)),
+        onboardingCompleteProvider.overrideWith(
+          (ref) => OnboardingNotifier(onboardingComplete),
+        ),
         if (prefs != null)
-          notificationProvider.overrideWith((ref) => NotificationNotifier(prefs!)),
+          notificationProvider.overrideWith(
+            (ref) => NotificationNotifier(prefs!),
+          ),
+        pushNotificationServiceProvider.overrideWithValue(
+          pushNotificationService,
+        ),
       ],
       child: const Gift360App(),
     ),
@@ -52,11 +94,28 @@ class Gift360App extends ConsumerStatefulWidget {
   ConsumerState<Gift360App> createState() => _Gift360AppState();
 }
 
-class _Gift360AppState extends ConsumerState<Gift360App> with WidgetsBindingObserver {
+class _Gift360AppState extends ConsumerState<Gift360App>
+    with WidgetsBindingObserver {
+  late final PushNotificationService _pushNotificationService;
+  ProviderSubscription<AuthUser?>? _authSubscription;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _pushNotificationService = ref.read(pushNotificationServiceProvider);
+    _pushNotificationService.setNavigationHandler(
+      (destination) => ref.read(goRouterProvider).go(destination),
+    );
+    _pushNotificationService.updateAuthenticatedUser(ref.read(authProvider));
+    _authSubscription = ref.listenManual<AuthUser?>(
+      authProvider,
+      (_, user) => _pushNotificationService.updateAuthenticatedUser(user),
+    );
+    unawaited(_pushNotificationService.initialize());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _pushNotificationService.setNavigationReady(true);
+    });
     // Wire up 401 session expiry handler
     DioClient.onSessionExpired = () {
       _handleSessionExpired();
@@ -66,6 +125,8 @@ class _Gift360AppState extends ConsumerState<Gift360App> with WidgetsBindingObse
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _authSubscription?.close();
+    _pushNotificationService.dispose();
     super.dispose();
   }
 
@@ -73,8 +134,11 @@ class _Gift360AppState extends ConsumerState<Gift360App> with WidgetsBindingObse
   /// (mirrors React's sendBeacon on beforeunload).
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       _releaseActiveSuperCoinHolds();
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(_pushNotificationService.retryRegistration());
     }
   }
 
@@ -107,20 +171,24 @@ class _Gift360AppState extends ConsumerState<Gift360App> with WidgetsBindingObse
     if (trimmed.startsWith('+') && digits.length >= 10) return '+$digits';
     if (digits.length == 10) return '+91$digits';
     if (digits.length == 12 && digits.startsWith('91')) return '+$digits';
-    return trimmed.startsWith('+') ? trimmed : '+${digits.isNotEmpty ? digits : trimmed}';
+    return trimmed.startsWith('+')
+        ? trimmed
+        : '+${digits.isNotEmpty ? digits : trimmed}';
   }
 
   void _handleSessionExpired() {
     // Use addPostFrameCallback to ensure we're in a valid frame
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      
+
       final currentContext = navigatorKey.currentContext;
       if (currentContext == null) return;
 
       // Don't show dialog if already on login/onboarding
       final currentPath = GoRouterState.of(currentContext).matchedLocation;
-      if (currentPath == '/login' || currentPath == '/onboarding' || currentPath == '/register') {
+      if (currentPath == '/login' ||
+          currentPath == '/onboarding' ||
+          currentPath == '/register') {
         return;
       }
 
@@ -140,18 +208,11 @@ class _Gift360AppState extends ConsumerState<Gift360App> with WidgetsBindingObse
       showDialog(
         context: currentContext,
         barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Session Expired'),
-          content: const Text('Your session has expired. Please log in again.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                GoRouter.of(currentContext).go('/login');
-              },
-              child: const Text('OK'),
-            ),
-          ],
+        builder: (ctx) => SessionExpiredDialog(
+          onLoginRedirect: () {
+            Navigator.of(ctx).pop();
+            GoRouter.of(currentContext).go('/login?session=expired');
+          },
         ),
       );
     });
@@ -170,12 +231,15 @@ class _Gift360AppState extends ConsumerState<Gift360App> with WidgetsBindingObse
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        // Ensure navigatorKey is available for 401 handler
-        return child ?? const SizedBox.shrink();
+        // App-level overlays (support chat) live above the Navigator so they
+        // are reachable on every page — matching React App.tsx.
+        return Stack(
+          children: [
+            child ?? const SizedBox.shrink(),
+            const GlobalSupportChatOverlay(),
+          ],
+        );
       },
     );
   }
 }
-
-/// Global navigator key for 401 handler to access context
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

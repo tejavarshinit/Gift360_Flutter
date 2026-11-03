@@ -46,3 +46,5 @@ app.*.map.json
 
 # Environment
 .env
+.env.prod
+.env.uat

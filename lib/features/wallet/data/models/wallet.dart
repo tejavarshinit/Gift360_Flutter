@@ -1,5 +1,3 @@
-import 'package:gift360/config/app_config.dart';
-
 class WalletBalance {
   final String? clientId;
   final double? totalBalance;
@@ -40,14 +38,8 @@ class WalletBalance {
       offerBalance: parseAmount(json['offerBalance']),
       cashBalance: parseAmount(json['cashBalance']),
       voucherCashbackBalance: parseAmount(json['voucherCashbackBalance']),
-      cashbackRedeemPercent: parseAmount(
-        json['cashbackRedeemPercent'],
-        AppConfig.cashbackRedeemPercent,
-      ),
-      maxRedeemAmount: parseAmount(
-        json['maxRedeemAmount'],
-        AppConfig.maxRedeemAmount,
-      ),
+      cashbackRedeemPercent: parseAmount(json['cashbackRedeemPercent'], 50),
+      maxRedeemAmount: parseAmount(json['maxRedeemAmount'], 100),
     );
   }
 }

@@ -1,16 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/support/data/repositories/support_ticket_api.dart';
-
-/// Thrown when posting to a ticket the backend has already closed.
-/// Matches React's TicketClosedError class.
-class TicketClosedError implements Exception {
-  final String message;
-  TicketClosedError(this.message);
-  @override
-  String toString() => message;
-}
 
 final supportTicketApiProvider = Provider<SupportTicketApi>((ref) {
   final dio = ref.watch(brandsDioProvider);
@@ -21,11 +11,17 @@ class TicketMessage {
   final String senderType;
   final String message;
   final String createdAt;
+  final int? id;
+  final String? intentKey;
+  final String? vote;
 
   TicketMessage({
     required this.senderType,
     required this.message,
     required this.createdAt,
+    this.id,
+    this.intentKey,
+    this.vote,
   });
 
   factory TicketMessage.fromJson(Map<String, dynamic> json) {
@@ -33,6 +29,9 @@ class TicketMessage {
       senderType: json['senderType'] ?? 'USER',
       message: json['message'] ?? '',
       createdAt: json['createdAt'] ?? '',
+      id: json['id'] as int?,
+      intentKey: json['intentKey'] as String?,
+      vote: json['vote'] as String?,
     );
   }
 }
@@ -120,7 +119,8 @@ class SupportTicketNotifier extends StateNotifier<SupportTicketState> {
     state = state.copyWith(isLoadingThread: true, clearError: true);
     try {
       final result = await _api.getThread(publicId);
-      final messages = (result['data'] as List?)
+      final messages =
+          (result['data'] as List?)
               ?.map((m) => TicketMessage.fromJson(m as Map<String, dynamic>))
               .toList() ??
           [];
@@ -139,24 +139,33 @@ class SupportTicketNotifier extends StateNotifier<SupportTicketState> {
     state = state.copyWith(isSending: true, clearError: true);
     try {
       final result = await _api.sendMessage(publicId, message);
-      final newMessage = TicketMessage.fromJson(result['data'] as Map<String, dynamic>? ?? result);
+      final newMessage = TicketMessage.fromJson(
+        result['data'] as Map<String, dynamic>? ?? result,
+      );
       state = state.copyWith(
         isSending: false,
         messages: [...state.messages, newMessage],
       );
       return true;
-    } on DioException catch (e) {
-      // Check for TICKET_CLOSED error code (matches React's TicketClosedError)
-      final data = e.response?.data;
-      if (data is Map && data['errorCode'] == 'TICKET_CLOSED') {
-        final msg = data['message'] as String? ?? 'This conversation is closed.';
-        state = state.copyWith(isSending: false, error: msg, ticketStatus: 'CLOSED');
-      } else {
-        state = state.copyWith(isSending: false, error: e.toString());
-      }
+    } on TicketClosedException catch (e) {
+      state = state.copyWith(
+        isSending: false,
+        error: e.message,
+        ticketStatus: 'CLOSED',
+      );
       return false;
     } catch (e) {
       state = state.copyWith(isSending: false, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> sendFeedback(String publicId, int messageId, String vote) async {
+    try {
+      await _api.sendFeedback(publicId, messageId, vote);
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
       return false;
     }
   }
@@ -168,5 +177,5 @@ class SupportTicketNotifier extends StateNotifier<SupportTicketState> {
 
 final supportTicketProvider =
     StateNotifierProvider<SupportTicketNotifier, SupportTicketState>((ref) {
-  return SupportTicketNotifier(ref.watch(supportTicketApiProvider));
-});
+      return SupportTicketNotifier(ref.watch(supportTicketApiProvider));
+    });

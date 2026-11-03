@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:gift360/features/brands/data/models/brand.dart';
+import 'package:gift360/features/payment/data/models/payment_method_fee.dart';
+import 'package:gift360/features/supercoin/data/hidden_catalog_brands.dart';
 
 class BrandsApi {
   final Dio _dio;
@@ -30,7 +32,7 @@ class BrandsApi {
     final items = _extractItems(response.data);
     return items
         .map((e) => Brand.fromJson(e))
-        .where((b) => b.brandId != null && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 
@@ -74,7 +76,9 @@ class BrandsApi {
     final response = await _dio.post('/brands/search', data: {'searchText': query});
     final data = response.data;
     if (data is List) {
-      return data.map((e) => Brand.fromJson(e as Map<String, dynamic>)).toList();
+      return data.map((e) => Brand.fromJson(e as Map<String, dynamic>))
+        .where((b) => !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
+        .toList();
     }
     return [];
   }
@@ -84,7 +88,7 @@ class BrandsApi {
     final items = _extractItems(response.data);
     return items
         .map(Brand.fromJson)
-        .where((b) => b.brandId != null && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 
@@ -99,7 +103,7 @@ class BrandsApi {
 
   Future<List<Map<String, dynamic>>> getAllBrands() async {
     final response = await _dio.post('/v1/fetchbrands', data: {});
-    return _extractItems(response.data);
+    return _extractItems(response.data).where((m) => !isHiddenCatalogBrand(m['brandId']?.toString() ?? m['BrandId']?.toString() ?? m['brand_id']?.toString() ?? m['id']?.toString(), m['brandName']?.toString() ?? m['BrandName']?.toString() ?? m['brand_name']?.toString(), m['brandCode']?.toString() ?? m['BrandCode']?.toString() ?? m['brand_code']?.toString())).toList();
   }
 
   Future<List<Brand>> getBrandsWithCategory() async {
@@ -107,7 +111,7 @@ class BrandsApi {
     final items = _extractItems(response.data);
     return items
         .map((e) => Brand.fromJson(e))
-        .where((b) => b.brandId != null && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 
@@ -145,10 +149,10 @@ class BrandsApi {
   Future<List<Map<String, dynamic>>> filterBrands(Map<String, dynamic> filter) async {
     final response = await _dio.post('/brands/filter', data: filter);
     final data = response.data;
-    if (data is List) return data.cast<Map<String, dynamic>>();
+    if (data is List) return data.whereType<Map<String, dynamic>>().where((m) => !isHiddenCatalogBrand(m['brandId']?.toString() ?? m['BrandId']?.toString() ?? m['brand_id']?.toString() ?? m['id']?.toString(), m['brandName']?.toString() ?? m['BrandName']?.toString() ?? m['brand_name']?.toString(), m['brandCode']?.toString() ?? m['BrandCode']?.toString() ?? m['brand_code']?.toString())).cast<Map<String, dynamic>>().toList();
     if (data is Map) {
       final items = data['data'] ?? data['brands'] ?? data['result'] ?? [];
-      if (items is List) return items.cast<Map<String, dynamic>>();
+      if (items is List) return items.whereType<Map<String, dynamic>>().where((m) => !isHiddenCatalogBrand(m['brandId']?.toString() ?? m['BrandId']?.toString() ?? m['brand_id']?.toString() ?? m['id']?.toString(), m['brandName']?.toString() ?? m['BrandName']?.toString() ?? m['brand_name']?.toString(), m['brandCode']?.toString() ?? m['BrandCode']?.toString() ?? m['brand_code']?.toString())).cast<Map<String, dynamic>>().toList();
     }
     return [];
   }
@@ -172,7 +176,7 @@ class BrandsApi {
     final rawItems = await filterBrands(filter);
     return rawItems
         .map((e) => Brand.fromJson(e))
-        .where((b) => b.brandId != null && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 
@@ -201,8 +205,8 @@ class BrandsApi {
       items = [];
     }
     return items
-        .map((e) => Brand.fromJson(e as Map<String, dynamic>))
-        .where((b) => b.brandId != null && b.brandName != null)
+        .map((e) => Brand.fromJson(e))
+        .where((b) => b.brandId != null && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 
@@ -222,7 +226,7 @@ class BrandsApi {
     final items = _extractItems(response.data);
     return items
         .map((e) => Brand.fromJson(e))
-        .where((b) => b.brandId != null && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 
@@ -232,16 +236,38 @@ class BrandsApi {
     final items = _extractItems(response.data);
     return items
         .map((e) => Brand.fromJson(e))
-        .where((b) => b.brandId != null && b.brandName != null)
+        .where((b) => b.brandId != null && b.brandName != null && !isHiddenCatalogBrand(b.brandId, b.brandName, b.brandCode))
         .toList();
   }
 
-  /// Fetch live platform fee configuration (feePercent, feeMax).
+  /// Fetch live platform fee config (feePercent, feeMax, feePercentCash, feeMaxCash).
   Future<Map<String, dynamic>> getPlatformFeeConfig() async {
     final response = await _dio.get('/v1/platform-fee-config');
     if (response.data is Map<String, dynamic>) {
       return response.data as Map<String, dynamic>;
     }
-    return {'feePercent': 0.02, 'feeMax': 20.0};
+    return {
+      'feePercent': 0.02,
+      'feeMax': 20.0,
+      'feePercentCash': 0.02,
+      'feeMaxCash': 20.0,
+    };
+  }
+
+  /// Active cash payment methods and their platform fee (UPI/DC/CC percent,
+  /// NB flat). Display-only: the backend recomputes the fee from the chosen
+  /// method. Ported from React `fetchPaymentMethodFees`.
+  Future<List<PaymentMethodFee>> getPaymentMethodFees() async {
+    final response = await _dio.get('/v1/payment-method-fees');
+    final data = response.data;
+    final methods = data is Map<String, dynamic> ? data['methods'] : null;
+    if (methods is List) {
+      return methods
+          .whereType<Map>()
+          .map((e) => PaymentMethodFee.fromJson(e.cast<String, dynamic>()))
+          .where((m) => m.code.isNotEmpty)
+          .toList();
+    }
+    return const [];
   }
 }

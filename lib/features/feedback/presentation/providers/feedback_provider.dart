@@ -3,10 +3,16 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/feedback/data/repositories/feedback_api.dart';
+import 'package:gift360/features/feedback/data/repositories/micro_feedback_api.dart';
 
 final feedbackApiProvider = Provider<FeedbackApi>((ref) {
   final dio = ref.watch(brandsDioProvider);
   return FeedbackApi(dio);
+});
+
+final microFeedbackApiProvider = Provider<MicroFeedbackApi>((ref) {
+  final dio = ref.watch(brandsDioProvider);
+  return MicroFeedbackApi(dio);
 });
 
 class FeedbackState {

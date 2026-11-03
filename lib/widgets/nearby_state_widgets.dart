@@ -14,16 +14,38 @@ class LocationPrompt extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: const [BoxShadow(color: AppColors.cardShadow, blurRadius: 24, offset: Offset(0, 12))],
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 24,
+            offset: Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 64, height: 64, decoration: const BoxDecoration(color: AppColors.primaryLight, shape: BoxShape.circle), child: const Icon(Icons.navigation, color: AppColors.primary, size: 32)),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: AppColors.primaryLight,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.navigation,
+              color: AppColors.primary,
+              size: 32,
+            ),
+          ),
           const SizedBox(height: 16),
           Text('Enable Location', style: AppTextStyles.stateTitle),
           const SizedBox(height: 8),
-          Text('We need your location to find gift voucher stores near you.', style: AppTextStyles.stateDescription, textAlign: TextAlign.center),
+          Text(
+            'We need your location to find gift voucher stores near you.',
+            style: AppTextStyles.stateDescription,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 24),
           GestureDetector(
             onTap: onRequest,
@@ -32,14 +54,23 @@ class LocationPrompt extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(999),
-                boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 18, offset: const Offset(0, 8))],
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.location_pin, color: Colors.white, size: 16),
                   const SizedBox(width: 8),
-                  Text('Allow Location Access', style: AppTextStyles.stateButtonText),
+                  Text(
+                    'Allow Location Access',
+                    style: AppTextStyles.stateButtonText,
+                  ),
                 ],
               ),
             ),
@@ -51,7 +82,8 @@ class LocationPrompt extends StatelessWidget {
 }
 
 class LocationDenied extends StatelessWidget {
-  const LocationDenied({super.key});
+  final VoidCallback? onOpenSettings;
+  const LocationDenied({super.key, this.onOpenSettings});
 
   @override
   Widget build(BuildContext context) {
@@ -61,16 +93,69 @@ class LocationDenied extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: const [BoxShadow(color: AppColors.cardShadow, blurRadius: 24, offset: Offset(0, 12))],
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 24,
+            offset: Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 64, height: 64, decoration: const BoxDecoration(color: AppColors.red50, shape: BoxShape.circle), child: const Icon(Icons.error_outline, color: AppColors.red400, size: 32)),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: AppColors.red50,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.error_outline,
+              color: AppColors.red400,
+              size: 32,
+            ),
+          ),
           const SizedBox(height: 16),
           Text('Location Access Denied', style: AppTextStyles.stateTitle),
           const SizedBox(height: 8),
-          Text('Please enable location access in your browser settings to discover stores near you.', style: AppTextStyles.stateDescription, textAlign: TextAlign.center),
+          Text(
+            'Please enable location access in your device settings to discover stores near you.',
+            style: AppTextStyles.stateDescription,
+            textAlign: TextAlign.center,
+          ),
+          if (onOpenSettings != null) ...[
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: onOpenSettings,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.3),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.settings, color: Colors.white, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Open Settings', style: AppTextStyles.stateButtonText),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -89,16 +174,34 @@ class EmptyState extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: const [BoxShadow(color: AppColors.cardShadow, blurRadius: 24, offset: Offset(0, 12))],
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 24,
+            offset: Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 64, height: 64, decoration: const BoxDecoration(color: AppColors.primaryLight, shape: BoxShape.circle), child: const Icon(Icons.store, color: AppColors.primary, size: 32)),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: AppColors.primaryLight,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.store, color: AppColors.primary, size: 32),
+          ),
           const SizedBox(height: 16),
           Text('No Stores Found', style: AppTextStyles.stateTitle),
           const SizedBox(height: 8),
-          Text('No $category stores found near your location. Try a different category.', style: AppTextStyles.stateDescription, textAlign: TextAlign.center),
+          Text(
+            'No $category stores found near your location. Try a different category.',
+            style: AppTextStyles.stateDescription,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );

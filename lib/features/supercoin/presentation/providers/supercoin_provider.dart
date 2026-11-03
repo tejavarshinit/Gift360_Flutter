@@ -1,38 +1,124 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/supercoin/data/repositories/supercoin_api.dart';
+import 'package:gift360/features/supercoin/data/supercoin_excluded_brands.dart';
 
 final supercoinApiProvider = Provider<SuperCoinApi>((ref) {
   final dio = ref.watch(brandsDioProvider);
   return SuperCoinApi(dio);
 });
 
-/// SuperCoin configuration fetched from the backend.
-/// Contains capPercent (default 20%) which limits how much of a voucher's
-/// face value can be redeemed via SuperCoins.
+/// SuperCoin configuration fetched from the backend (POST /v1/supercoin/config).
+/// Mirrors React's `SuperCoinConfigResponse`: the rules live in the DB
+/// (giftvouchers_brands row + application defaults), so a SQL update changes
+/// behaviour without an app redeploy. The 20% cap fallback matches React.
 class SuperCoinConfig {
+  /// Max % of a voucher's face value coverable by SuperCoins.
   final double capPercent;
-  const SuperCoinConfig({this.capPercent = 20});
+
+  /// Coins required per rupee of voucher value (1.25 UAT / 1.00 prod).
+  final double burnRatio;
+
+  /// Surcharge behind [burnRatio] (burnRatio == 1 + surchargePercent/100).
+  final double surchargePercent;
+
+  /// % coinback on burn orders for the special SKU (fallback 5).
+  final double earnPercentSpecialSku;
+
+  const SuperCoinConfig({
+    required this.capPercent,
+    this.burnRatio = 1.0,
+    this.surchargePercent = 0,
+    this.earnPercentSpecialSku = 5,
+  });
+}
+
+double _configDouble(dynamic raw, double fallback) {
+  if (raw is num) return raw.toDouble();
+  return double.tryParse(raw?.toString() ?? '') ?? fallback;
 }
 
 final superCoinConfigProvider = FutureProvider<SuperCoinConfig>((ref) async {
   final api = ref.watch(supercoinApiProvider);
+  final envRatio = SuperCoinConversionConfig.burnRatio;
+  const fallbackCapPercent = 20.0;
   try {
     final response = await api.fetchConfig();
     final rawCap = response['capPercent'];
-    final cap = rawCap is num
+    final cap = rawCap is num && rawCap > 0
         ? rawCap.toDouble()
-        : double.tryParse(rawCap?.toString() ?? '') ?? 20.0;
-    return SuperCoinConfig(capPercent: cap > 0 ? cap : 20.0);
-  } catch (_) {
-    return const SuperCoinConfig();
+        : fallbackCapPercent;
+    final rawRatio = response['burnRatio'];
+    final ratio = rawRatio is num ? rawRatio.toDouble() : envRatio;
+    return SuperCoinConfig(
+      capPercent: cap,
+      burnRatio: ratio,
+      surchargePercent: _configDouble(response['surchargePercent'], 0),
+      earnPercentSpecialSku: _configDouble(
+        response['earnPercentSpecialSku'],
+        5,
+      ),
+    );
+  } catch (error, stackTrace) {
+    debugPrint('Could not fetch SuperCoin config; using fallback: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    return SuperCoinConfig(capPercent: fallbackCapPercent, burnRatio: envRatio);
   }
 });
+
+/// Live burn ratio (DB config, env fallback) — used by the convert flow.
+final superCoinBurnRatioProvider = Provider<double>((ref) {
+  final config = ref.watch(superCoinConfigProvider).valueOrNull;
+  return config?.burnRatio ?? SuperCoinConversionConfig.burnRatio;
+});
+
+/// Per-brand SuperCoin share percent (GET /v1/supercoin/brand-shares, V51).
+/// 0 = cash only, 1..99 = that percent may be paid in SuperCoins, 100 = SC only.
+final superCoinBrandSharesProvider = FutureProvider<Map<String, double>>((
+  ref,
+) async {
+  try {
+    return await ref.watch(supercoinApiProvider).fetchBrandShares();
+  } catch (_) {
+    return const <String, double>{};
+  }
+});
+
+/// Brands shown in the convert modal and their pay mode (GET /v1/supercoin/modal-brands).
+final superCoinModalBrandsProvider = FutureProvider<List<SuperCoinModalBrand>>((
+  ref,
+) async {
+  try {
+    return await ref.watch(supercoinApiProvider).fetchModalBrands();
+  } catch (_) {
+    return const <SuperCoinModalBrand>[];
+  }
+});
+
+/// Per-brand cap override: a share in (0, 100) replaces the global cap percent.
+double? superCoinCapShare(Map<String, double> shares, String brandId) {
+  final share = shares[brandId];
+  return (share != null && share > 0 && share < 100) ? share : null;
+}
+
+/// Share-aware exclusion, matching React Cart's `isScExcluded`: a brand with a
+/// share < 100 is excluded only when the share is 0; otherwise the built-in
+/// exclusion list applies.
+bool isSuperCoinExcludedWithShares(
+  Map<String, double> shares, {
+  required String brandId,
+  required String brandName,
+}) {
+  final share = shares[brandId];
+  if (share != null && share < 100) return share <= 0;
+  return !isSuperCoinEligible(brandId: brandId, brandName: brandName);
+}
 
 /// Normalize a mobile number to E.164 (matches React's normalizeMobileToE164).
 /// Strips non-digits, prepends +91 to 10-digit, normalizes +91…, keeps +country.
@@ -63,41 +149,27 @@ double extractSuperCoinBalance(Map<String, dynamic> response) {
   return 0;
 }
 
-/// Burn ratio for converting rupees to SuperCoins (from config, default 1.25).
+/// Burn ratio for converting rupees to SuperCoins (env fallback; prefer
+/// [superCoinBurnRatioProvider] / config value which tracks the DB).
 double get superCoinBurnRatio => SuperCoinConversionConfig.burnRatio;
 
 /// Calculate the number of SuperCoins required to redeem a given rupee amount.
 /// Formula: ceil(round(amount * burnRatio * 100) / 100) — matches React exactly.
-int calculateSuperCoinsRequired(double voucherAmount) {
-  final scaled = (voucherAmount * superCoinBurnRatio * 100).round();
+int calculateSuperCoinsRequired(double voucherAmount, {double? burnRatio}) {
+  final ratio = burnRatio ?? superCoinBurnRatio;
+  final scaled = (voucherAmount * ratio * 100).round();
   return (scaled / 100).ceil();
 }
 
 /// Check if the user can afford a voucher with their SuperCoin balance.
 /// Matches React's canAffordVoucher().
-bool canAffordVoucher(double balance, double voucherAmount) {
-  return balance >= calculateSuperCoinsRequired(voucherAmount);
-}
-
-/// Calculate the maximum SuperCoin redemption amount for a set of cart items.
-/// Uses capPercent from backend config and per-brand multiplier (default 1.25).
-/// Formula per item: ceil(itemTotal * capPercent/100 * multiplier)
-/// Total = sum of per-item caps.
-double calculateMaxSuperCoinRedeemable({
-  required List<Map<String, dynamic>> items,
-  required double capPercent,
-  double defaultMultiplier = 1.25,
+bool canAffordVoucher(
+  double balance,
+  double voucherAmount, {
+  double? burnRatio,
 }) {
-  double total = 0;
-  for (final item in items) {
-    final itemTotal = (item['lineTotal'] as num?)?.toDouble() ?? 0;
-    final multiplier =
-        (item['supercoinMultiplier'] as num?)?.toDouble() ?? defaultMultiplier;
-    final itemRupeeCap = itemTotal * (capPercent / 100);
-    final itemCoinCap = (itemRupeeCap * multiplier).ceil().toDouble();
-    total += itemCoinCap;
-  }
-  return total;
+  return balance >=
+      calculateSuperCoinsRequired(voucherAmount, burnRatio: burnRatio);
 }
 
 // ── Hold Context ──
@@ -159,8 +231,10 @@ class SuperCoinState {
 class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
   final SuperCoinApi _api;
   final String? _mobile;
+  final String? _clientId;
 
-  SuperCoinNotifier(this._api, this._mobile) : super(const SuperCoinState()) {
+  SuperCoinNotifier(this._api, this._mobile, [this._clientId])
+    : super(const SuperCoinState()) {
     if (_mobile != null && _mobile!.isNotEmpty) {
       _searchAndLoadBalance();
     }
@@ -208,6 +282,10 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
       final result = await _api.fetchBalance(id);
       final bal = extractSuperCoinBalance(result);
       state = state.copyWith(balance: bal, isBalanceLoading: false);
+      final clientId = _clientId;
+      if (clientId != null && clientId.isNotEmpty) {
+        _api.syncBalance(clientId, bal);
+      }
     } catch (e) {
       state = state.copyWith(isBalanceLoading: false, error: e.toString());
     }
@@ -229,7 +307,7 @@ final supercoinProvider =
     StateNotifierProvider.autoDispose<SuperCoinNotifier, SuperCoinState>((ref) {
       final api = ref.watch(supercoinApiProvider);
       final user = ref.watch(authProvider);
-      return SuperCoinNotifier(api, user?.mobile);
+      return SuperCoinNotifier(api, user?.mobile, user?.clientId);
     });
 
 // ── OTP Modal State ──

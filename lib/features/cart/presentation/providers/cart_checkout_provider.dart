@@ -1,43 +1,19 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/supercoin/data/repositories/supercoin_api.dart';
+import 'package:gift360/features/supercoin/data/utils/supercoin_redemption.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
-import 'package:gift360/features/supercoin/data/supercoin_excluded_brands.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
+import 'package:gift360/features/wallet/data/utils/wallet_redemption.dart';
 import 'package:gift360/features/home/presentation/providers/home_providers.dart';
+import 'package:gift360/features/payment/data/models/payment_method_fee.dart';
 import 'package:gift360/core/utils/analytics.dart';
-import 'package:gift360/config/app_config.dart';
 
 enum RewardMode { cashbackWallet, superCoins }
-
-/// Computes a cart item's cashback contribution in scale-4 integer units.
-/// Mirrors GiftcardOrderService.validateAndRecomputeItems exactly:
-///   itemCashback = round(lineTotal * pct / 100, 4 decimals, HALF_UP)
-/// Exact integer arithmetic (paise × basis-points) — divide by 10000 for ₹.
-int _itemCashbackScale4(double lineTotal, double pct) {
-  final lineTotalPaise = (lineTotal * 100).round();
-  final pctBasis = (pct * 100).round();
-  final product = lineTotalPaise * pctBasis;
-  final q = product ~/ 100;
-  final r = product % 100;
-  return r * 2 >= 100 ? q + 1 : q;
-}
-
-/// Mirrors GiftcardOrderService.validateWalletAmount's final step:
-///   maxWalletAllowed = min(round(cashbackValue * redeemPercent / 100, 2, HALF_UP), maxRedeemAmount)
-/// Returns the cap in whole paise (divide by 100 for ₹).
-int _walletCapPaise(int cashbackValueScale4, double redeemPercent, double maxRedeemAmount) {
-  final redeemPercentInt = redeemPercent.round();
-  final product = cashbackValueScale4 * redeemPercentInt;
-  final q = product ~/ 10000;
-  final r = product % 10000;
-  final percentOfCashbackPaise = r * 2 >= 10000 ? q + 1 : q;
-  final maxRedeemPaise = (maxRedeemAmount * 100).round();
-  return percentOfCashbackPaise < maxRedeemPaise ? percentOfCashbackPaise : maxRedeemPaise;
-}
 
 // ── Checkout State ──
 class CartCheckoutState {
@@ -55,6 +31,15 @@ class CartCheckoutState {
   final bool superCoinCountdownExpired;
   final String? superCoinTransactionTime;
 
+  // Cart slider selection (mirrors React `selectedSCCoins`): coins the user
+  // picked before applying the SuperCoin hold. 0 = not chosen yet (defaults
+  // to the max redeemable until the user drags).
+  final double selectedSuperCoinCoins;
+
+  // Selected cash payment method (UPI/DC/CC/NB) — drives the DB-backed
+  // platform fee. Defaults to UPI like React (`selectedPaymentMethod`).
+  final String selectedPaymentMethod;
+
   // Payment
   final bool isProcessing;
 
@@ -70,6 +55,8 @@ class CartCheckoutState {
     this.superCoinCountdownSeconds = 900,
     this.superCoinCountdownExpired = false,
     this.superCoinTransactionTime,
+    this.selectedSuperCoinCoins = 0,
+    this.selectedPaymentMethod = 'UPI',
     this.isProcessing = false,
   });
 
@@ -85,6 +72,8 @@ class CartCheckoutState {
     int? superCoinCountdownSeconds,
     bool? superCoinCountdownExpired,
     String? superCoinTransactionTime,
+    double? selectedSuperCoinCoins,
+    String? selectedPaymentMethod,
     bool? isProcessing,
     bool clearHold = false,
     bool clearError = false,
@@ -93,14 +82,28 @@ class CartCheckoutState {
       rewardMode: rewardMode ?? this.rewardMode,
       useWalletBalance: useWalletBalance ?? this.useWalletBalance,
       brandDiscounts: brandDiscounts ?? this.brandDiscounts,
-      brandSupercoinMultipliers: brandSupercoinMultipliers ?? this.brandSupercoinMultipliers,
-      brandDiscountsLoading: brandDiscountsLoading ?? this.brandDiscountsLoading,
+      brandSupercoinMultipliers:
+          brandSupercoinMultipliers ?? this.brandSupercoinMultipliers,
+      brandDiscountsLoading:
+          brandDiscountsLoading ?? this.brandDiscountsLoading,
       superCoinAuthorized: superCoinAuthorized ?? this.superCoinAuthorized,
-      superCoinHoldContext: clearHold ? null : (superCoinHoldContext ?? this.superCoinHoldContext),
-      superCoinOrderNumber: clearHold ? null : (superCoinOrderNumber ?? this.superCoinOrderNumber),
-      superCoinCountdownSeconds: superCoinCountdownSeconds ?? this.superCoinCountdownSeconds,
-      superCoinCountdownExpired: superCoinCountdownExpired ?? this.superCoinCountdownExpired,
-      superCoinTransactionTime: clearHold ? null : (superCoinTransactionTime ?? this.superCoinTransactionTime),
+      superCoinHoldContext: clearHold
+          ? null
+          : (superCoinHoldContext ?? this.superCoinHoldContext),
+      superCoinOrderNumber: clearHold
+          ? null
+          : (superCoinOrderNumber ?? this.superCoinOrderNumber),
+      superCoinCountdownSeconds:
+          superCoinCountdownSeconds ?? this.superCoinCountdownSeconds,
+      superCoinCountdownExpired:
+          superCoinCountdownExpired ?? this.superCoinCountdownExpired,
+      superCoinTransactionTime: clearHold
+          ? null
+          : (superCoinTransactionTime ?? this.superCoinTransactionTime),
+      selectedSuperCoinCoins:
+          selectedSuperCoinCoins ?? this.selectedSuperCoinCoins,
+      selectedPaymentMethod:
+          selectedPaymentMethod ?? this.selectedPaymentMethod,
       isProcessing: isProcessing ?? this.isProcessing,
     );
   }
@@ -112,7 +115,8 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
   final String? _mobile;
   Timer? _countdownTimer;
 
-  CartCheckoutNotifier(this._superCoinApi, this._mobile) : super(const CartCheckoutState());
+  CartCheckoutNotifier(this._superCoinApi, this._mobile)
+    : super(const CartCheckoutState());
 
   SuperCoinIdentity? get _identity {
     final normalized = normalizeMobileToE164(_mobile);
@@ -129,13 +133,18 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
   // ── Reward Mode ──
   void setRewardMode(RewardMode mode) {
     if (mode == RewardMode.superCoins) {
-      state = state.copyWith(rewardMode: RewardMode.superCoins, useWalletBalance: false);
+      state = state.copyWith(
+        rewardMode: RewardMode.superCoins,
+        useWalletBalance: false,
+      );
     } else {
       // Cancel supercoin hold when switching to cashback
       if (state.superCoinAuthorized) {
         cancelSuperCoinHold();
         // Fire analytics: supercoin removed
-        AnalyticsService.trackSuperCoinRemoved(amount: state.superCoinHoldContext?.amount ?? 0);
+        AnalyticsService.trackSuperCoinRemoved(
+          amount: state.superCoinHoldContext?.amount ?? 0,
+        );
       }
       state = state.copyWith(
         rewardMode: RewardMode.cashbackWallet,
@@ -152,10 +161,27 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
     state = state.copyWith(useWalletBalance: !state.useWalletBalance);
   }
 
+  // ── Cash payment method (React `setSelectedPaymentMethod`) ──
+  void setSelectedPaymentMethod(String code) {
+    if (state.selectedPaymentMethod == code) return;
+    state = state.copyWith(selectedPaymentMethod: code);
+  }
+
+  // ── SuperCoin slider selection (React `setSelectedSCCoins`) ──
+  void setSelectedSuperCoinCoins(double coins) {
+    if (state.selectedSuperCoinCoins == coins) return;
+    state = state.copyWith(selectedSuperCoinCoins: coins);
+  }
+
   // ── Brand Discounts + SuperCoin multipliers ──
-  Future<void> fetchBrandDiscounts(List<CartItem> cartItems, dynamic brandsApi) async {
+  Future<void> fetchBrandDiscounts(
+    List<CartItem> cartItems,
+    dynamic brandsApi,
+  ) async {
     final uniqueBrandIds = cartItems.map((i) => i.brandId).toSet().toList();
-    final unknownIds = uniqueBrandIds.where((id) => !state.brandDiscounts.containsKey(id)).toList();
+    final unknownIds = uniqueBrandIds
+        .where((id) => !state.brandDiscounts.containsKey(id))
+        .toList();
     if (unknownIds.isEmpty) return;
 
     state = state.copyWith(brandDiscountsLoading: true);
@@ -173,7 +199,9 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
         }),
       );
       final discounts = Map<String, double>.from(state.brandDiscounts);
-      final multipliers = Map<String, double>.from(state.brandSupercoinMultipliers);
+      final multipliers = Map<String, double>.from(
+        state.brandSupercoinMultipliers,
+      );
       for (final (brandId, discount, multiplier) in results) {
         discounts[brandId] = discount;
         multipliers[brandId] = multiplier;
@@ -209,14 +237,21 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
 
     if (holdContext.transactionTime != null) {
       try {
-        final startMs = DateTime.parse(holdContext.transactionTime!).millisecondsSinceEpoch;
+        final startMs = DateTime.parse(
+          holdContext.transactionTime!,
+        ).millisecondsSinceEpoch;
         final endMs = startMs + 15 * 60 * 1000;
-        remaining = ((endMs - DateTime.now().millisecondsSinceEpoch) / 1000).round().clamp(0, 900);
+        remaining = ((endMs - DateTime.now().millisecondsSinceEpoch) / 1000)
+            .round()
+            .clamp(0, 900);
       } catch (_) {
         if (holdContext.stampExpiry != null) {
-          remaining = ((holdContext.stampExpiry! - DateTime.now().millisecondsSinceEpoch) / 1000)
-              .round()
-              .clamp(0, 900);
+          remaining =
+              ((holdContext.stampExpiry! -
+                          DateTime.now().millisecondsSinceEpoch) /
+                      1000)
+                  .round()
+                  .clamp(0, 900);
         }
       }
     }
@@ -229,7 +264,9 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
         superCoinAuthorized: false,
         clearHold: true,
       );
-      SuperCoinOtpNotifier.loadActiveOrderNumber().then((activeOrderNumber) async {
+      SuperCoinOtpNotifier.loadActiveOrderNumber().then((
+        activeOrderNumber,
+      ) async {
         if (activeOrderNumber != null && activeOrderNumber.isNotEmpty) {
           await SuperCoinOtpNotifier.clearHoldContext(activeOrderNumber);
         }
@@ -249,7 +286,8 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
           clearHold: true,
         );
         // Expiry is terminal for this hold; remove both persisted references.
-        final activeOrderNumber = await SuperCoinOtpNotifier.loadActiveOrderNumber();
+        final activeOrderNumber =
+            await SuperCoinOtpNotifier.loadActiveOrderNumber();
         if (activeOrderNumber != null && activeOrderNumber.isNotEmpty) {
           await SuperCoinOtpNotifier.clearHoldContext(activeOrderNumber);
         }
@@ -268,12 +306,15 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
 
   /// Cancel the active SuperCoin hold if one exists, sending the identity
   /// payload with the unhold request (matches React's cancelSuperCoinHold).
-  Future<void> cancelSuperCoinHoldIfNeeded({SuperCoinIdentity? identity}) async {
+  Future<void> cancelSuperCoinHoldIfNeeded({
+    SuperCoinIdentity? identity,
+  }) async {
     final holdContext = state.superCoinHoldContext;
     if (holdContext != null) {
       try {
         await _superCoinApi.unhold({
-          'identity': identity?.toJson() ?? {'identifier': '', 'type': 'MOBILE'},
+          'identity':
+              identity?.toJson() ?? {'identifier': '', 'type': 'MOBILE'},
           'merchantTransactionId': holdContext.merchantTransactionId,
           'merchantWalletId': holdContext.merchantWalletId,
         });
@@ -300,18 +341,24 @@ class CartCheckoutNotifier extends StateNotifier<CartCheckoutState> {
 
 // ── Providers ──
 final cartCheckoutProvider =
-    StateNotifierProvider.autoDispose<CartCheckoutNotifier, CartCheckoutState>((ref) {
-  final superCoinApi = ref.watch(supercoinApiProvider);
-  final user = ref.watch(authProvider);
-  return CartCheckoutNotifier(superCoinApi, user?.mobile);
-});
+    StateNotifierProvider.autoDispose<CartCheckoutNotifier, CartCheckoutState>((
+      ref,
+    ) {
+      final superCoinApi = ref.watch(supercoinApiProvider);
+      final user = ref.watch(authProvider);
+      return CartCheckoutNotifier(superCoinApi, user?.mobile);
+    });
 
 // ── Derived Calculation Providers ──
 
 /// Brand totals grouped by brand+unitValue
-final brandTotalsProvider = Provider.autoDispose<Map<String, BrandTotal>>((ref) {
+final brandTotalsProvider = Provider.autoDispose<Map<String, BrandTotal>>((
+  ref,
+) {
   final cart = ref.watch(cartProvider);
-  final discounts = ref.watch(cartCheckoutProvider.select((s) => s.brandDiscounts));
+  final discounts = ref.watch(
+    cartCheckoutProvider.select((s) => s.brandDiscounts),
+  );
   if (cart == null || cart.items.isEmpty) return {};
 
   final map = <String, BrandTotal>{};
@@ -379,9 +426,21 @@ class PaymentBreakdown {
   final double finalPayable;
   final double cashbackPercent;
   final double cashbackAmount;
+
+  /// Cash paid for the vouchers (excludes the platform fee) after the wallet and
+  /// the SuperCoin deduction — authorised hold, or the slider preview while the
+  /// OTP hold is still pending. Backend earn estimates and cashback are based on
+  /// this, exactly like React Cart's `displayCash`.
+  final double displayCash;
   final double maxSuperCoinRedeemable;
   final double effectiveSupercoinMultiplier;
   final double estimatedEarn;
+
+  /// Active cash payment method (from the DB fee table) used for
+  /// [processingFee]. Null when the fee table could not load and the legacy
+  /// platform fee is in effect.
+  final String? paymentMethodCode;
+  final String? paymentMethodLabel;
 
   const PaymentBreakdown({
     required this.subtotal,
@@ -394,9 +453,12 @@ class PaymentBreakdown {
     required this.finalPayable,
     required this.cashbackPercent,
     required this.cashbackAmount,
+    required this.displayCash,
     required this.maxSuperCoinRedeemable,
     required this.effectiveSupercoinMultiplier,
     required this.estimatedEarn,
+    this.paymentMethodCode,
+    this.paymentMethodLabel,
   });
 }
 
@@ -405,7 +467,11 @@ final paymentBreakdownProvider = Provider.autoDispose<PaymentBreakdown>((ref) {
   final checkout = ref.watch(cartCheckoutProvider);
   final walletAsync = ref.watch(walletBalanceProvider);
   final superCoinState = ref.watch(supercoinProvider);
-  final superCoinConfig = ref.watch(superCoinConfigProvider).valueOrNull;
+  final superCoinConfigAsync = ref.watch(superCoinConfigProvider);
+  final superCoinConfig =
+      superCoinConfigAsync.hasValue && !superCoinConfigAsync.hasError
+      ? superCoinConfigAsync.valueOrNull
+      : null;
   final platformFeeAsync = ref.watch(platformFeeConfigProvider).valueOrNull;
 
   final subtotal = cart?.totalAmount ?? 0;
@@ -415,17 +481,22 @@ final paymentBreakdownProvider = Provider.autoDispose<PaymentBreakdown>((ref) {
   // cashbackValue = sum of per-item itemCashbackScale4(lineTotal, pct).
   // maxWalletUsage = min(cashbackValue * redeemPercent / 100, maxRedeemAmount).
   final walletData = walletAsync.value;
-  final cashbackRedeemPercent = walletData?.cashbackRedeemPercent ?? AppConfig.cashbackRedeemPercent;
-  final maxRedeemAmount = walletData?.maxRedeemAmount ?? AppConfig.maxRedeemAmount;
+  final cashbackRedeemPercent = walletData?.cashbackRedeemPercent ?? 50.0;
+  final maxRedeemAmount = walletData?.maxRedeemAmount ?? 100.0;
   int cartCashbackValueScale4 = 0;
   if (cart != null && cart.items.isNotEmpty) {
     cartCashbackValueScale4 = cart.items.fold(0, (sum, item) {
       final pct = item.discount ?? checkout.brandDiscounts[item.brandId] ?? 0;
-      return sum + _itemCashbackScale4(item.lineTotal, pct);
+      return sum + walletItemCashbackScale4(item.lineTotal, pct);
     });
   }
   final maxWalletUsage =
-      _walletCapPaise(cartCashbackValueScale4, cashbackRedeemPercent, maxRedeemAmount) / 100;
+      walletRedemptionCapPaise(
+        cartCashbackValueScale4,
+        cashbackRedeemPercent,
+        maxRedeemAmount,
+      ) /
+      100;
 
   final walletBalance = (walletAsync.value?.totalBalance ?? 0).toDouble();
   final walletDeduction = checkout.useWalletBalance
@@ -437,48 +508,137 @@ final paymentBreakdownProvider = Provider.autoDispose<PaymentBreakdown>((ref) {
   // totalCoinCap = sum(itemCoinCap), totalRupeeCap = sum(itemRupeeCap)
   // effectiveSupercoinMultiplier = totalCoinCap / totalRupeeCap (or 1.25)
   final capPercent = superCoinConfig?.capPercent ?? 20.0;
-  final allItemsSuperCoinExcluded = cart != null &&
-      cart.items.isNotEmpty &&
-      cart.items.every((i) => !isSuperCoinEligible(brandId: i.brandId, brandName: i.brandName));
+  // Per-brand share (V51) overrides the global cap and can exclude a brand
+  // (share 0) exactly like React Cart's isScExcluded / brandCapShare.
+  final brandShares =
+      ref.watch(superCoinBrandSharesProvider).valueOrNull ??
+      const <String, double>{};
+  bool isScExcluded(dynamic item) => isSuperCoinExcludedWithShares(
+    brandShares,
+    brandId: item.brandId,
+    brandName: item.brandName,
+  );
+  final allItemsSuperCoinExcluded =
+      cart != null && cart.items.isNotEmpty && cart.items.every(isScExcluded);
 
   double totalRupeeCap = 0;
   double totalCoinCap = 0;
-  if (cart != null && cart.items.isNotEmpty) {
+  final discountsLoaded =
+      cart == null ||
+      cart.items.every(
+        (item) =>
+            item.discount != null ||
+            item.hasDiscountField ||
+            checkout.brandDiscounts.containsKey(item.brandId),
+      );
+  if (cart != null && cart.items.isNotEmpty && discountsLoaded) {
     for (final item in cart.items) {
-      if (!isSuperCoinEligible(brandId: item.brandId, brandName: item.brandName)) continue;
-      final multiplier = checkout.brandSupercoinMultipliers[item.brandId] ?? 1.25;
-      final itemRupeeCap = item.lineTotal * (capPercent / 100);
-      final itemCoinCap = (itemRupeeCap * multiplier).ceil().toDouble();
+      if (isScExcluded(item)) continue;
+      final multiplier =
+          checkout.brandSupercoinMultipliers[item.brandId] ?? 1.25;
+      final itemCapPercent =
+          superCoinCapShare(brandShares, item.brandId) ?? capPercent;
+      final itemTotal = item.quantity * item.unitValue;
+      final itemRupeeCap = itemTotal * (itemCapPercent / 100);
+      final itemCoinCap = supercoinItemCapCoins(
+        itemTotal: itemTotal,
+        capPercent: itemCapPercent,
+        multiplier: multiplier,
+      ).toDouble();
       totalRupeeCap += itemRupeeCap;
       totalCoinCap += itemCoinCap;
     }
   }
-  final maxSuperCoinRedeemable = totalCoinCap;
-  final effectiveSupercoinMultiplier = totalRupeeCap > 0 ? totalCoinCap / totalRupeeCap : 1.25;
+  final maxSuperCoinRedeemable = discountsLoaded
+      ? totalCoinCap
+      : superCoinState.balance;
+  final effectiveSupercoinMultiplier = discountsLoaded && totalRupeeCap > 0
+      ? totalCoinCap / totalRupeeCap
+      : 1.25;
 
-  final holdAmount = checkout.superCoinHoldContext?.amount ?? superCoinState.balance;
-  final superCoinDeduction = !allItemsSuperCoinExcluded &&
+  final holdAmount =
+      checkout.superCoinHoldContext?.amount ?? superCoinState.balance;
+  final superCoinDeduction =
+      !allItemsSuperCoinExcluded &&
           checkout.superCoinAuthorized &&
           superCoinState.isEnrolled &&
           holdAmount > 0
-      ? [holdAmount, maxSuperCoinRedeemable, superCoinState.balance]
-              .reduce((a, b) => a < b ? a : b) /
-          effectiveSupercoinMultiplier
+      ? [
+              holdAmount,
+              maxSuperCoinRedeemable,
+              superCoinState.balance,
+            ].reduce((a, b) => a < b ? a : b) /
+            effectiveSupercoinMultiplier
       : 0.0;
 
-  // ── Platform fee — only charged when SuperCoins are redeemed ──
-  // PLATFORM_FEE = min(subtotal × feePercent, feeMax). Matches React
-  // Cart.tsx exactly: feePercent is a decimal fraction (default 0.02 = 2%)
-  // multiplied directly (NO division by 100), feeMax default ₹20.
-  final feePercent = (platformFeeAsync?['feePercent'] as num?)?.toDouble() ?? 0.02;
-  final feeMax = (platformFeeAsync?['feeMax'] as num?)?.toDouble() ?? 20.0;
+  // ── Platform fee ──
+  // Primary: the DB-backed per-method fee (UPI/DC/CC percent, NB flat) from
+  // /v1/payment-method-fees, computed on the cash payable BEFORE the fee.
+  // Fallback (fee table unavailable, older backend): the legacy mode-based
+  // percent of face value, still always charged (React Cart.tsx).
+  final feeMethods =
+      ref.watch(paymentMethodFeesProvider).valueOrNull ??
+      const <PaymentMethodFee>[];
+  final selectedMethod = activePaymentMethod(
+    feeMethods,
+    checkout.selectedPaymentMethod,
+  );
+  final useMethodFee = feeMethods.isNotEmpty;
+
+  // React: couponAdjustedAmount = Math.max(0, subtotal - couponDiscount)
+  final couponAdjustedAmount = (subtotal - couponDiscount)
+      .clamp(0.0, double.infinity)
+      .toDouble();
+  // React: cashBeforeFee = max(0, couponAdjusted - wallet - superCoin)
+  final cashBeforeFee =
+      (couponAdjustedAmount - walletDeduction - superCoinDeduction)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+
+  final inSuperCoinMode = checkout.rewardMode == RewardMode.superCoins;
+  // Display preview (React Cart): while the slider is moved but the hold isn't
+  // authorised yet, the on-screen total previews the coins; payment itself
+  // still uses only the authorised hold.
+  final previewSCCoins = checkout.selectedSuperCoinCoins < 1
+      ? maxSuperCoinRedeemable
+      : math.min(checkout.selectedSuperCoinCoins, maxSuperCoinRedeemable);
+  final scPreviewDeduction =
+      (inSuperCoinMode &&
+          !checkout.superCoinAuthorized &&
+          !allItemsSuperCoinExcluded &&
+          superCoinState.isEnrolled &&
+          maxSuperCoinRedeemable >= 1 &&
+          previewSCCoins >= 1)
+      ? math.min(
+          previewSCCoins / effectiveSupercoinMultiplier,
+          couponAdjustedAmount,
+        )
+      : 0.0;
+  final displaySCDeduction = superCoinDeduction > 0
+      ? superCoinDeduction
+      : scPreviewDeduction;
+  final displayCash =
+      (couponAdjustedAmount - walletDeduction - displaySCDeduction)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+  // NOTE: keys resolved first — Dart's parser chokes on `cond ? map?['k'] : ...`
+  // (nested ternary vs `?[]` ambiguity), so never inline the lookup in a ternary.
+  final feePercentKey = inSuperCoinMode ? 'feePercent' : 'feePercentCash';
+  final feeMaxKey = inSuperCoinMode ? 'feeMax' : 'feeMaxCash';
+  final feePercent =
+      (platformFeeAsync?[feePercentKey] as num?)?.toDouble() ?? 0.02;
+  final feeMax = (platformFeeAsync?[feeMaxKey] as num?)?.toDouble() ?? 20.0;
   final rawFee = subtotal * feePercent;
-  final processingFee = superCoinDeduction > 0 ? (rawFee < feeMax ? rawFee : feeMax) : 0.0;
+  // Backend order: fee.setScale(2, HALF_UP) then .min(feeMax) — match exactly.
+  final roundedFee = (rawFee * 100).roundToDouble() / 100;
+  final legacyFee = roundedFee < feeMax ? roundedFee : feeMax;
 
-  final couponAdjustedAmount = subtotal + processingFee - couponDiscount;
+  final processingFee = useMethodFee
+      ? computeMethodFee(selectedMethod, cashBeforeFee)
+      : legacyFee;
 
-  final finalPayable = (couponAdjustedAmount - walletDeduction - superCoinDeduction)
-      .clamp(0.0, double.infinity).toDouble();
+  // React: finalPayable = cashBeforeFee + PLATFORM_FEE
+  final finalPayable = cashBeforeFee + processingFee;
 
   // Cashback % (weighted average)
   double cashbackPercent = 0;
@@ -486,13 +646,17 @@ final paymentBreakdownProvider = Provider.autoDispose<PaymentBreakdown>((ref) {
     final totalLine = cart.items.fold(0.0, (s, i) => s + i.lineTotal);
     if (totalLine > 0) {
       cashbackPercent = cart.items.fold(0.0, (sum, item) {
-        final disc = item.discount ?? checkout.brandDiscounts[item.brandId] ?? 0;
+        final disc =
+            item.discount ?? checkout.brandDiscounts[item.brandId] ?? 0;
         return sum + (item.lineTotal / totalLine) * disc;
       });
     }
   }
-  final cashbackAmount = finalPayable * (cashbackPercent / 100);
-  final estimatedEarn = finalPayable * 0.01;
+  // Cashback is on the voucher cash paid, not the platform fee (React Cart).
+  final cashbackAmount = displayCash * (cashbackPercent / 100);
+  // Deprecated: the SuperCoin earn estimate now comes from the backend
+  // (superCoinEarnEstimateProvider). Kept at 0 so no misleading 1% is shown.
+  const estimatedEarn = 0.0;
 
   return PaymentBreakdown(
     subtotal: subtotal,
@@ -505,8 +669,11 @@ final paymentBreakdownProvider = Provider.autoDispose<PaymentBreakdown>((ref) {
     finalPayable: finalPayable,
     cashbackPercent: cashbackPercent,
     cashbackAmount: cashbackAmount,
+    displayCash: displayCash,
     maxSuperCoinRedeemable: maxSuperCoinRedeemable,
     effectiveSupercoinMultiplier: effectiveSupercoinMultiplier,
     estimatedEarn: estimatedEarn,
+    paymentMethodCode: useMethodFee ? selectedMethod?.code : null,
+    paymentMethodLabel: useMethodFee ? selectedMethod?.label : null,
   );
 });

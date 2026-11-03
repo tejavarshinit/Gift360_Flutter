@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gift360/config/app_config.dart';
 
 class CashbackWalletSection extends ConsumerWidget {
   final double cashbackPercent;
   final double cashbackAmount;
   final double walletBalance;
   final double maxWalletUsage;
+  final double cashbackRedeemPercent;
   final double walletDeduction;
   final bool useWalletBalance;
   final VoidCallback onToggleWallet;
@@ -17,6 +17,7 @@ class CashbackWalletSection extends ConsumerWidget {
     required this.cashbackAmount,
     required this.walletBalance,
     required this.maxWalletUsage,
+    required this.cashbackRedeemPercent,
     required this.walletDeduction,
     required this.useWalletBalance,
     required this.onToggleWallet,
@@ -44,13 +45,20 @@ class CashbackWalletSection extends ConsumerWidget {
                       children: [
                         const Text(
                           'Earn Cashback',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                         if (cashbackPercent > 0) ...[
                           const SizedBox(width: 6),
                           Text(
                             '(${cashbackPercent.toStringAsFixed(0)}%)',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF10B981)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF10B981),
+                            ),
                           ),
                         ],
                       ],
@@ -58,7 +66,10 @@ class CashbackWalletSection extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Text(
                       'Earn ₹${cashbackAmount.toStringAsFixed(2)} in cashback after purchase',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF374151),
+                      ),
                     ),
                   ],
                 ),
@@ -95,10 +106,14 @@ class CashbackWalletSection extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: useWalletBalance ? const Color(0xFF9747FF) : Colors.grey[400]!,
+                      color: useWalletBalance
+                          ? const Color(0xFF9747FF)
+                          : Colors.grey[400]!,
                       width: 2,
                     ),
-                    color: useWalletBalance ? const Color(0xFF9747FF) : Colors.transparent,
+                    color: useWalletBalance
+                        ? const Color(0xFF9747FF)
+                        : Colors.transparent,
                   ),
                   child: useWalletBalance
                       ? const Center(
@@ -110,7 +125,11 @@ class CashbackWalletSection extends ConsumerWidget {
                       : null,
                 ),
                 const SizedBox(width: 10),
-                Icon(Icons.account_balance_wallet, size: 18, color: const Color(0xFF9747FF).withValues(alpha: 0.7)),
+                Icon(
+                  Icons.account_balance_wallet,
+                  size: 18,
+                  color: const Color(0xFF9747FF).withValues(alpha: 0.7),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -118,11 +137,14 @@ class CashbackWalletSection extends ConsumerWidget {
                     children: [
                       const Text(
                         'Redeem Wallet Points',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${maxWalletUsage.toStringAsFixed(2)} (${AppConfig.cashbackRedeemPercent.round()}% of cart)',
+                        'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${maxWalletUsage.toStringAsFixed(2)} (${cashbackRedeemPercent.round()}% of cart)',
                         style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                       ),
                       if (walletBalance <= 0)
@@ -130,14 +152,22 @@ class CashbackWalletSection extends ConsumerWidget {
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             'No wallet balance available',
-                            style: TextStyle(fontSize: 11, color: Colors.grey[400], fontStyle: FontStyle.italic),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[400],
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ),
                       if (useWalletBalance && walletDeduction > 0) ...[
                         const SizedBox(height: 4),
                         Text(
                           '-₹${walletDeduction.toStringAsFixed(2)} will be deducted',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF10B981)),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF10B981),
+                          ),
                         ),
                       ],
                     ],

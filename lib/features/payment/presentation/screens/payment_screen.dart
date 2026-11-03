@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:gift360/config/app_config.dart';
-import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 import 'package:gift360/features/payment/data/models/payment.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
+import 'package:gift360/features/wallet/data/utils/wallet_redemption.dart';
 import 'package:gift360/core/widgets/brand_image.dart';
 
 class PaymentScreen extends ConsumerStatefulWidget {
@@ -69,26 +68,20 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     final subtotal = cart.totalAmount;
     final walletBalance = (walletAsync.value?.totalBalance ?? 0).toDouble();
     final cashbackRedeemPercent =
-        walletAsync.value?.cashbackRedeemPercent ??
-        AppConfig.cashbackRedeemPercent;
-    final maxRedeemAmount =
-        walletAsync.value?.maxRedeemAmount ?? AppConfig.maxRedeemAmount;
+        walletAsync.value?.cashbackRedeemPercent ?? 50.0;
+    final maxRedeemAmount = walletAsync.value?.maxRedeemAmount ?? 100.0;
     // Compute wallet cap: min(cashbackValue * cashbackRedeemPercent / 100, maxRedeemAmount)
     // cashbackValue = sum of per-item cashback amounts (itemTotal * discount% / 100)
-    final cashbackValue = cart.items.fold<double>(0, (sum, item) {
+    final cashbackValueScale4 = cart.items.fold<int>(0, (sum, item) {
       final discount = double.tryParse(item.discount?.toString() ?? '0') ?? 0;
-      final lineTotalPaise = (item.lineTotal * 100).round();
-      final pctBasis = (discount * 100).round();
-      final product = lineTotalPaise * pctBasis;
-      final cashbackScale4 =
-          product ~/ 100 + ((product % 100) * 2 >= 100 ? 1 : 0);
-      return sum + cashbackScale4 / 10000;
+      return sum + walletItemCashbackScale4(item.lineTotal, discount);
     });
-    final walletCapPaise = (cashbackValue * cashbackRedeemPercent / 100).clamp(
-      0,
+    final walletCapPaise = walletRedemptionCapPaise(
+      cashbackValueScale4,
+      cashbackRedeemPercent,
       maxRedeemAmount,
     );
-    final maxWalletUsage = walletCapPaise.toDouble();
+    final maxWalletUsage = walletCapPaise / 100;
     final walletDeduction = _useWallet
         ? (walletBalance < maxWalletUsage ? walletBalance : maxWalletUsage)
         : 0.0;
@@ -128,7 +121,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 children: [
                   _buildCartItems(cart.items),
                   const SizedBox(height: 16),
-                  _buildWalletSection(walletBalance, maxWalletUsage),
+                  _buildWalletSection(
+                    walletBalance,
+                    maxWalletUsage,
+                    cashbackRedeemPercent,
+                  ),
                   const SizedBox(height: 12),
                   _buildCouponSection(paymentState),
                   const SizedBox(height: 12),
@@ -231,7 +228,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     );
   }
 
-  Widget _buildWalletSection(double walletBalance, double maxWalletUsage) {
+  Widget _buildWalletSection(
+    double walletBalance,
+    double maxWalletUsage,
+    double cashbackRedeemPercent,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -269,7 +270,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 Text(
-                  'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${maxWalletUsage.toStringAsFixed(2)} (50%)',
+                  'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${maxWalletUsage.toStringAsFixed(2)} (${cashbackRedeemPercent.round()}%)',
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
                 ),
               ],

@@ -189,11 +189,28 @@ class Brand {
       imageUrl: _extractImageUrl(json),
       logoUrl: json['LogoURL'] as String? ?? json['logoUrl'] as String?,
       brandImageUrl: json['BrandImageURL'] as String? ?? json['brandImageUrl'] as String? ?? json['brand_image_url'] as String?,
-      terms: json['Terms'] as String? ?? json['terms'] as String? ?? _parseJsonTextField(json['tnc']),
+      terms: _firstNonEmpty([
+        json['Terms'],
+        json['terms'],
+        json['Tnc'],
+        json['tnc'],
+        json['termsAndConditions'],
+        json['terms_and_conditions'],
+      ]),
       validity: json['Validity'] as String? ?? json['validity'] as String?,
       denomination: json['Denomination'] as String? ?? json['denomination'] as String?,
-      howToUse: json['HowToUse'] as String? ?? json['howToUse'] as String? ?? _parseJsonTextField(json['redeemSteps']),
-      importantInstruction: _parseJsonTextField(json['importantInstruction']) ?? _parseJsonTextField(json['important_instruction']),
+      howToUse: _firstRedeemSteps([
+        json['HowToUse'],
+        json['howToUse'],
+        json['RedeemSteps'],
+        json['redeemSteps'],
+        json['redeem_steps'],
+      ]),
+      importantInstruction: _formatInfoText(
+        json['ImportantInstruction'] ??
+            json['importantInstruction'] ??
+            json['important_instruction'],
+      ),
       brandCode: json['BrandCode'] as String? ?? json['brandCode'] as String?,
       images: parsedImages,
       brandType: json['brandType'] as String? ?? json['BrandType'] as String? ?? json['brand_type'] as String?,
@@ -227,25 +244,101 @@ class Brand {
     return null;
   }
 
-  /// Parses a JSON-encoded text field like `{"text":"..."}` or a plain string.
-  /// Returns the extracted text, or null if empty/parse fails.
-  static String? _parseJsonTextField(dynamic value) {
+  /// Redeem steps are usually a JSON list of `{title, description}` objects.
+  /// Normalize both that shape and plain/JSON string variants to readable
+  /// content for the About / How to Use / Terms tabs.
+  static String? _formatRedeemSteps(dynamic value) {
+    final decoded = _decodeJsonValue(value);
+    if (decoded == null) return null;
+    if (decoded is List) {
+      final lines = <String>[];
+      for (final step in decoded) {
+        if (step is Map) {
+          final map = step.cast<String, dynamic>();
+          final title = _firstNonEmpty([
+            map['title'],
+            map['name'],
+            map['step'],
+            map['instruction'],
+          ]);
+          final description = _firstNonEmpty([
+            map['description'],
+            map['text'],
+            map['details'],
+          ]);
+          final line = [title, description]
+              .where((part) => part != null)
+              .join(title != null && description != null ? ' - ' : '');
+          if (line.isNotEmpty) lines.add(line);
+        } else {
+          final line = step.toString().trim();
+          if (line.isNotEmpty) lines.add(line);
+        }
+      }
+      return lines.isEmpty ? null : lines.join('\n');
+    }
+    return _formatInfoText(decoded);
+  }
+
+  /// Flattens plain strings, JSON-encoded strings, maps and lists into readable
+  /// lines. Supports backend `Tnc` maps and `ImportantInstruction` objects.
+  static String? _formatInfoText(dynamic value) {
+    final decoded = _decodeJsonValue(value);
+    if (decoded == null) return null;
+    if (decoded is Map) {
+      final lines = <String>[];
+      decoded.forEach((key, entry) {
+        final text = _formatInfoText(entry);
+        if (text == null || text.isEmpty) return;
+        final label = key.toString().trim();
+        lines.add(label.isEmpty ? text : '$label: $text');
+      });
+      return lines.isEmpty ? null : lines.join('\n');
+    }
+    if (decoded is List) {
+      final lines = decoded
+          .map(_formatInfoText)
+          .whereType<String>()
+          .where((line) => line.isNotEmpty)
+          .toList();
+      return lines.isEmpty ? null : lines.join('\n');
+    }
+    if (decoded is String) {
+      final text = decoded.trim();
+      return text.isEmpty ? null : text;
+    }
+    final text = decoded.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  static dynamic _decodeJsonValue(dynamic value) {
     if (value == null) return null;
     if (value is String) {
-      if (value.isEmpty) return null;
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
       try {
-        final decoded = jsonDecode(value);
-        if (decoded is Map<String, dynamic>) {
-          return decoded['text'] as String? ?? decoded.values.firstOrNull?.toString();
-        }
-        if (decoded is String) return decoded;
-      } catch (_) {}
-      return value;
+        return jsonDecode(trimmed);
+      } catch (_) {
+        return trimmed;
+      }
     }
-    if (value is Map<String, dynamic>) {
-      return value['text'] as String? ?? value.values.firstOrNull?.toString();
+    return value;
+  }
+
+  static String? _firstNonEmpty(List<dynamic> values) {
+    for (final value in values) {
+      final text = _formatInfoText(value);
+      if (text != null && text.isNotEmpty) return text;
     }
-    return value.toString();
+    return null;
+  }
+
+  static String? _firstRedeemSteps(List<dynamic> values) {
+    for (final value in values) {
+      final text = _formatRedeemSteps(value);
+      if (text != null && text.isNotEmpty) return text;
+    }
+    return null;
   }
 
   /// Safely parse a value to double, handling String, num, and null.

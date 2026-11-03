@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gift360/core/widgets/react_backdrop.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -56,12 +57,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Aurora background
+          // Background matching React: #f3f5f9 (replaced ganeshbackdrop.png)
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/ganeshbackdrop.png',
-              fit: BoxFit.cover,
-            ),
+            child: const ReactBackdropBackground(),
           ),
           SafeArea(
             child: Column(

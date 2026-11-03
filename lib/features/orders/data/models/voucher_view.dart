@@ -2,6 +2,7 @@
 // `src/pages/Orders.tsx` (extractVouchers, getImageUrl, mapOrder helpers)
 // and `src/types/order.ts` (VoucherState, DeliveryChannel).
 import 'package:gift360/core/utils/image_url_helper.dart';
+import 'package:gift360/features/orders/data/voucher_state_store.dart';
 
 /// Terminal state machine for a single voucher/coupon.
 ///
@@ -38,6 +39,11 @@ class VoucherView {
   final bool isScratched;
   final bool isGift;
 
+  /// Exact physical card id (giftcard_coupon_items.item_id) when the
+  /// card-items endpoint provided one — used to scope scratch/gift and the
+  /// local terminal-state floor to a single card in qty>1 orders.
+  final String? itemId;
+
   const VoucherView({
     required this.key,
     required this.orderItemId,
@@ -48,6 +54,7 @@ class VoucherView {
     required this.amount,
     required this.isScratched,
     required this.isGift,
+    this.itemId,
   });
 
   VoucherState get initialState {
@@ -57,16 +64,17 @@ class VoucherView {
   }
 
   VoucherView copyWith({bool? isScratched, bool? isGift}) => VoucherView(
-    key: key,
-    orderItemId: orderItemId,
-    brandName: brandName,
-    cardNumber: cardNumber,
-    cardPin: cardPin,
-    expiryDate: expiryDate,
-    amount: amount,
-    isScratched: isScratched ?? this.isScratched,
-    isGift: isGift ?? this.isGift,
-  );
+        key: key,
+        orderItemId: orderItemId,
+        brandName: brandName,
+        cardNumber: cardNumber,
+        cardPin: cardPin,
+        expiryDate: expiryDate,
+        amount: amount,
+        isScratched: isScratched ?? this.isScratched,
+        isGift: isGift ?? this.isGift,
+        itemId: itemId,
+      );
 
   Map<String, dynamic> toJson() => {
     'key': key,
@@ -78,6 +86,7 @@ class VoucherView {
     'amount': amount,
     'isScratched': isScratched,
     'isGift': isGift,
+    'itemId': itemId,
   };
 
   factory VoucherView.fromJson(Map<String, dynamic> json) => VoucherView(
@@ -90,6 +99,7 @@ class VoucherView {
     amount: json['amount']?.toString() ?? '',
     isScratched: json['isScratched'] == true,
     isGift: json['isGift'] == true,
+    itemId: json['itemId']?.toString(),
   );
 }
 
@@ -118,8 +128,6 @@ List<VoucherView> extractVouchers(
     final meta = _asMap(item['meta']);
     final orderItemId = item['order_item_id']?.toString() ?? '';
     final brandName = meta['brand_name']?.toString() ?? '';
-    final isScratched = _asBool(item['is_scratched']);
-    final isGift = _asBool(item['is_gift']);
     final cardItems =
         cardItemsByOrderItem[orderItemId] ?? const <Map<String, dynamic>>[];
 
@@ -140,6 +148,16 @@ List<VoucherView> extractVouchers(
               break;
             }
           }
+          final itemId = card?['itemId']?.toString();
+          // Terminal-state union across ALL sources: the shared order-item
+          // flag (legacy no-itemId write path), the per-card flag (written
+          // when an itemId was known), AND the local floor recorded on every
+          // confirmed reveal/gift (see VoucherTerminalStore) — a terminal
+          // state must never revert to PENDING, exactly like React's
+          // extractVouchers in Orders.tsx.
+          final localState = card != null
+              ? VoucherTerminalStore.cardState(itemId)
+              : VoucherTerminalStore.orderItemState(orderItemId);
           results.add(
             VoucherView(
               key: '$orderItemId-$ci-$vi',
@@ -149,14 +167,17 @@ List<VoucherView> extractVouchers(
               cardPin: v['getCardPin']?.toString() ?? '',
               expiryDate: v['getExpiryDate']?.toString() ?? '',
               amount: v['balanceTotal']?.toString() ?? '',
+              itemId: itemId,
               isScratched:
+                  _asBool(item['is_scratched']) ||
                   _asBool(card?['isScratched']) ||
                   _asBool(card?['is_scratched']) ||
-                  (card == null && isScratched),
+                  localState == 'SCRATCHED',
               isGift:
+                  _asBool(item['is_gift']) ||
                   _asBool(card?['isGift']) ||
                   _asBool(card?['is_gift']) ||
-                  (card == null && isGift),
+                  localState == 'GIFTED',
             ),
           );
         }
@@ -177,6 +198,10 @@ List<VoucherView> extractVouchers(
             break;
           }
         }
+        final itemId = card?['itemId']?.toString();
+        final localState = card != null
+            ? VoucherTerminalStore.cardState(itemId)
+            : VoucherTerminalStore.orderItemState(orderItemId);
         results.add(
           VoucherView(
             key: '$orderItemId-$ci-$vi',
@@ -186,14 +211,17 @@ List<VoucherView> extractVouchers(
             cardPin: v['getCardPin']?.toString() ?? '',
             expiryDate: v['getExpiryDate']?.toString() ?? '',
             amount: v['balanceTotal']?.toString() ?? '',
+            itemId: itemId,
             isScratched:
+                _asBool(item['is_scratched']) ||
                 _asBool(card?['isScratched']) ||
                 _asBool(card?['is_scratched']) ||
-                (card == null && isScratched),
+                localState == 'SCRATCHED',
             isGift:
+                _asBool(item['is_gift']) ||
                 _asBool(card?['isGift']) ||
                 _asBool(card?['is_gift']) ||
-                (card == null && isGift),
+                localState == 'GIFTED',
           ),
         );
       }

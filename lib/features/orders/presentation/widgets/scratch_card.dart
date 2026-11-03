@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:gift360/core/constants/app_colors.dart';
 import 'package:gift360/features/gifting/presentation/providers/gifting_provider.dart';
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
+import 'package:gift360/features/orders/data/voucher_state_store.dart';
 import 'package:gift360/features/orders/presentation/widgets/scratch_gate.dart';
 
 class ScratchCard extends ConsumerStatefulWidget {
@@ -35,6 +36,19 @@ class ScratchCard extends ConsumerStatefulWidget {
 class _ScratchCardState extends ConsumerState<ScratchCard> {
   late VoucherState _voucherState;
   String? _copiedField;
+  bool _sendingEmail = false;
+  bool _emailSent = false;
+
+  /// Persist a confirmed terminal outcome locally so the card can never show
+  /// "Tap to reveal" again even when a later server read misses the flag
+  /// (per-card vs order-item write/read flip — see VoucherTerminalStore).
+  void _recordTerminal(bool scratched) {
+    VoucherTerminalStore.record(
+      orderItemId: widget.voucher.orderItemId,
+      itemId: widget.voucher.itemId,
+      scratched: scratched,
+    );
+  }
 
   @override
   void initState() {
@@ -92,20 +106,30 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
   Future<void> _confirmScratch() async {
     try {
       final api = ref.read(giftingApiProvider);
+      final itemId = widget.voucher.itemId;
       final result = await api.scratchVoucher({
         'clientId': widget.clientId,
         'orderItemId': widget.voucher.orderItemId,
+        if (itemId != null && itemId.isNotEmpty) 'itemId': itemId,
       });
       if (!mounted) return;
       setState(() => _voucherState = VoucherState.scratched);
+      _recordTerminal(true);
       widget.onStateChange?.call(VoucherState.scratched);
-      _showSnack('Voucher revealed! 🎉', result['message']?.toString());
+      _showSnack('Voucher revealed!', result['message']?.toString());
     } on DioException catch (e) {
       final message = _errorMessage(e);
       if (e.response?.statusCode == 409) {
         _showSnack('Already used', message, isError: true);
-        final next = message.contains('gifted') ? VoucherState.gifted : VoucherState.scratched;
+        // Use the backend's explicit errorCode rather than guessing from the
+        // message text (both terminal messages can contain either word).
+        final data = e.response?.data;
+        final errorCode = data is Map ? data['errorCode']?.toString() : null;
+        final alreadyGifted = errorCode == 'ALREADY_GIFTED' ||
+            (errorCode == null && message.toLowerCase().contains('gifted'));
+        final next = alreadyGifted ? VoucherState.gifted : VoucherState.scratched;
         if (mounted) setState(() => _voucherState = next);
+        _recordTerminal(next == VoucherState.scratched);
         widget.onStateChange?.call(next);
       } else {
         _showSnack('Could not reveal voucher', message, isError: true);
@@ -127,9 +151,11 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
   }) async {
     try {
       final api = ref.read(giftingApiProvider);
+      final itemId = widget.voucher.itemId;
       final result = await api.giftVoucher({
         'clientId': widget.clientId,
         'orderItemId': widget.voucher.orderItemId,
+        if (itemId != null && itemId.isNotEmpty) 'itemId': itemId,
         if (recipientEmail != null) 'recipientEmail': recipientEmail,
         if (senderName != null) 'senderName': senderName,
         if (personalMessage != null) 'personalMessage': personalMessage,
@@ -139,14 +165,20 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
       });
       if (!mounted) return;
       setState(() => _voucherState = VoucherState.gifted);
+      _recordTerminal(false);
       widget.onStateChange?.call(VoucherState.gifted);
-      _showSnack('Voucher gifted! 🎁', result['message']?.toString());
+      _showSnack('Voucher gifted!', result['message']?.toString());
     } on DioException catch (e) {
       final message = _errorMessage(e);
       if (e.response?.statusCode == 409) {
         _showSnack('Already used', message, isError: true);
-        final next = message.contains('scratched') ? VoucherState.scratched : VoucherState.gifted;
+        final data = e.response?.data;
+        final errorCode = data is Map ? data['errorCode']?.toString() : null;
+        final alreadyScratched = errorCode == 'ALREADY_SCRATCHED' ||
+            (errorCode == null && message.toLowerCase().contains('scratched'));
+        final next = alreadyScratched ? VoucherState.scratched : VoucherState.gifted;
         if (mounted) setState(() => _voucherState = next);
+        _recordTerminal(next == VoucherState.scratched);
         widget.onStateChange?.call(next);
       } else {
         _showSnack('Could not gift voucher', message, isError: true);
@@ -237,11 +269,11 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('✨ Scratch to Reveal',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
-                        SizedBox(height: 6),
+                        Text('\u2728 Scratch to Reveal',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                        SizedBox(height: 4),
                         Text('Tap here to use or gift',
-                            style: TextStyle(color: Color(0xCCFFD700), fontSize: 13)),
+                            style: TextStyle(color: Color(0xCCFFD700), fontSize: 11)),
                       ],
                     ),
                   ),
@@ -301,10 +333,39 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
   // SCRATCHED — Compact layout matching React ScratchCard compact mode
   // Light cream bg (#F8F5F4), dark blue info boxes (#1A3052), copy buttons
   // ════════════════════════════════════════════════════════════════════════════
+  /// Share revealed voucher via email — the existing `/mail/send` backend
+  /// renders the real voucher codes from the DB and emails them from
+  /// gift360@gift360.io to the registered client email (matches React
+  /// ScratchCard's "Email this voucher" button / `gift_vouchers` template).
+  Future<void> _sendRevealedEmail() async {
+    if (_sendingEmail || _emailSent) return;
+    setState(() => _sendingEmail = true);
+    try {
+      await ref.read(mailApiProvider).sendEmail(
+            clientId: widget.clientId,
+            orderNumber: widget.orderNumber,
+            templateName: 'gift_vouchers',
+          );
+      if (!mounted) return;
+      setState(() {
+        _sendingEmail = false;
+        _emailSent = true;
+      });
+      _showSnack(
+        'Voucher emailed!',
+        'Sent to your registered email from gift360@gift360.io.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _sendingEmail = false);
+      _showSnack('Could not send email', 'Something went wrong. Please try again.', isError: true);
+    }
+  }
+
   Widget _buildScratchedCompact(String displayName) {
     return Container(
       width: double.infinity,
-      height: 200,
+      height: 236,
       decoration: BoxDecoration(
         color: const Color(0xFFF8F5F4),
         borderRadius: BorderRadius.circular(12),
@@ -384,6 +445,57 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
               label: 'PIN',
               value: widget.voucher.cardPin,
               fieldKey: 'pin',
+            ),
+
+            const SizedBox(height: 8),
+
+            // ── Email this voucher (React "Share revealed voucher via email") ──
+            SizedBox(
+              height: 28,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _sendRevealedEmail,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _emailSent ? const Color(0xFF065F46) : const Color(0xFF1A3052),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_sendingEmail)
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFCD34D)),
+                          )
+                        else
+                          Icon(
+                            _emailSent ? Icons.check : Icons.mail_outline,
+                            size: 12,
+                            color: _emailSent ? const Color(0xFF34D399) : const Color(0xFFFCD34D),
+                          ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _sendingEmail
+                              ? 'Sending\u2026'
+                              : _emailSent
+                                  ? 'Sent to your email'
+                                  : 'Email this voucher',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
 
             const Spacer(),

@@ -1,17 +1,22 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/core/utils/jwt_utils.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/data/repositories/auth_api.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
+import 'package:gift360/features/supercoin/data/repositories/supercoin_api.dart';
 
 class AuthNotifier extends StateNotifier<AuthUser?> {
   final FlutterSecureStorage _secureStorage;
   final AuthApi _authApi;
+  final Dio? _brandsDio;
   bool _initialized = false;
 
-  AuthNotifier(this._secureStorage, this._authApi) : super(null) {
+  AuthNotifier(this._secureStorage, this._authApi, [this._brandsDio])
+      : super(null) {
     _loadUser();
   }
 
@@ -91,6 +96,54 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
     _persistUser(user);
   }
 
+  /// Immediately after login/register, fetch the customer's live SuperCoin
+  /// balance and POST it into `client_profile.supercoin_balance`
+  /// (POST /v1/clients/supercoin-balance) — the same snapshot React's
+  /// fetchSuperCoinBalance persists on every balance fetch while logged in.
+  /// Non-Flipkart users (upstream 404) store "NA". Fire-and-forget.
+  void _syncSuperCoinBalanceOnAuth(String clientId, String? mobile) {
+    final dio = _brandsDio;
+    if (dio == null || clientId.trim().isEmpty) return;
+    final normalized = _normalizeMobile(mobile);
+    if (normalized == null) return;
+    final api = SuperCoinApi(dio);
+    Future<void>(() async {
+      try {
+        final result =
+            await api.fetchBalance(SuperCoinIdentity(identifier: normalized, type: 'MOBILE'));
+        await api.syncBalance(clientId, _extractBalance(result));
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          await api.syncBalance(clientId, 'NA');
+        }
+      } catch (_) {
+        // Balance sync must never break the login flow.
+      }
+    });
+  }
+
+  String? _normalizeMobile(String? mobile) {
+    if (mobile == null || mobile.trim().isEmpty) return null;
+    final trimmed = mobile.trim();
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (trimmed.startsWith('+')) return '+$digits';
+    if (digits.length == 10) return '+91$digits';
+    if (digits.length == 12 && digits.startsWith('91')) return '+$digits';
+    return digits.isEmpty ? null : '+$digits';
+  }
+
+  double _extractBalance(Map<String, dynamic> response) {
+    for (final key in ['balance', 'totalBalance', 'availableBalance', 'amount']) {
+      final value = response[key];
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        final parsed = double.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+    }
+    return 0;
+  }
+
   Future<SendOtpResponse> sendOtp(SendOtpRequest request) async {
     return _authApi.sendOtp(request);
   }
@@ -105,7 +158,19 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
         token: response.token!,
         clientId: extractClientIdFromToken(response.token!) ?? response.userInfo!.clientId.trim(),
       );
-      setUser(user);
+      // Show the SuperCoin intro modal on Home after a login
+      // (mirrors React `localStorage.setItem("showSuperCoinIntro", "1")`).
+      // NOTE: written BEFORE setUser — setUser notifies listeners which can
+      // navigate/mount Home before an awaited prefs write would land, making
+      // Home consume a stale (unset) flag and never show the modal.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('showSuperCoinIntro', true);
+      // Persist the session FIRST so the balance-sync request's auth
+      // interceptor reads the fresh token, then notify listeners.
+      await _persistUser(user);
+      state = user;
+      // Persist the SuperCoin balance snapshot to client_profile right away.
+      _syncSuperCoinBalanceOnAuth(user.clientId, user.mobile);
     }
     return response;
   }
@@ -140,7 +205,17 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
         token: response.token!,
         clientId: extractClientIdFromToken(response.token!) ?? response.userInfo!.clientId.trim(),
       );
-      setUser(user);
+      // Show the SuperCoin intro modal on Home after registration too
+      // (mirrors React Register.tsx) — same ordering as loginWithOtp: the
+      // flag must be persisted before setUser triggers any navigation.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('showSuperCoinIntro', true);
+      // Persist the session FIRST so the balance-sync request's auth
+      // interceptor reads the fresh token, then notify listeners.
+      await _persistUser(user);
+      state = user;
+      // Persist the SuperCoin balance snapshot to client_profile right away.
+      _syncSuperCoinBalanceOnAuth(user.clientId, user.mobile);
     }
     return response;
   }
@@ -174,6 +249,7 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthUser?>((ref) {
   return AuthNotifier(
     const FlutterSecureStorage(),
     ref.watch(authApiProvider),
+    ref.watch(brandsDioProvider),
   );
 });
 

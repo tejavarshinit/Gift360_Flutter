@@ -11,6 +11,11 @@ class SuperCoinOTPModal extends ConsumerStatefulWidget {
   final String displayName;
   final double preloadedBalance;
   final double maxRedeemable;
+
+  /// Coins chosen on the cart slider before applying (React
+  /// `initialCoinAmount={selectedSCCoins}`). Null/0 → falls back to
+  /// min(balance, maxRedeemable).
+  final double? initialCoinAmount;
   final void Function(SuperCoinHoldContext context) onAuthorized;
   final VoidCallback onSwitchToCashback;
   final VoidCallback onClose;
@@ -22,6 +27,7 @@ class SuperCoinOTPModal extends ConsumerStatefulWidget {
     required this.displayName,
     required this.preloadedBalance,
     required this.maxRedeemable,
+    this.initialCoinAmount,
     required this.onAuthorized,
     required this.onSwitchToCashback,
     required this.onClose,
@@ -52,10 +58,24 @@ class _SuperCoinOTPModalState extends ConsumerState<SuperCoinOTPModal> {
   void initState() {
     super.initState();
     _balance = widget.preloadedBalance;
-    _coinAmount = widget.maxRedeemable > 0
-        ? (widget.preloadedBalance < widget.maxRedeemable ? widget.preloadedBalance : widget.maxRedeemable)
-        : widget.preloadedBalance;
+    _coinAmount = _resolveCoinAmount(widget.preloadedBalance);
     _loadBalance();
+  }
+
+  /// Mirrors React SuperCoinOTPModal `resolveCoinAmount`: prefer the cart
+  /// slider's selection; fall back to min(balance, cap). Always clamped to
+  /// 1..maxRedeemable (0 only when nothing is redeemable).
+  double _resolveCoinAmount(double bal) {
+    if (widget.maxRedeemable < 1 || bal < 1) return 0;
+    final fallback = bal < widget.maxRedeemable ? bal : widget.maxRedeemable;
+    final preferred = (widget.initialCoinAmount != null && widget.initialCoinAmount! >= 1)
+        ? widget.initialCoinAmount!
+        : fallback;
+    var amount = preferred;
+    if (amount < 1) amount = 1;
+    if (amount > widget.maxRedeemable) amount = widget.maxRedeemable;
+    if (amount > bal) amount = bal;
+    return amount;
   }
 
   @override
@@ -63,6 +83,22 @@ class _SuperCoinOTPModalState extends ConsumerState<SuperCoinOTPModal> {
     _countdownTimer?.cancel();
     super.dispose();
   }
+
+  Future<void> _handleClose() async {
+    if (_step == SuperCoinOtpStep.otpSent && _merchantTransactionId.isNotEmpty) {
+      try {
+        final api = ref.read(supercoinApiProvider);
+        await api.unhold({
+          'identity': _identity?.toJson() ?? {'identifier': '', 'type': 'MOBILE'},
+          'merchantTransactionId': _merchantTransactionId,
+          'merchantWalletId': widget.merchantWalletId,
+        });
+      } catch (_) {}
+    }
+    _countdownTimer?.cancel();
+    widget.onClose();
+  }
+
 
   String _formatCountdown(int seconds) {
     final mins = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -90,9 +126,7 @@ class _SuperCoinOTPModalState extends ConsumerState<SuperCoinOTPModal> {
           break;
         }
       }
-      final coinAmt = widget.maxRedeemable > 0
-          ? (bal < widget.maxRedeemable ? bal : widget.maxRedeemable)
-          : bal;
+      final coinAmt = _resolveCoinAmount(bal);
       setState(() {
         _step = SuperCoinOtpStep.ready;
         _balance = bal;
@@ -480,12 +514,9 @@ class _SuperCoinOTPModalState extends ConsumerState<SuperCoinOTPModal> {
                 child: SizedBox(
                   height: 44,
                   child: OutlinedButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () {
-                            _countdownTimer?.cancel();
-                            widget.onClose();
-                          },
+                     onPressed: _isLoading
+                         ? null
+                         : _handleClose,
                     style: OutlinedButton.styleFrom(
                       backgroundColor: const Color(0xFFD7BDFF),
                       foregroundColor: const Color(0xFF2D2D2D),
@@ -563,10 +594,7 @@ class _SuperCoinOTPModalState extends ConsumerState<SuperCoinOTPModal> {
             width: double.infinity,
             height: 44,
             child: ElevatedButton(
-              onPressed: () {
-                _countdownTimer?.cancel();
-                widget.onClose();
-              },
+               onPressed: _handleClose,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF9747FF),
                 foregroundColor: Colors.white,

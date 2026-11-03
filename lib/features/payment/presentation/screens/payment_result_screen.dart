@@ -1,15 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
+import 'package:gift360/features/payment/data/repositories/session_resume_api.dart';
+import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/core/utils/analytics.dart';
+import 'package:gift360/core/navigation/app_navigator.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
+import 'package:gift360/core/widgets/gift_header.dart';
+import 'package:gift360/core/widgets/site_footer.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
+import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
+import 'package:gift360/features/rewards/presentation/widgets/quiz_modal.dart';
+import 'package:gift360/features/feedback/presentation/feedback_orchestrator.dart';
 
 class PaymentResultScreen extends ConsumerStatefulWidget {
   final String? status;
@@ -35,22 +45,126 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
   bool _statusUpdated = false;
   bool _couponsFetched = false;
   bool _clientIdMismatch = false;
+  bool _orderDetailsLoading = false;
+  bool _orderDetailsLoaded = false;
 
   /// Live processing status indicators (matches React's step-by-step UI)
   bool _statusUpdateInProgress = false;
   bool _couponConfirmInProgress = false;
-  bool _couponConfirmDone = false;
   bool _fetchCouponsInProgress = false;
   bool _fetchCouponsDone = false;
-  bool _fetchCouponsFailed = false;
+  final bool _fetchCouponsFailed = false;
 
   String? _resolvedOrderNumber;
   String? _resolvedClientId;
 
+  /// Session resume from the encrypted order reference (`txnid`).
+  Future<void>? _resumeFuture;
+
+  /// Payment-cancelled Dussehra quiz callout (mirrors React PaymentResult).
+  bool _cancelCalloutAttempted = false;
+  bool _calloutLoading = false;
+  Map<String, dynamic>? _calloutReward;
+  int _calloutSecondsLeft = 0;
+  Timer? _calloutTimer;
+  static const int _voucherRedirectSeconds = 10;
+  int _voucherSecondsLeft = _voucherRedirectSeconds;
+  bool _stayOnResult = false;
+  Timer? _voucherRedirectTimer;
+
   @override
   void initState() {
     super.initState();
+    hideGlobalSupportChat();
+    _resumeFuture = _resumeSessionForReturn();
     _processPaymentResult();
+
+    // Payment cancelled by the customer: offer the feedback form shortly after
+    // the result page renders (the orchestrator applies cooldowns/limits).
+    if (widget.status?.toLowerCase() == 'usercancelled') {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          FeedbackOrchestrator.prompt(context, ref, 'payment-cancelled');
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    showGlobalSupportChat();
+    _calloutTimer?.cancel();
+    _voucherRedirectTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startVoucherRedirect() {
+    if (_voucherRedirectTimer != null || _stayOnResult) return;
+
+    _voucherRedirectTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_voucherSecondsLeft <= 1) {
+        timer.cancel();
+        _voucherRedirectTimer = null;
+        _navigateToVouchers();
+        return;
+      }
+      setState(() => _voucherSecondsLeft--);
+    });
+  }
+
+  Future<void> _navigateToVouchers() async {
+    _voucherRedirectTimer?.cancel();
+    _voucherRedirectTimer = null;
+    await PaymentNotifier.setJustReturnedFromPayment();
+    if (mounted) context.go('/orders');
+  }
+
+  void _stayOnPaymentResult() {
+    _voucherRedirectTimer?.cancel();
+    _voucherRedirectTimer = null;
+    setState(() => _stayOnResult = true);
+  }
+
+  /// Restore the customer's existing session from the encrypted order reference
+  /// in the return URL. This does NOT depend on local storage, so it works even
+  /// when the page loads in a different/empty browser context (e.g. Google
+  /// Pay's in-app browser after a UPI hand-off). Never logs the user out: any
+  /// failure is ignored and the page stays read-only.
+  Future<void> _resumeSessionForReturn() async {
+    final txnId = widget.txnId;
+    if (txnId == null || txnId.trim().isEmpty) return;
+
+    final session = await SessionResumeApi().resume(
+      normalizeEncryptedToken(txnId),
+    );
+    if (session == null) return;
+
+    final token = (session['token'] ?? '').toString();
+    final info = (session['userInfo'] as Map?)?.cast<String, dynamic>();
+    if (token.isEmpty || info == null) return;
+
+    final resumed = AuthUser(
+      name: (info['name'] ?? '').toString(),
+      email: (info['email'] ?? '').toString(),
+      mobile: (info['mobile'] ?? '').toString(),
+      token: token,
+      clientId: (info['clientId'] ?? '').toString(),
+    );
+
+    // Only adopt the resumed session when there is no in-app session or it is
+    // the same customer — avoids silently switching accounts.
+    final current = ref.read(authProvider);
+    if (current != null &&
+        current.clientId.isNotEmpty &&
+        current.clientId != resumed.clientId) {
+      return;
+    }
+    if (!mounted) return;
+    ref.read(authProvider.notifier).setUser(resumed);
   }
 
   String? _resolveOrderNumber() {
@@ -84,8 +198,21 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
 
+    // Ensure the session restore has completed before the order calls, so they
+    // carry the restored Bearer token (avoids a token-less 401).
+    if (_resumeFuture != null) {
+      try {
+        await _resumeFuture;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+
     final paymentNotifier = ref.read(paymentProvider.notifier);
 
+    final hasTxnId = widget.txnId != null && widget.txnId!.isNotEmpty;
+    final isSuccess =
+        widget.status?.toLowerCase() == 'success' ||
+        (hasTxnId && widget.status == null && widget.error == null);
     final orderNumber = _resolveOrderNumber();
     _resolvedOrderNumber = orderNumber;
 
@@ -95,16 +222,17 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
         : null;
 
     if (orderNumber == null) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        if (isSuccess) _orderDetailsLoaded = true;
+      });
+      if (isSuccess) _startVoucherRedirect();
       return;
     }
 
     _validateClientId();
 
-    final hasTxnId = widget.txnId != null && widget.txnId!.isNotEmpty;
-    final isSuccess =
-        widget.status?.toLowerCase() == 'success' ||
-        (hasTxnId && widget.status == null && widget.error == null);
+    final isCancelled = widget.status?.toLowerCase() == 'usercancelled';
     final orderStatus = isSuccess ? 'PAID' : 'FAILED';
 
     if (!_statusUpdated) {
@@ -112,9 +240,12 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
         _statusUpdateInProgress = true;
         _isLoading = false;
       });
+      if (isSuccess) _startVoucherRedirect();
 
       bool statusUpdateSucceeded = false;
-      if (encryptedOrderRef != null) {
+      // A customer cancellation stays read-only (matches React): the order must
+      // remain PENDING for the Dussehra quiz offer to be registered.
+      if (encryptedOrderRef != null && !isCancelled) {
         statusUpdateSucceeded = await paymentNotifier.updateOrderStatus(
           orderStatus,
           encryptedOrderRef: encryptedOrderRef,
@@ -132,7 +263,6 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
         await paymentNotifier.confirmCoupon(orderNumber);
         setState(() {
           _couponConfirmInProgress = false;
-          _couponConfirmDone = true;
         });
 
         // Fetch/generate vouchers
@@ -151,7 +281,17 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
         });
 
         // Fetch order details (for SuperCoins earned + cashback earned)
-        await paymentNotifier.fetchOrderDetails(orderNumber: orderNumber);
+        if (mounted) setState(() => _orderDetailsLoading = true);
+        try {
+          await paymentNotifier.fetchOrderDetails(orderNumber: orderNumber);
+        } finally {
+          if (mounted) {
+            setState(() {
+              _orderDetailsLoading = false;
+              _orderDetailsLoaded = true;
+            });
+          }
+        }
 
         // Clear cart
         if (mounted) {
@@ -188,16 +328,181 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
       } else if (isSuccess && !statusUpdateSucceeded) {
         await SuperCoinOtpNotifier.clearHoldContext(orderNumber);
         await SuperCoinOtpNotifier.clearActiveOrderNumber();
+        if (mounted) setState(() => _orderDetailsLoaded = true);
       } else {
         await paymentNotifier.releaseCoupon();
         await SuperCoinOtpNotifier.clearHoldContext(orderNumber);
         await SuperCoinOtpNotifier.clearActiveOrderNumber();
       }
+
+      // Payment cancelled: offer the Dussehra quiz callout (source of truth for
+      // opening the offer is the backend, which verifies the order is PENDING).
+      if (isCancelled) {
+        await _handleCancelledOrder(orderNumber);
+      }
     }
 
     if (mounted) {
       setState(() => _isLoading = false);
+      if (isSuccess) _startVoucherRedirect();
     }
+  }
+
+  /// Registers the payment-cancelled Dussehra quiz offer and shows the callout.
+  /// Mirrors React `registerPaymentCancellation` usage in PaymentResult.
+  Future<void> _handleCancelledOrder(String orderNumber) async {
+    if (_cancelCalloutAttempted) return;
+    _cancelCalloutAttempted = true;
+
+    final clientId = ref.read(authProvider)?.clientId;
+    if (clientId == null || clientId.isEmpty) return;
+
+    if (mounted) setState(() => _calloutLoading = true);
+    try {
+      await ref
+          .read(paymentProvider.notifier)
+          .fetchOrderDetails(orderNumber: orderNumber);
+      final status = ref
+          .read(paymentProvider)
+          .orderDetails
+          ?.status
+          ?.toUpperCase();
+      if (status != 'PENDING') {
+        if (mounted) setState(() => _calloutLoading = false);
+        return;
+      }
+
+      final reward = await ref
+          .read(rewardsApiProvider)
+          .registerPaymentCancellation(clientId, orderNumber);
+      if (!mounted) return;
+      setState(() {
+        _calloutReward = reward;
+        _calloutLoading = false;
+      });
+      _startCalloutCountdown(reward['quizStartExpiresAt']?.toString());
+    } catch (_) {
+      if (mounted) setState(() => _calloutLoading = false);
+    }
+  }
+
+  void _startCalloutCountdown(String? deadlineIso) {
+    _calloutTimer?.cancel();
+    final deadline = DateTime.tryParse(deadlineIso ?? '');
+    if (deadline == null) return;
+
+    void tick() {
+      if (!mounted) return;
+      final left = deadline.difference(DateTime.now()).inSeconds;
+      setState(() => _calloutSecondsLeft = left > 0 ? left : 0);
+    }
+
+    tick();
+    _calloutTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  }
+
+  Future<void> _openCancelledQuiz() async {
+    final publicId = (_calloutReward?['publicId'] ?? '').toString();
+    final clientId = ref.read(authProvider)?.clientId ?? '';
+    if (publicId.isEmpty || clientId.isEmpty) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => QuizModal(
+        clientId: clientId,
+        publicId: publicId,
+        onClose: () => Navigator.of(context, rootNavigator: true).pop(),
+        onFinished: (reward) {
+          ref.invalidate(rewardStatusProvider);
+          if (mounted) {
+            setState(() {
+              _calloutReward = {...?_calloutReward, ...reward};
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildCancelCallout() {
+    final reward = _calloutReward!;
+    final status = (reward['status'] ?? '').toString().toUpperCase();
+    final available = status == 'AVAILABLE' || status == 'IN_PROGRESS';
+    final pending = status == 'PENDING';
+    final minutes = _calloutSecondsLeft ~/ 60;
+    final seconds = (_calloutSecondsLeft % 60).toString().padLeft(2, '0');
+    final hasPublicId = (reward['publicId'] ?? '').toString().isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF7ED), Color(0xFFFFFBEB)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: available
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Payment cancelled? Play a quick Dussehra quiz and earn 5 SuperCoins!',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF431407),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Start and finish within $minutes:$seconds.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF7C2D12),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 38,
+                  child: ElevatedButton(
+                    onPressed: _calloutSecondsLeft <= 0 || !hasPublicId
+                        ? null
+                        : _openCancelledQuiz,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEA580C),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Play Dussehra Quiz',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Text(
+              pending
+                  ? 'Quiz won! Complete a new purchase within five minutes to receive 5 bonus SuperCoins after payment and voucher fulfillment.'
+                  : 'This Dussehra quiz offer has expired or is no longer available.',
+              style: TextStyle(
+                fontSize: pending ? 13 : 12,
+                fontWeight: pending ? FontWeight.w600 : FontWeight.w500,
+                color: pending
+                    ? const Color(0xFF431407)
+                    : const Color(0xFF7C2D12),
+              ),
+            ),
+    );
   }
 
   @override
@@ -240,6 +545,19 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
         : widget.error != null
         ? 'Payment verification failed. Please contact support.'
         : 'Payment could not be completed. Please try again.';
+
+    if (!_isLoading) {
+      return isSuccess
+          ? _buildSuccessResult(paymentState)
+          : _buildGenericResult(
+              isPending: isPending,
+              isCancelled: isCancelled,
+              statusColor: statusColor,
+              statusIcon: statusIcon,
+              statusTitle: statusTitle,
+              statusMessage: statusMessage,
+            );
+    }
 
     return Scaffold(
       body: Container(
@@ -330,6 +648,49 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                               _resolvedOrderNumber!,
                               Colors.grey.shade700,
                             ),
+                          ],
+
+                          // Payment-cancelled quiz callout
+                          if (isCancelled && _calloutLoading) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF7ED),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: const Color(0xFFFED7AA),
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFFEA580C),
+                                    ),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Preparing your Dussehra quiz offer.',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF7C2D12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (isCancelled && _calloutReward != null) ...[
+                            const SizedBox(height: 12),
+                            _buildCancelCallout(),
                           ],
 
                           // SuperCoins earned
@@ -620,6 +981,677 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuccessResult(PaymentState paymentState) {
+    final orderDetails = paymentState.orderDetails;
+    final coins = orderDetails?.coinsEarned ?? 0;
+    final cashback = orderDetails?.cashbackEarned ?? 0;
+    final hasCoins = coins > 0;
+    final hasCashback = cashback > 0;
+    final rewardsKnown = hasCoins || hasCashback;
+    final showSkeleton =
+        !rewardsKnown &&
+        (_orderDetailsLoading ||
+            _statusUpdateInProgress ||
+            _couponConfirmInProgress ||
+            _fetchCouponsInProgress ||
+            (orderDetails == null && !_orderDetailsLoaded));
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF4ECFF), Colors.white],
+            stops: [0, 0.4],
+          ),
+        ),
+        child: Column(
+          children: [
+            const GiftHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 420),
+                          child: Column(
+                            children: [
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.4, end: 1),
+                                duration: const Duration(milliseconds: 500),
+                                curve: Curves.elasticOut,
+                                builder: (context, scale, child) =>
+                                    Transform.scale(scale: scale, child: child),
+                                child: Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFF34D399),
+                                        Color(0xFF059669),
+                                      ],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFF10B981,
+                                        ).withValues(alpha: 0.35),
+                                        blurRadius: 28,
+                                        offset: const Offset(0, 10),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.check_rounded,
+                                    size: 40,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Payment successful',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1F1B3A),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Your vouchers are being issued${_resolvedOrderNumber == null ? '' : ' · Order #$_resolvedOrderNumber'}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              if (showSkeleton)
+                                _rewardSkeleton()
+                              else if (hasCoins || hasCashback) ...[
+                                if (hasCoins)
+                                  _successRewardCard(
+                                    color: const Color(0xFF7C3AED),
+                                    borderColor: const Color(0xFFD8B4FE),
+                                    backgroundColor: const Color(0xFFF5F3FF),
+                                    icon: Image.asset(
+                                      'assets/images/SuperCOin-removebg-preview.png',
+                                      width: 56,
+                                      height: 56,
+                                      fit: BoxFit.contain,
+                                    ),
+                                    value: coins.toDouble(),
+                                    label: 'SuperCoins',
+                                    detail:
+                                        'Added to your Flipkart SuperCoin account',
+                                  ),
+                                if (hasCashback) ...[
+                                  if (hasCoins) const SizedBox(height: 12),
+                                  _successRewardCard(
+                                    color: const Color(0xFF059669),
+                                    borderColor: const Color(0xFFA7F3D0),
+                                    backgroundColor: const Color(0xFFECFDF5),
+                                    icon: const Text(
+                                      '💰',
+                                      style: TextStyle(fontSize: 32),
+                                    ),
+                                    value: cashback,
+                                    label: 'cashback points',
+                                    detail:
+                                        '1 point = ₹1 · already in your wallet',
+                                  ),
+                                ],
+                              ] else if (_orderDetailsLoaded)
+                                _successInfoCard(
+                                  'Any rewards from this order will show in your wallet once it is processed.',
+                                ),
+                              const SizedBox(height: 20),
+                              if (!_stayOnResult)
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: 44,
+                                      height: 44,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          CircularProgressIndicator(
+                                            value:
+                                                _voucherSecondsLeft /
+                                                _voucherRedirectSeconds,
+                                            strokeWidth: 4,
+                                            backgroundColor: const Color(
+                                              0xFFE9D5FF,
+                                            ),
+                                            valueColor:
+                                                const AlwaysStoppedAnimation(
+                                                  Color(0xFF7C3AED),
+                                                ),
+                                          ),
+                                          Text(
+                                            '$_voucherSecondsLeft',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF4C1D95),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Taking you to your\nvouchers in ${_voucherSecondsLeft}s',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Color(0xFF4B5563),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              else
+                                const Text(
+                                  'Your vouchers will appear on the Orders page once issued.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF4B5563),
+                                  ),
+                                ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: 240,
+                                height: 48,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFF7B61FF),
+                                        Color(0xFF5B3FFF),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(28),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFF6C5CE7,
+                                        ).withValues(alpha: 0.28),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: _navigateToVouchers,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      shape: const StadiumBorder(),
+                                    ),
+                                    child: const Text(
+                                      'View my vouchers',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 24,
+                                children: [
+                                  TextButton(
+                                    onPressed: () => context.go('/'),
+                                    child: const Text(
+                                      'Continue shopping',
+                                      style: TextStyle(
+                                        color: Color(0xFF5B3FFF),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (!_stayOnResult)
+                                    TextButton(
+                                      onPressed: _stayOnPaymentResult,
+                                      child: const Text(
+                                        'Stay here',
+                                        style: TextStyle(
+                                          color: Color(0xFF6B7280),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SiteFooter(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _successRewardCard({
+    required Color color,
+    required Color borderColor,
+    required Color backgroundColor,
+    required Widget icon,
+    required double value,
+    required String label,
+    required String detail,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.12),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: 56, height: 56, child: Center(child: icon)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'YOU EARNED',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                    color: color,
+                  ),
+                ),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: value),
+                  duration: const Duration(milliseconds: 1400),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, currentValue, child) => Text(
+                    '+${_formatReward(currentValue, value)} $label',
+                    style: TextStyle(
+                      fontSize: 22,
+                      height: 1.15,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rewardSkeleton() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFEDE9FE)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: const Row(
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              color: Color(0xFF7C3AED),
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              'Counting your rewards…',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _successInfoCard(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFEDE9FE)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+      ),
+    );
+  }
+
+  String _formatReward(double value, double finalValue) =>
+      finalValue % 1 == 0 ? value.round().toString() : value.toStringAsFixed(2);
+
+  Widget _buildGenericResult({
+    required bool isPending,
+    required bool isCancelled,
+    required Color statusColor,
+    required IconData statusIcon,
+    required String statusTitle,
+    required String statusMessage,
+  }) {
+    final statusLabel = isPending ? 'PENDING' : 'FAILED';
+    final hasTransaction = widget.txnId?.isNotEmpty == true;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF4ECFF), Colors.white],
+            stops: [0, 0.4],
+          ),
+        ),
+        child: Column(
+          children: [
+            const GiftHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 672),
+                          child: Card(
+                            elevation: 12,
+                            shadowColor: const Color(0x26000000),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              side: const BorderSide(
+                                color: Color(0xFFE5E7EB),
+                                width: 2,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                24,
+                                28,
+                                24,
+                                24,
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    statusIcon,
+                                    size: 80,
+                                    color: statusColor,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    statusTitle,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.bold,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    statusMessage,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF9FAFB),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: const Color(0xFFE5E7EB),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (isCancelled && _calloutLoading) ...[
+                                          const Row(
+                                            children: [
+                                              SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Color(0xFFEA580C),
+                                                    ),
+                                              ),
+                                              SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  'Preparing your Dussehra quiz offer…',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Color(0xFF7C2D12),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                        ],
+                                        if (isCancelled &&
+                                            _calloutReward != null) ...[
+                                          _buildCancelCallout(),
+                                          const SizedBox(height: 12),
+                                        ],
+                                        _detailRow(
+                                          'Status',
+                                          statusLabel,
+                                          statusColor,
+                                        ),
+                                        if (_resolvedOrderNumber != null) ...[
+                                          const Divider(height: 24),
+                                          _detailRow(
+                                            'Order Number',
+                                            _resolvedOrderNumber!,
+                                            const Color(0xFF4B5563),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  if (!hasTransaction) ...[
+                                    const SizedBox(height: 16),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFFBEB),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: const Color(0xFFFDE68A),
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        '⚠️ Transaction details unavailable. Please contact support with your payment reference.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF92400E),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 20),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: ElevatedButton(
+                                      onPressed: () => context.go('/cart'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFF7B61FF,
+                                        ),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Return to Cart',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: OutlinedButton(
+                                      onPressed: () => context.go('/'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(
+                                          0xFF5B3FFF,
+                                        ),
+                                        side: const BorderSide(
+                                          color: Color(0xFFD1D5DB),
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Go to Home',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (!isPending) ...[
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      child: Divider(height: 1),
+                                    ),
+                                    const Text(
+                                      'Need assistance with your payment?',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: _launchSupport,
+                                      child: const Text(
+                                        'Contact Support →',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SiteFooter(),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
