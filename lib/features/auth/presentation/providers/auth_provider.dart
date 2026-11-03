@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -149,6 +151,59 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
     await _persistUser(user);
     state = user;
     _syncSuperCoinBalanceOnAuth(user.clientId, user.mobile);
+    _requestFirstLoginSuperCoinReward(user);
+  }
+
+  void _requestFirstLoginSuperCoinReward(AuthUser user) {
+    final dio = _brandsDio;
+    if (dio == null) return;
+    unawaited(
+      Future<void>(() async {
+        try {
+          final deviceId = await _getOrCreateDeviceId();
+          final result = await SuperCoinApi(
+            dio,
+          ).awardFirstLoginReward(deviceId);
+          if (result['credited'] == true) {
+            _syncSuperCoinBalanceOnAuth(user.clientId, user.mobile);
+          }
+        } on DioException catch (error) {
+          debugPrint(
+            '[SuperCoin] First-login reward request failed'
+            '${error.response?.statusCode == null ? '' : ' (HTTP ${error.response!.statusCode})'}.',
+          );
+        } catch (error) {
+          debugPrint(
+            '[SuperCoin] First-login reward request failed (${error.runtimeType}).',
+          );
+        }
+      }),
+    );
+  }
+
+  Future<String> _getOrCreateDeviceId() async {
+    const key = 'gift360_device_id';
+    final existing = await _secureStorage.read(key: key);
+    if (existing != null && _isUuid(existing)) return existing;
+    final deviceId = _generateDeviceId();
+    await _secureStorage.write(key: key, value: deviceId);
+    return deviceId;
+  }
+
+  bool _isUuid(String value) => RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value);
+
+  String _generateDeviceId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
   Future<SendOtpResponse> registerSendOtp({
@@ -180,17 +235,7 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
             extractClientIdFromToken(response.token!) ??
             response.userInfo!.clientId.trim(),
       );
-      // Show the SuperCoin intro modal on Home after registration too
-      // (mirrors React Register.tsx) — same ordering as loginWithOtp: the
-      // flag must be persisted before setUser triggers any navigation.
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('showSuperCoinIntro', true);
-      // Persist the session FIRST so the balance-sync request's auth
-      // interceptor reads the fresh token, then notify listeners.
-      await _persistUser(user);
-      state = user;
-      // Persist the SuperCoin balance snapshot to client_profile right away.
-      _syncSuperCoinBalanceOnAuth(user.clientId, user.mobile);
+      await _establishSession(user);
     }
     return response;
   }

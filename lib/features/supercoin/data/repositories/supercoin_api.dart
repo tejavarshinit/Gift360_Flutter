@@ -54,6 +54,9 @@ class SuperCoinApi {
   Future<Map<String, dynamic>> searchUser(SuperCoinIdentity identity) =>
       _post('/v1/supercoin/searchUser', {'identity': identity.toJson()});
 
+  Future<Map<String, dynamic>> awardFirstLoginReward(String deviceId) =>
+      _post('/v1/supercoin/first-login-reward', {'deviceId': deviceId});
+
   Future<Map<String, dynamic>> enrolUser(SuperCoinIdentity identity) =>
       _post('/v1/supercoin/enrolUser', {'identity': identity.toJson()});
 
@@ -78,15 +81,17 @@ class SuperCoinApi {
   Future<Map<String, dynamic>> refund(Map<String, dynamic> payload) =>
       _post('/v1/supercoin/refund', payload);
 
-  Future<Map<String, dynamic>> fetchTransactions(Map<String, dynamic> payload) =>
-      _post('/v1/supercoin/transactions', payload);
+  Future<Map<String, dynamic>> fetchTransactions(
+    Map<String, dynamic> payload,
+  ) => _post('/v1/supercoin/transactions', payload);
 
   Future<Map<String, dynamic>> fetchExpiring(Map<String, dynamic> payload) =>
       _post('/v1/supercoin/expiring', payload);
 
   Future<Map<String, dynamic>> fetchTransactionStatus(
-          String transactionId, Map<String, dynamic> payload) =>
-      _post('/v1/supercoin/transaction/$transactionId/status', payload);
+    String transactionId,
+    Map<String, dynamic> payload,
+  ) => _post('/v1/supercoin/transaction/$transactionId/status', payload);
 
   Future<Map<String, dynamic>> burnAndOrder(Map<String, dynamic> payload) =>
       _post('/v1/supercoin/burn-and-order', payload);
@@ -95,9 +100,13 @@ class SuperCoinApi {
   /// optional -- the backend falls back to its configured default and echoes
   /// the resolved value back in `sku`.
   Future<Map<String, dynamic>> fetchConfig({String? sku}) async {
-    final response = await _dio.post('/v1/supercoin/config', data: {
-      if (sku != null && sku.trim().isNotEmpty) 'sku': sku.trim().toUpperCase(),
-    });
+    final response = await _dio.post(
+      '/v1/supercoin/config',
+      data: {
+        if (sku != null && sku.trim().isNotEmpty)
+          'sku': sku.trim().toUpperCase(),
+      },
+    );
     return response.data as Map<String, dynamic>;
   }
 
@@ -107,10 +116,10 @@ class SuperCoinApi {
   /// storeSuperCoinBalance). Fire-and-forget friendly: errors are swallowed.
   Future<void> syncBalance(String clientId, Object balance) async {
     try {
-      await _dio.post('/v1/clients/supercoin-balance', data: {
-        'clientId': clientId,
-        'balance': balance,
-      });
+      await _dio.post(
+        '/v1/clients/supercoin-balance',
+        data: {'clientId': clientId, 'balance': balance},
+      );
     } catch (_) {}
   }
 
@@ -121,10 +130,10 @@ class SuperCoinApi {
     List<Map<String, dynamic>> items,
     double cashPayable,
   ) async {
-    final response = await _dio.post('/v1/supercoin/earn-estimate', data: {
-      'items': items,
-      'cashPayable': cashPayable,
-    });
+    final response = await _dio.post(
+      '/v1/supercoin/earn-estimate',
+      data: {'items': items, 'cashPayable': cashPayable},
+    );
     return response.data as Map<String, dynamic>;
   }
 
@@ -159,7 +168,10 @@ class SuperCoinApi {
     return const [];
   }
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> _post(
+    String path,
+    Map<String, dynamic> data,
+  ) async {
     final response = await _dio.post(path, data: data);
     return response.data as Map<String, dynamic>;
   }
