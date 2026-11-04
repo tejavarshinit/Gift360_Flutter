@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/navigation/app_router.dart';
 import 'core/navigation/app_navigator.dart';
@@ -19,9 +20,11 @@ import 'core/widgets/session_expired_dialog.dart';
 import 'config/app_config.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/auth/data/models/auth_user.dart';
-import 'features/notifications/data/repositories/device_token_api.dart';
 import 'features/notifications/presentation/services/push_notification_service.dart';
 import 'features/supercoin/presentation/providers/supercoin_provider.dart';
+import 'features/rewards/data/app_install_reward_service.dart';
+import 'features/rewards/presentation/providers/rewards_provider.dart';
+import 'features/rewards/presentation/widgets/app_install_reward_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,17 +32,9 @@ void main() async {
 
   var firebaseAvailable = false;
   try {
-    if (kIsWeb) {
-      final options = AppConfig.firebaseWebOptions;
-      if (options == null) {
-        throw StateError(
-          'Web Firebase options are missing from the app environment.',
-        );
-      }
-      await Firebase.initializeApp(options: options);
-    } else {
-      await Firebase.initializeApp();
-    }
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     firebaseAvailable = true;
   } catch (error, stackTrace) {
@@ -65,7 +60,6 @@ void main() async {
 
   final pushNotificationService = PushNotificationService(
     firebaseAvailable: firebaseAvailable,
-    deviceTokenApi: DeviceTokenApi(baseUrl: AppConfig.notificationApiBaseUrl),
   );
 
   runApp(
@@ -97,6 +91,7 @@ class Gift360App extends ConsumerStatefulWidget {
 class _Gift360AppState extends ConsumerState<Gift360App>
     with WidgetsBindingObserver {
   late final PushNotificationService _pushNotificationService;
+  late final AppInstallRewardService _installRewardService;
   ProviderSubscription<AuthUser?>? _authSubscription;
 
   @override
@@ -108,10 +103,20 @@ class _Gift360AppState extends ConsumerState<Gift360App>
       (destination) => ref.read(goRouterProvider).go(destination),
     );
     _pushNotificationService.updateAuthenticatedUser(ref.read(authProvider));
-    _authSubscription = ref.listenManual<AuthUser?>(
-      authProvider,
-      (_, user) => _pushNotificationService.updateAuthenticatedUser(user),
+    _installRewardService = AppInstallRewardService(
+      ref.read(rewardsApiProvider),
     );
+    _authSubscription = ref.listenManual<AuthUser?>(authProvider, (
+      previous,
+      user,
+    ) {
+      _pushNotificationService.updateAuthenticatedUser(user);
+      if (user != null && previous?.clientId != user.clientId) {
+        unawaited(_claimInstallReward(user));
+      }
+    });
+    final startupUser = ref.read(authProvider);
+    if (startupUser != null) unawaited(_claimInstallReward(startupUser));
     unawaited(_pushNotificationService.initialize());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pushNotificationService.setNavigationReady(true);
@@ -137,8 +142,6 @@ class _Gift360AppState extends ConsumerState<Gift360App>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       _releaseActiveSuperCoinHolds();
-    } else if (state == AppLifecycleState.resumed) {
-      unawaited(_pushNotificationService.retryRegistration());
     }
   }
 
@@ -162,6 +165,38 @@ class _Gift360AppState extends ConsumerState<Gift360App>
       }
     } catch (_) {
       // Best effort — don't crash on background release
+    }
+  }
+
+  Future<void> _claimInstallReward(AuthUser user) async {
+    if (kIsWeb) return;
+    final coins = await _installRewardService.claimIfEligible(user.clientId);
+    if (coins <= 0) return;
+
+    ref.read(authProvider.notifier).refreshSuperCoinBalance();
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (!mounted) return;
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        final path = ref
+            .read(goRouterProvider)
+            .routerDelegate
+            .currentConfiguration
+            .uri
+            .path;
+        const authPaths = {
+          '/login',
+          '/register',
+          '/onboarding',
+          '/forgot-password',
+          '/reset-password',
+        };
+        if (path.isNotEmpty && !authPaths.contains(path)) {
+          await AppInstallRewardDialog.show(context, coins);
+          return;
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
     }
   }
 

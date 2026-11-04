@@ -1,12 +1,8 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:gift360/core/network/dio_client.dart';
 import 'package:gift360/features/auth/data/models/biometric_models.dart';
 import 'package:gift360/features/auth/data/repositories/auth_api.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
@@ -137,76 +133,4 @@ void main() {
       notifier.dispose();
     },
   );
-
-  test(
-    'successful login requests the one-time reward with stable device ID',
-    () async {
-      final rewardRequest = Completer<RequestOptions>();
-      final dioClient = DioClient(
-        baseUrl: 'https://gateway.example/api',
-        secureStorage: const FlutterSecureStorage(),
-      );
-      dioClient.dio.httpClientAdapter = _RewardAdapter((request) {
-        if (request.path.endsWith('/first-login-reward')) {
-          rewardRequest.complete(request);
-          return {'success': true, 'credited': true, 'status': 'credited'};
-        }
-        if (request.path.endsWith('/balance')) return {'balance': 5};
-        return {'saved': true};
-      });
-      final notifier = AuthNotifier(
-        const FlutterSecureStorage(),
-        AuthApi(Dio()),
-        dioClient.dio,
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      await notifier.loginWithBiometrics(
-        const BiometricLoginResult(
-          token: 'new-auth-token',
-          clientId: 'client-1',
-          name: 'User',
-          email: 'user@example.test',
-          mobile: '1234567890',
-        ),
-      );
-
-      final request = await rewardRequest.future.timeout(
-        const Duration(seconds: 2),
-      );
-      final deviceId = values['gift360_device_id'];
-      expect(
-        deviceId,
-        matches(RegExp(r'^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')),
-      );
-      expect(request.data, {'deviceId': deviceId});
-      expect(request.headers['Authorization'], 'Bearer new-auth-token');
-      notifier.dispose();
-    },
-  );
-}
-
-class _RewardAdapter implements HttpClientAdapter {
-  final Map<String, Object?> Function(RequestOptions) _respond;
-
-  _RewardAdapter(this._respond);
-
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
-    final data = _respond(options);
-    return ResponseBody.fromString(
-      jsonEncode(data),
-      200,
-      headers: {
-        Headers.contentTypeHeader: [Headers.jsonContentType],
-      },
-    );
-  }
-
-  @override
-  void close({bool force = false}) {}
 }

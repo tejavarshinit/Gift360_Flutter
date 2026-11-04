@@ -54,9 +54,6 @@ class SuperCoinApi {
   Future<Map<String, dynamic>> searchUser(SuperCoinIdentity identity) =>
       _post('/v1/supercoin/searchUser', {'identity': identity.toJson()});
 
-  Future<Map<String, dynamic>> awardFirstLoginReward(String deviceId) =>
-      _post('/v1/supercoin/first-login-reward', {'deviceId': deviceId});
-
   Future<Map<String, dynamic>> enrolUser(SuperCoinIdentity identity) =>
       _post('/v1/supercoin/enrolUser', {'identity': identity.toJson()});
 

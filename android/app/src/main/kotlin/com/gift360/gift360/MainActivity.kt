@@ -5,7 +5,9 @@ import android.security.keystore.KeyInfo
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import android.os.Build
+import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -36,6 +38,21 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "gift360/device_id"
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "getAndroidId") {
+                result.success(
+                    Settings.Secure.getString(
+                        contentResolver,
+                        Settings.Secure.ANDROID_ID
+                    )
+                )
+            } else {
+                result.notImplemented()
+            }
+        }
     }
 
     private fun availability(): Map<String, Any> {
@@ -73,6 +90,7 @@ class MainActivity : FlutterFragmentActivity() {
                 KeyProperties.PURPOSE_SIGN
             )
                 .setKeySize(2048)
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
                 .setDigests(KeyProperties.DIGEST_SHA256)
                 .setUserAuthenticationRequired(true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -133,6 +151,7 @@ class MainActivity : FlutterFragmentActivity() {
             result.error("invalid_argument", "A biometric challenge is required.", null)
             return
         }
+        var stage = "load Android Keystore"
         try {
             val keyStore = loadKeyStore()
             if (!keyStore.containsAlias(keyAlias)) {
@@ -144,8 +163,10 @@ class MainActivity : FlutterFragmentActivity() {
                     result.error("key_missing", "The protected biometric key is missing.", null)
                     return
                 }
+            stage = "initialize biometric signing key"
             val signature = Signature.getInstance("SHA256withRSA")
             signature.initSign(privateKey)
+            stage = "create biometric prompt"
             val prompt = BiometricPrompt(
                 this,
                 ContextCompat.getMainExecutor(this),
@@ -179,18 +200,27 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }
             )
+            stage = "configure biometric prompt"
             val promptInfo = BiometricPrompt.PromptInfo.Builder()
                 .setTitle("Verify to log in")
                 .setSubtitle("Use your device biometric to sign in securely")
                 .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                 .setNegativeButtonText("Cancel")
                 .build()
+            stage = "start biometric prompt"
             prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(signature))
-        } catch (_: KeyPermanentlyInvalidatedException) {
+        } catch (error: KeyPermanentlyInvalidatedException) {
+            Log.e("Gift360Biometric", "Biometric setup failed at $stage", error)
             result.error("key_invalidated", "The biometric key was invalidated. Sign in with OTP and enroll again.", null)
-        } catch (_: java.security.UnrecoverableKeyException) {
+        } catch (error: java.security.UnrecoverableKeyException) {
+            Log.e("Gift360Biometric", "Biometric setup failed at $stage", error)
             result.error("key_invalidated", "The biometric key was invalidated. Sign in with OTP and enroll again.", null)
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.e(
+                "Gift360Biometric",
+                "Could not start biometric authentication at $stage (${error.javaClass.simpleName})",
+                error
+            )
             result.error("biometric_unavailable", "Could not start biometric authentication. Use OTP login instead.", null)
         }
     }

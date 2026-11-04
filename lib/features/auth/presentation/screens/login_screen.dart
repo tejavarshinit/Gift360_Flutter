@@ -250,294 +250,325 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
             // ── 2. Content ──
             SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  // Logo
-                  Center(
-                    child: Image.asset(
-                      'assets/images/gift360full.png',
-                      width: 140,
-                      fit: BoxFit.contain,
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Heading
-                  Center(
-                    child: Column(
-                      children: [
-                        RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.poppins(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black,
-                              height: 1.3,
-                            ),
-                            children: const [
-                              TextSpan(text: 'India #1 Destination for '),
-                              TextSpan(
-                                text: 'Gifting',
-                                style: TextStyle(color: Color(0xFF7C3AED)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'Access 400+ brands Vouchers. Delivered instantly, and gift feeling',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(
-                              fontSize: 10,
-                              color: const Color(0xFF1E1E1E),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // ── Spacer pushes card to bottom ──
-                  const Spacer(),
-
-                  // ── White card ──
-                  Center(
-                    child: Container(
-                      width: 342,
-                      margin: const EdgeInsets.symmetric(horizontal: 20),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFC9C9C9)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x40000000),
-                            blurRadius: 4,
-                            offset: Offset(4, 4),
-                          ),
-                        ],
-                      ),
+                    child: IntrinsicHeight(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            'Get Started',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Enter your mobile number to continue',
-                            style: GoogleFonts.poppins(
-                              fontSize: 9,
-                              color: const Color(0xFF4E4E4E),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Session expired alert
-                          if (widget.isSessionExpired && _error.isNotEmpty)
-                            _buildAlert(_error, isAmber: true),
-
-                          // Error alert
-                          if (_error.isNotEmpty && !widget.isSessionExpired)
-                            _buildAlert(_error),
-
-                          if (AppConfig.biometricLoginEnabled &&
-                              _biometricIssue != null)
-                            _buildAlert(
-                              '$_biometricIssue Use OTP login instead.',
-                            ),
-                          if (AppConfig.biometricLoginEnabled &&
-                              _biometricEnrolled) ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _isLoading
-                                    ? null
-                                    : _handleBiometricLogin,
-                                icon: const Icon(Icons.fingerprint),
-                                label: const Text('Log in with biometrics'),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-
-                          // ── Mobile input ──
-                          _buildMobileInput(),
-                          if (_mobileError.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                _mobileError,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 9,
-                                  color: Colors.red[500],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-
-                          const SizedBox(height: 12),
-
-                          // ── Send OTP / OTP section ──
-                          if (!_otpSent)
-                            _buildSendOtpButton()
-                          else
-                            _buildOtpSection(),
-
-                          // OTP success message
-                          if (_otpMessage.isNotEmpty && _otpSent)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                '✓ $_otpMessage',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 9,
-                                  color: const Color(0xFF16a34a),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-
-                          const SizedBox(height: 10),
-                          // Secure note
+                          const SizedBox(height: 24),
+                          // Logo
                           Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                            child: Image.asset(
+                              'assets/images/gift360full.png',
+                              width: 140,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Heading
+                          Center(
+                            child: Column(
                               children: [
-                                const Icon(
-                                  Icons.verified_user_outlined,
-                                  size: 12,
-                                  color: Color(0xFF7C3AED),
+                                RichText(
+                                  text: TextSpan(
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                      height: 1.3,
+                                    ),
+                                    children: const [
+                                      TextSpan(
+                                        text: 'India #1 Destination for ',
+                                      ),
+                                      TextSpan(
+                                        text: 'Gifting',
+                                        style: TextStyle(
+                                          color: Color(0xFF7C3AED),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  "we'll send a secure OTP to verify your number",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFF4E4E4E),
+                                const SizedBox(height: 4),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: Text(
+                                    'Access 400+ brands Vouchers. Delivered instantly, and gift feeling',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: const Color(0xFF1E1E1E),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
+
+                          const SizedBox(height: 72),
+
+                          // ── White card ──
+                          Center(
+                            child: Container(
+                              width: 342,
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFFC9C9C9),
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x40000000),
+                                    blurRadius: 4,
+                                    offset: Offset(4, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Get Started',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Enter your mobile number to continue',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 9,
+                                      color: const Color(0xFF4E4E4E),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  // Session expired alert
+                                  if (widget.isSessionExpired &&
+                                      _error.isNotEmpty)
+                                    _buildAlert(_error, isAmber: true),
+
+                                  // Error alert
+                                  if (_error.isNotEmpty &&
+                                      !widget.isSessionExpired)
+                                    _buildAlert(_error),
+
+                                  if (AppConfig.biometricLoginEnabled &&
+                                      _biometricIssue != null)
+                                    _buildAlert(
+                                      '$_biometricIssue Use OTP login instead.',
+                                    ),
+                                  if (AppConfig.biometricLoginEnabled &&
+                                      _biometricEnrolled) ...[
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _isLoading
+                                            ? null
+                                            : _handleBiometricLogin,
+                                        icon: const Icon(Icons.fingerprint),
+                                        label: const Text(
+                                          'Log in with biometrics',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                  ],
+
+                                  // ── Mobile input ──
+                                  _buildMobileInput(),
+                                  if (_mobileError.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        _mobileError,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 9,
+                                          color: Colors.red[500],
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 12),
+
+                                  // ── Send OTP / OTP section ──
+                                  if (!_otpSent)
+                                    _buildSendOtpButton()
+                                  else
+                                    _buildOtpSection(),
+
+                                  // OTP success message
+                                  if (_otpMessage.isNotEmpty && _otpSent)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '✓ $_otpMessage',
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 9,
+                                          color: const Color(0xFF16a34a),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 10),
+                                  // Secure note
+                                  Center(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.verified_user_outlined,
+                                          size: 12,
+                                          color: Color(0xFF7C3AED),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          "we'll send a secure OTP to verify your number",
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w500,
+                                            color: const Color(0xFF4E4E4E),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          // ── Sign up link ──
+                          GestureDetector(
+                            onTap: () => context.push('/register'),
+                            child: Center(
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF1E1E1E),
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                      text: "Don't have an account? ",
+                                    ),
+                                    TextSpan(
+                                      text: 'Sign up',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF7C3AED),
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // ── TRUSTED BY 400+ BRANDS ──
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    color: const Color(0xFFC9C9C9),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'TRUSTED BY 400+ BRANDS',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF35009A),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    color: const Color(0xFFC9C9C9),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // ── Brand logos marquee ──
+                          SizedBox(height: 28, child: _buildBrandMarquee()),
+                          const SizedBox(height: 8),
+
+                          // ── Terms ──
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: Text.rich(
+                                TextSpan(
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 7,
+                                    color: const Color(0xFF4E4E4E),
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                      text: 'By continuing, you agree to our ',
+                                    ),
+                                    TextSpan(
+                                      text: 'Terms & Conditions',
+                                      style: GoogleFonts.poppins(
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                    const TextSpan(text: ' and '),
+                                    TextSpan(
+                                      text: 'Privacy Policy',
+                                      style: GoogleFonts.poppins(
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Spacer(),
                         ],
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 8),
-
-                  // ── Sign up link ──
-                  GestureDetector(
-                    onTap: () => context.push('/register'),
-                    child: Center(
-                      child: RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF1E1E1E),
-                          ),
-                          children: [
-                            const TextSpan(text: "Don't have an account? "),
-                            TextSpan(
-                              text: 'Sign up',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF7C3AED),
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // ── TRUSTED BY 400+ BRANDS ──
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            height: 1,
-                            color: const Color(0xFFC9C9C9),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'TRUSTED BY 400+ BRANDS',
-                          style: GoogleFonts.poppins(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF35009A),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Container(
-                            height: 1,
-                            color: const Color(0xFFC9C9C9),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // ── Brand logos marquee ──
-                  SizedBox(height: 28, child: _buildBrandMarquee()),
-                  const SizedBox(height: 8),
-
-                  // ── Terms ──
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text.rich(
-                        TextSpan(
-                          style: GoogleFonts.poppins(
-                            fontSize: 7,
-                            color: const Color(0xFF4E4E4E),
-                          ),
-                          children: [
-                            const TextSpan(
-                              text: 'By continuing, you agree to our ',
-                            ),
-                            TextSpan(
-                              text: 'Terms & Conditions',
-                              style: GoogleFonts.poppins(
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                            const TextSpan(text: ' and '),
-                            TextSpan(
-                              text: 'Privacy Policy',
-                              style: GoogleFonts.poppins(
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                ),
               ),
             ),
           ],
