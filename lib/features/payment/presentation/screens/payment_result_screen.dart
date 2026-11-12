@@ -12,7 +12,6 @@ import 'package:gift360/features/cart/presentation/providers/cart_provider.dart'
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/core/utils/analytics.dart';
-import 'package:gift360/core/navigation/app_navigator.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
 import 'package:gift360/core/widgets/gift_header.dart';
 import 'package:gift360/core/widgets/site_footer.dart';
@@ -75,7 +74,6 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
   @override
   void initState() {
     super.initState();
-    hideGlobalSupportChat();
     _resumeFuture = _resumeSessionForReturn();
     _processPaymentResult();
 
@@ -92,7 +90,6 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
 
   @override
   void dispose() {
-    showGlobalSupportChat();
     _calloutTimer?.cancel();
     _voucherRedirectTimer?.cancel();
     super.dispose();
@@ -252,6 +249,7 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
         );
       }
 
+      if (!mounted) return;
       setState(() {
         _statusUpdateInProgress = false;
         _statusUpdated = true;
@@ -261,6 +259,7 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
         // Confirm coupon reservation
         setState(() => _couponConfirmInProgress = true);
         await paymentNotifier.confirmCoupon(orderNumber);
+        if (!mounted) return;
         setState(() {
           _couponConfirmInProgress = false;
         });
@@ -274,6 +273,7 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
             orderNumber: orderNumber,
           );
         }
+        if (!mounted) return;
         setState(() {
           _fetchCouponsInProgress = false;
           _fetchCouponsDone = true;

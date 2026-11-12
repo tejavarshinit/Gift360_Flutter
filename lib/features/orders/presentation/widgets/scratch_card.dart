@@ -365,7 +365,7 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
   Widget _buildScratchedCompact(String displayName) {
     return Container(
       width: double.infinity,
-      height: 236,
+      height: 200,
       decoration: BoxDecoration(
         color: const Color(0xFFF8F5F4),
         borderRadius: BorderRadius.circular(12),
@@ -447,11 +447,11 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
               fieldKey: 'pin',
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
             // ── Email this voucher (React "Share revealed voucher via email") ──
             SizedBox(
-              height: 28,
+              height: 24,
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
@@ -460,8 +460,9 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
                   child: Container(
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: _emailSent ? const Color(0xFF065F46) : const Color(0xFF1A3052),
+                      color: Colors.white.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0x66E4B76C)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -476,7 +477,7 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
                           Icon(
                             _emailSent ? Icons.check : Icons.mail_outline,
                             size: 12,
-                            color: _emailSent ? const Color(0xFF34D399) : const Color(0xFFFCD34D),
+                            color: _emailSent ? const Color(0xFF059669) : const Color(0xFF1A3052),
                           ),
                         const SizedBox(width: 6),
                         Text(
@@ -484,11 +485,11 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
                               ? 'Sending\u2026'
                               : _emailSent
                                   ? 'Sent to your email'
-                                  : 'Email this voucher',
+                                  : 'Email',
                           style: GoogleFonts.poppins(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: const Color(0xFF1A3052),
                           ),
                         ),
                       ],
@@ -543,7 +544,7 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
   }) {
     final isCopied = _copiedField == fieldKey;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFF1A3052),
         borderRadius: BorderRadius.circular(8),

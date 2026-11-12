@@ -87,7 +87,7 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
       builder: (context, hideCount, _) {
         if (hideCount > 0) return const SizedBox.shrink();
         final screen = MediaQuery.sizeOf(context);
-        final widgetWidth = math.max(0.0, math.min(320.0, screen.width - 32));
+        final widgetWidth = math.max(0.0, math.min(300.0, screen.width - 32));
         final panelMaxHeight = screen.height * 0.65;
 
         // The Stack must occupy the whole panel/FAB area. Previously it sized
@@ -125,12 +125,12 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
-        height: 48,
+        height: 44,
         // Keep both endpoints finite. Animating AnimatedContainer from a
         // null width (unbounded constraints) to 48px causes BoxConstraints
         // interpolation assertions in Flutter Web.
-        width: isPill ? 112 : 48,
-        padding: isPill ? const EdgeInsets.only(left: 14, right: 16) : null,
+        width: isPill ? 96 : 44,
+        padding: isPill ? const EdgeInsets.only(left: 12, right: 14) : null,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
@@ -150,11 +150,11 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _open
-                ? const Icon(Icons.close, color: Colors.white, size: 20)
+                ? const Icon(Icons.close, color: Colors.white, size: 18)
                 : const Icon(
                     Icons.chat_bubble_outline,
                     color: Colors.white,
-                    size: 20,
+                    size: 18,
                   ),
             if (isPill) ...[
               const SizedBox(width: 8),
@@ -164,7 +164,7 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
                 child: Text(
                   'Ask Us',
                   style: GoogleFonts.poppins(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),

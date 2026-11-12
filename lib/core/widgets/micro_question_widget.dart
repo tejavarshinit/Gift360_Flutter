@@ -96,6 +96,7 @@ class _MicroQuestionWidgetState extends ConsumerState<MicroQuestionWidget> {
   List<_MicroQuestion> _source = _fallbackQuestions;
   final Set<String> _answered = {};
   String? _answeredFor;
+  String? _answeredLoadScheduledFor;
   String _location = appLocation.value;
 
   _MicroQuestion? _question;
@@ -188,8 +189,15 @@ class _MicroQuestionWidgetState extends ConsumerState<MicroQuestionWidget> {
     final page = _pageForPath(_location);
     final blocked = _isBlocked(_location);
 
-    if (clientId.isNotEmpty) {
-      _loadAnswered(clientId);
+    if (clientId.isNotEmpty &&
+        _answeredFor != clientId &&
+        _answeredLoadScheduledFor != clientId) {
+      _answeredLoadScheduledFor = clientId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _answeredLoadScheduledFor = null;
+        unawaited(_loadAnswered(clientId));
+      });
     }
 
     final pool = <_MicroQuestion>[];

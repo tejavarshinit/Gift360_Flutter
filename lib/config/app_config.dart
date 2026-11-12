@@ -22,7 +22,7 @@ class AppConfig {
     final url = configuredUrl.trim().isNotEmpty
         ? configuredUrl
         : dotenv.env['NOTIFICATION_API_URL'] ?? '';
-    return url.trim().isEmpty ? 'http://localhost:8081' : url.trim();
+    return url.trim().isEmpty ? brandApiUrl.trim() : url.trim();
   }
 
   static String get firebaseWebVapidKey =>

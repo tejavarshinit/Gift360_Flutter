@@ -255,6 +255,7 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
     state = state.copyWith(isSearching: true, clearError: true);
     try {
       final searchResult = await _api.searchUser(id);
+      if (!mounted) return;
       final exists =
           searchResult['userExists'] == true ||
           (searchResult['state']?.toString().toUpperCase() == 'ACTIVATED');
@@ -269,6 +270,7 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
         await fetchBalance();
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isSearching: false, error: e.toString());
     }
   }
@@ -280,6 +282,7 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
     state = state.copyWith(isBalanceLoading: true, clearError: true);
     try {
       final result = await _api.fetchBalance(id);
+      if (!mounted) return;
       final bal = extractSuperCoinBalance(result);
       state = state.copyWith(balance: bal, isBalanceLoading: false);
       final clientId = _clientId;
@@ -287,6 +290,7 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
         _api.syncBalance(clientId, bal);
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isBalanceLoading: false, error: e.toString());
     }
   }
@@ -299,6 +303,7 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
   }
 
   void reset() {
+    if (!mounted) return;
     state = const SuperCoinState();
   }
 }
@@ -424,12 +429,14 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
 
   Future<void> _loadBalance() async {
     if (_identity == null) {
+      if (!mounted) return;
       state = state.copyWith(step: SuperCoinOtpStep.ready, clearError: true);
       return;
     }
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final result = await _api.fetchBalance(_identity!);
+      if (!mounted) return;
       double bal = 0;
       for (final key in [
         'balance',
@@ -451,6 +458,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
         isLoading: false,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: 'Unable to load your SuperCoin balance. Please try again.',
@@ -500,6 +508,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       if (response['stampExpiry'] is num) {
         holdExpiry = (response['stampExpiry'] as num).toInt();
       }
+      if (!mounted) return;
 
       state = state.copyWith(
         step: SuperCoinOtpStep.otpSent,
@@ -512,6 +521,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
 
       _startCountdown(txTime, holdExpiry);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: e.toString().contains('Exception')
@@ -548,6 +558,10 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
     if (remaining <= 0) return;
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       final next = state.countdownSeconds - 1;
       if (next <= 0) {
         timer.cancel();
@@ -585,6 +599,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       });
 
       final txnState = response['transactionState']?.toString().toUpperCase();
+      if (!mounted) return null;
       if (txnState == 'SUCCESSFUL' || txnState == 'SUCCESS') {
         _countdownTimer?.cancel();
         state = state.copyWith(
@@ -611,6 +626,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
         return null;
       }
     } catch (e) {
+      if (!mounted) return null;
       state = state.copyWith(
         isLoading: false,
         error: e.toString().contains('Exception')

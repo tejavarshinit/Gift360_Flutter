@@ -62,8 +62,8 @@ void main() {
         secureStorage: const FlutterSecureStorage(),
       );
 
-      expect(await service.claimIfEligible('client-1'), 5);
-      expect(await service.claimIfEligible('client-1'), 0);
+      expect((await service.claimIfEligible('client-1')).coins, 5);
+      expect((await service.claimIfEligible('client-1')).status, 'skipped');
 
       expect(requests, hasLength(1));
       expect(requests.single.path, '/v1/supercoin/first-login-reward');
@@ -90,8 +90,8 @@ void main() {
       secureStorage: const FlutterSecureStorage(),
     );
 
-    expect(await service.claimIfEligible('client-2'), 0);
-    expect(await service.claimIfEligible('client-2'), 0);
+    expect((await service.claimIfEligible('client-2')).coins, isNull);
+    expect((await service.claimIfEligible('client-2')).status, 'skipped');
     expect(requestCount, 1);
     dio.close();
   });

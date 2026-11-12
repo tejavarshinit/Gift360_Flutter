@@ -33,12 +33,24 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   bool _showSuperCoinOtp = false;
   bool _showSuperCoinRedeemed = false;
   bool _showPaymentSheet = false;
+  ProviderSubscription<Cart?>? _cartSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchBrandDiscounts();
+    });
+    _cartSubscription = ref.listenManual<Cart?>(cartProvider, (prev, next) {
+      if (next != null && next.items.isNotEmpty) {
+        _fetchBrandDiscounts();
+        // Reset in-memory order when the cart changes so a fresh order is
+        // created on next pay (matches React's cart-signature reset effect).
+        if (prev != null &&
+            _cartSignature(prev.items) != _cartSignature(next.items)) {
+          ref.read(paymentProvider.notifier).resetOrder();
+        }
+      }
     });
   }
 
@@ -53,22 +65,16 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   }
 
   @override
+  void dispose() {
+    _cartSubscription?.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     final cart = ref.watch(cartProvider);
     final checkout = ref.watch(cartCheckoutProvider);
-
-    ref.listen(cartProvider, (prev, next) {
-      if (next != null && next.items.isNotEmpty) {
-        _fetchBrandDiscounts();
-        // Reset in-memory order when the cart changes so a fresh order is
-        // created on next pay (matches React's cart-signature reset effect).
-        if (prev != null &&
-            _cartSignature(prev.items) != _cartSignature(next.items)) {
-          ref.read(paymentProvider.notifier).resetOrder();
-        }
-      }
-    });
 
     final hasPopulatedCart =
         user != null && cart != null && cart.items.isNotEmpty;
@@ -108,6 +114,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   open: _showSuperCoinRedeemed,
                   onContinue: () =>
                       setState(() => _showSuperCoinRedeemed = false),
+                ),
+              ),
+            if (_showPaymentSheet)
+              Positioned.fill(
+                child: PaymentFlowSheet(
+                  isOpen: true,
+                  state: 'loading',
                 ),
               ),
           ],
@@ -456,7 +469,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               });
             },
           ),
-        PaymentFlowSheet(isOpen: _showPaymentSheet, state: 'loading'),
       ],
     );
   }

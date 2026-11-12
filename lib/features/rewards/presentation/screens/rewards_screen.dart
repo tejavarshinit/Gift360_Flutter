@@ -109,14 +109,6 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
           ),
         );
         if (!mounted) return;
-        final refreshed = await ref
-            .read(rewardsApiProvider)
-            .getStatus(user.clientId, publicId: publicId);
-        ref.invalidate(rewardStatusProvider);
-        if (!mounted) return;
-        if (_string(refreshed, 'status').toUpperCase() == 'PENDING') {
-          context.push('/supercoin-voucher');
-        }
       } else if (status == 'PENDING') {
         context.push('/supercoin-voucher');
       } else {

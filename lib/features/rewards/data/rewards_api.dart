@@ -7,20 +7,6 @@ class RewardsApi {
 
   RewardsApi(this._dio);
 
-  Future<Map<String, dynamic>> getStatus(
-    String clientId, {
-    String? publicId,
-  }) async {
-    final response = await _dio.get(
-      '/v1/rewards/status',
-      queryParameters: {
-        'clientId': clientId,
-        if (publicId != null && publicId.isNotEmpty) 'publicId': publicId,
-      },
-    );
-    return (response.data as Map).cast<String, dynamic>();
-  }
-
   /// Opens the payment-cancelled quiz offer (backend verifies the order is
   /// still PENDING and belongs to the client). Mirrors React
   /// `registerPaymentCancellation`.

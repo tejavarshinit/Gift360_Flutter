@@ -8,20 +8,18 @@ final rewardsApiProvider = Provider<RewardsApi>((ref) {
   return RewardsApi(ref.watch(brandsDioProvider));
 });
 
-/// Latest quiz/reward status for the signed-in customer (null when logged out
-/// or unavailable). Mirrors React `getRewardStatus`.
-final rewardStatusProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
-  final user = ref.watch(authProvider);
-  if (user == null || user.clientId.isEmpty) return null;
-  try {
-    return await ref.watch(rewardsApiProvider).getStatus(user.clientId);
-  } catch (_) {
-    return null;
-  }
+/// Retained for the existing quiz UI, but status is now kept local because the
+/// backend does not expose a rewards/status endpoint.
+final rewardStatusProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((
+  ref,
+) async {
+  return null;
 });
 
 /// Live SuperCoin rules used to fill FAQ answers (null when unavailable).
-final scFactsProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
+final scFactsProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((
+  ref,
+) async {
   return ref.watch(rewardsApiProvider).scFacts();
 });
 
@@ -40,7 +38,9 @@ class QuizQuestion {
     return QuizQuestion(
       id: (json['id'] as num?)?.toInt() ?? 0,
       question: (json['question'] ?? '').toString(),
-      options: (json['options'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      options:
+          (json['options'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
     );
   }
 }

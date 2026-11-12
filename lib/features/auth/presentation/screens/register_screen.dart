@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_constants.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
-import 'package:gift360/features/auth/data/models/auth_user.dart';
+import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
+import 'package:flutter/gestures.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -28,20 +29,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String _nameError = '';
   String _emailError = '';
   String _mobileError = '';
-
-  // Brand logos for marquee (matching React)
-  static const _brandLogos = [
-    'assets/images/amazon.png',
-    'assets/images/flipkart.png',
-    'assets/images/myntra.png',
-    'assets/images/nike.png',
-    'assets/images/puma.png',
-    'assets/images/bata.png',
-    'assets/images/levis.png',
-    'assets/images/tatacliq.png',
-    'assets/images/ajio.png',
-    'assets/images/zomato.png',
-  ];
 
   @override
   void dispose() {
@@ -207,6 +194,60 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return DiwaliAuthShell(
+      switchPrompt: RichText(
+        text: TextSpan(
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF3F1A55),
+          ),
+          children: [
+            const TextSpan(text: 'Already have an account? '),
+            TextSpan(
+              text: 'Sign in',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFD4650F),
+                decoration: TextDecoration.underline,
+              ),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => context.go('/login'),
+            ),
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error.isNotEmpty) _buildAlert(_error),
+          _buildTextField(
+            controller: _fullNameController,
+            hint: 'Enter your full name',
+            keyboardType: TextInputType.name,
+            enabled: !_otpSent,
+          ),
+          if (_nameError.isNotEmpty) _buildErrorText(_nameError),
+          const SizedBox(height: 8),
+          _buildTextField(
+            controller: _emailController,
+            hint: 'Enter your email ID',
+            keyboardType: TextInputType.emailAddress,
+            enabled: !_otpSent,
+          ),
+          if (_emailError.isNotEmpty) _buildErrorText(_emailError),
+          const SizedBox(height: 8),
+          _buildMobileInput(),
+          if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
+          const SizedBox(height: 8),
+          if (!_otpSent) _buildSendOtpButton() else _buildOtpSection(),
+          if (_otpMessage.isNotEmpty && _otpSent)
+            _buildSuccessText(_otpMessage),
+        ],
+      ),
+    );
+    /*
     return Scaffold(
       body: SizedBox.expand(
         child: Stack(
@@ -504,7 +545,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ],
         ),
       ),
-    );
+    );*/
   }
 
   // ── Text Field (Full Name, Email) ──
@@ -864,23 +905,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
-  // ── Brand Marquee ──
-  Widget _buildBrandMarquee() {
-    final allLogos = [..._brandLogos, ..._brandLogos];
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      itemCount: allLogos.length,
-      itemBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Image.asset(
-            allLogos[index],
-            height: 22,
-            fit: BoxFit.contain,
-            opacity: const AlwaysStoppedAnimation(0.70),
+  Widget _buildSuccessText(String text) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          '✓ $text',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            fontSize: 9,
+            color: const Color(0xFF16A34A),
+            fontWeight: FontWeight.w500,
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+
 }

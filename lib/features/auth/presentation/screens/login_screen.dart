@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
+import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final bool isSessionExpired;
@@ -31,20 +33,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _mobileError = '';
   bool _biometricEnrolled = false;
   String? _biometricIssue;
-
-  // Brand logos for marquee (matching React)
-  static const _brandLogos = [
-    'assets/images/amazon.png',
-    'assets/images/flipkart.png',
-    'assets/images/myntra.png',
-    'assets/images/nike.png',
-    'assets/images/puma.png',
-    'assets/images/bata.png',
-    'assets/images/levis.png',
-    'assets/images/tatacliq.png',
-    'assets/images/ajio.png',
-    'assets/images/zomato.png',
-  ];
 
   @override
   void initState() {
@@ -235,6 +223,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return DiwaliAuthShell(
+      switchPrompt: RichText(
+        text: TextSpan(
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF3F1A55),
+          ),
+          children: [
+            const TextSpan(text: "Don't have an account? "),
+            TextSpan(
+              text: 'Sign up',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFD4650F),
+                decoration: TextDecoration.underline,
+              ),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => context.go('/register'),
+            ),
+          ],
+        ),
+      ),
+      afterMarquee: AppConfig.biometricLoginEnabled && _biometricEnrolled
+          ? IconButton(
+              onPressed: _isLoading ? null : _handleBiometricLogin,
+              tooltip: 'Log in with biometrics',
+              icon: const Icon(Icons.fingerprint),
+              color: const Color(0xFF3F1A55),
+              iconSize: 28,
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error.isNotEmpty) _buildAlert(_error),
+          if (AppConfig.biometricLoginEnabled && _biometricIssue != null)
+            _buildAlert('$_biometricIssue Use OTP login instead.'),
+          _buildMobileInput(),
+          if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
+          const SizedBox(height: 8),
+          if (!_otpSent) _buildSendOtpButton() else _buildOtpSection(),
+          if (_otpMessage.isNotEmpty && _otpSent)
+            _buildSuccessText(_otpMessage),
+        ],
+      ),
+    );
+    /*
     return Scaffold(
       body: SizedBox.expand(
         child: Stack(
@@ -574,7 +611,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ],
         ),
       ),
-    );
+    );*/
   }
 
   // ── Mobile Input ──
@@ -872,23 +909,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  // ── Brand Marquee ──
-  Widget _buildBrandMarquee() {
-    final allLogos = [..._brandLogos, ..._brandLogos];
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      itemCount: allLogos.length,
-      itemBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Image.asset(
-            allLogos[index],
-            height: 22,
-            fit: BoxFit.contain,
-            opacity: const AlwaysStoppedAnimation(0.70),
-          ),
-        );
-      },
-    );
-  }
+  Widget _buildErrorText(String text) => Padding(
+    padding: const EdgeInsets.only(top: 2),
+    child: Text(
+      text,
+      style: GoogleFonts.poppins(
+        fontSize: 9,
+        color: Colors.red[500],
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  );
+
+  Widget _buildSuccessText(String text) => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: Text(
+      '✓ $text',
+      textAlign: TextAlign.center,
+      style: GoogleFonts.poppins(
+        fontSize: 9,
+        color: const Color(0xFF16A34A),
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  );
 }

@@ -105,7 +105,11 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
           .join('&');
 
       if (mounted) {
-        context.go('/payment-result?$resultQueryString');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            context.go('/payment-result?$resultQueryString');
+          }
+        });
       }
     }
   }
@@ -181,11 +185,16 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              if (widget.orderNumber != null) {
-                context.go('/payment-result?status=usercancelled&orderNumber=${widget.orderNumber}');
-              } else {
-                context.go('/cart');
-              }
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                if (widget.orderNumber != null) {
+                  context.go(
+                    '/payment-result?status=usercancelled&orderNumber=${widget.orderNumber}',
+                  );
+                } else {
+                  context.go('/cart');
+                }
+              });
             },
             child: const Text('Cancel', style: TextStyle(color: Colors.red)),
           ),

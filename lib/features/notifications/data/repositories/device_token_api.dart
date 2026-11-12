@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class DeviceTokenRegistrationException implements Exception {
   final String message;
@@ -13,27 +14,38 @@ class DeviceTokenRegistrationException implements Exception {
 
 class DeviceTokenApi {
   final Dio _dio;
+  final FlutterSecureStorage _secureStorage;
 
-  DeviceTokenApi({required String baseUrl, Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: baseUrl,
-              contentType: Headers.jsonContentType,
-              responseType: ResponseType.plain,
-              headers: const {'Accept': 'application/json'},
-            ),
-          );
+  DeviceTokenApi({
+    required String baseUrl,
+    Dio? dio,
+    FlutterSecureStorage? secureStorage,
+  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage(),
+       _dio =
+           dio ??
+           Dio(
+             BaseOptions(
+               baseUrl: baseUrl,
+               contentType: Headers.jsonContentType,
+               responseType: ResponseType.plain,
+               headers: const {'Accept': 'application/json'},
+             ),
+           );
 
   Future<void> register({
     required String deviceToken,
     required String deviceType,
     required String clientId,
-    required String authToken,
   }) async {
+    final authToken = await _secureStorage.read(key: 'auth_token');
+    if (authToken == null || authToken.trim().isEmpty) {
+      throw const DeviceTokenRegistrationException(
+        'No authenticated session token is available.',
+      );
+    }
+
     final response = await _dio.post<Object?>(
-      '/api/v1/notification/device-token',
+      '/v1/notification/device-token',
       data: {
         'deviceToken': deviceToken,
         'deviceType': deviceType,
@@ -43,7 +55,7 @@ class DeviceTokenApi {
         contentType: Headers.jsonContentType,
         responseType: ResponseType.plain,
         validateStatus: (_) => true,
-        headers: {'Authorization': 'Bearer $authToken'},
+        headers: {'Authorization': 'Bearer ${authToken.trim()}'},
       ),
     );
 

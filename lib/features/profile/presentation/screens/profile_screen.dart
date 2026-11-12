@@ -11,6 +11,10 @@ import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
+import 'package:gift360/features/orders/presentation/providers/orders_provider.dart';
+import 'package:gift360/features/orders/data/models/voucher_view.dart';
+import 'package:gift360/core/widgets/gift_header.dart';
+import 'package:gift360/core/constants/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -166,15 +170,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     if (user == null) {
       return Scaffold(
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () => context.push('/login'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C5CE7),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-            ),
-            child: const Text('Login / Register'),
+        backgroundColor: const Color(0xFFF8F7FF),
+        appBar: const GiftHeader(),
+        body: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final horizontalPadding = constraints.maxWidth >= 600 ? 48.0 : 20.0;
+              return SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  28,
+                  horizontalPadding,
+                  120,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: _buildGuestAccountLanding(context),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       );
@@ -185,184 +202,661 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? user.name.trim().characters.first.toUpperCase()
         : 'U';
 
+    final ordersAsync = ref.watch(ordersProvider);
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 48, 16, 24),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.black),
-                    onPressed: () => context.pop(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                CircleAvatar(
-                  radius: 43,
-                  backgroundColor: const Color(0xFFDF9CA9),
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+      backgroundColor: const Color(0xFFF8F7FB),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildAccountHeader(context),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 620),
+                    child: Column(
+                      children: [
+                        _buildUserSummaryCard(user, initial),
+                        const SizedBox(height: 12),
+                        _buildBalanceCards(balance, supercoinState.balance),
+                        const SizedBox(height: 16),
+                        _buildAccountMenu(context),
+                        if (_selectedTab == 1) ...[
+                          const SizedBox(height: 16),
+                          _buildRewardsPanel(),
+                        ],
+                        const SizedBox(height: 16),
+                        _buildProfileDetailsCard(user),
+                        const SizedBox(height: 16),
+                        _buildPastOrdersCard(context, ordersAsync),
+                        const SizedBox(height: 16),
+                        _buildLogoutCard(context),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 18),
-                Text(
-                  user.name,
-                  style: const TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF454545),
-                  ),
-                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountHeader(BuildContext context) {
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFECE8F4))),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            tooltip: 'Go back',
+            onPressed: () => context.pop(),
+            icon: const Icon(Icons.arrow_back, size: 21),
+          ),
+          Text(
+            'MY ACCOUNT',
+            style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: .5),
+          ),
+          TextButton.icon(
+            onPressed: _showContactDialog,
+            icon: const Icon(Icons.help_outline, size: 17),
+            label: const Text('Help'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primaryPurple,
+              textStyle: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserSummaryCard(dynamic user, String initial) {
+    return _accountCard(
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 31,
+            backgroundColor: AppColors.profileAvatarBg,
+            child: Text(initial, style: GoogleFonts.poppins(fontSize: 25, fontWeight: FontWeight.w700, color: Colors.white)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_isEditingName)
+                  SizedBox(
+                    height: 36,
+                    child: TextField(
+                      controller: _nameController,
+                      autofocus: true,
+                      onSubmitted: (_) => _saveDisplayName(),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+                        suffixIcon: IconButton(
+                          tooltip: 'Save name',
+                          onPressed: _saveDisplayName,
+                          icon: const Icon(Icons.check, size: 18, color: AppColors.primaryPurple),
+                        ),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  )
+                else
+                  Text(user.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(user.email.isEmpty ? 'Email unavailable' : user.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _mutedText()),
+                Text(user.mobile.isEmpty ? 'Phone unavailable' : user.mobile, style: _mutedText()),
               ],
             ),
           ),
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF7357F1),
-                    Color(0xFF5040A0),
-                    Color(0xFF3B327D),
-                  ],
-                ),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(34),
-                  topRight: Radius.circular(34),
+          if (_isEditingName)
+            IconButton(
+              tooltip: 'Cancel',
+              onPressed: () => setState(() {
+                _isEditingName = false;
+                _nameController.text = user.name;
+              }),
+              icon: const Icon(Icons.close, size: 18),
+            )
+          else
+            TextButton(
+              onPressed: () => setState(() {
+                _nameController.text = user.name;
+                _nameController.selection = TextSelection.collapsed(
+                  offset: _nameController.text.length,
+                );
+                _isEditingName = true;
+              }),
+              child: Text(
+                'Edit',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              padding: const EdgeInsets.fromLTRB(20, 32, 20, 18),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBalanceCards(double balance, dynamic superCoins) {
+    return Row(
+      children: [
+        Expanded(child: _accountMetric('Balance', '₹${balance.toStringAsFixed(2)}')),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _accountMetric(
+            'SuperCoins',
+            '${(superCoins as num).toInt()}',
+            accent: true,
+            icon: 'assets/images/SuperCOin-removebg-preview.png',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _accountMetric(
+    String label,
+    String value, {
+    bool accent = false,
+    String? icon,
+  }) {
+    return _accountCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: _mutedText(fontSize: 11)),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              if (icon != null) ...[
+                Image.asset(icon, width: 20, height: 20),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: accent ? AppColors.primaryPurple : const Color(0xFF30284A),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountMenu(BuildContext context) {
+    return _accountCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          _accountMenuRow(Icons.person_outline, 'Profile details', 'Name, email and phone number', () => setState(() => _selectedTab = 0)),
+          _accountMenuRow(
+            Icons.monetization_on_outlined,
+            'Rewards / SuperCoins',
+            'View your rewards balance',
+            () => setState(() => _selectedTab = 1),
+            assetIcon: 'assets/images/SuperCOin-removebg-preview.png',
+          ),
+          _accountMenuRow(Icons.card_giftcard_outlined, 'My Vouchers', 'Open your purchased and redeemed vouchers', () => context.push('/orders')),
+          _accountMenuRow(Icons.storefront_outlined, 'Partner with us', 'Sell gift vouchers at your own margins', () => context.push('/reseller')),
+          _accountMenuRow(Icons.mail_outline, 'Contact Us', 'Get help with vouchers or payments', _showContactDialog),
+        ],
+      ),
+    );
+  }
+
+  Widget _accountMenuRow(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap, {
+    String? assetIcon,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF0ECF8)))),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: AppColors.primaryPurple.withValues(alpha: .1), shape: BoxShape.circle),
+              child: assetIcon == null
+                  ? Icon(icon, size: 20, color: AppColors.primaryPurple)
+                  : Padding(
+                      padding: const EdgeInsets.all(9),
+                      child: Image.asset(assetIcon),
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tab switcher
-                  _buildTabSwitcher(),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: _selectedTab == 0
-                        ? _buildProfileTab(user, balance, supercoinState)
-                        : _buildRewardsTab(),
-                  ),
+                  Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _mutedText(fontSize: 11)),
                 ],
               ),
             ),
-          ),
-        ],
+            const Icon(Icons.chevron_right, size: 20, color: Color(0xFFA59BBE)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTabSwitcher() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
+  Widget _buildRewardsPanel() {
+    return _accountCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedTab = 0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: _selectedTab == 0 ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                  child: Text(
-                    'Profile',
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Image.asset(
+                    'assets/images/SuperCOin-removebg-preview.png',
+                    width: 24,
+                    height: 24,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    'Rewards & SuperCoins',
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: _selectedTab == 0
-                          ? const Color(0xFF523DA9)
-                          : Colors.white70,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
+                ],
               ),
-            ),
+              TextButton(onPressed: () => setState(() => _selectedTab = 0), child: const Text('Back')),
+            ],
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedTab = 1),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: _selectedTab == 1 ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                  child: Text(
-                    'Rewards',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: _selectedTab == 1
-                          ? const Color(0xFF523DA9)
-                          : Colors.white70,
-                    ),
-                  ),
-                ),
-              ),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.primaryPurple,
+              borderRadius: BorderRadius.circular(16),
             ),
+            padding: const EdgeInsets.all(12),
+            child: _buildRewardsTab(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProfileTab(
-    dynamic user,
-    double balance,
-    SuperCoinState supercoinState,
-  ) {
-    return SingleChildScrollView(
+  Widget _buildProfileDetailsCard(dynamic user) {
+    return _accountCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Profile details', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          _buildLightField('Email', user.email),
+          const SizedBox(height: 12),
+          _buildLightField('Phone Number', user.mobile),
+          if (AppConfig.biometricLoginEnabled) ...[
+            const SizedBox(height: 16),
+            _buildBiometricLoginAction(user),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLightField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: _mutedText(fontSize: 11)),
+        const SizedBox(height: 7),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+          decoration: BoxDecoration(color: const Color(0xFFF8F7FB), border: Border.all(color: const Color(0xFFE8E3F2)), borderRadius: BorderRadius.circular(10)),
+          child: Text(value.isEmpty ? 'Unavailable' : value, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPastOrdersCard(BuildContext context, AsyncValue<OrdersData> ordersAsync) {
+    return _accountCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Past Orders', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700)),
+              TextButton(onPressed: () => context.push('/orders'), child: const Text('View all')),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ordersAsync.when(
+            loading: () => Column(children: List.generate(2, (_) => _orderSkeleton())),
+            error: (_, _) => _orderMessage('Unable to load orders right now.', isError: true),
+            data: (data) {
+              final orders = data.allOrders.take(3).toList();
+              if (orders.isEmpty) return _orderMessage('No orders yet.');
+              return Column(children: orders.map((order) => _orderPreview(order)).toList());
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _orderSkeleton() {
+    return Container(
+      height: 82,
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(color: const Color(0xFFF0ECF8), borderRadius: BorderRadius.circular(14)),
+    );
+  }
+
+  Widget _orderMessage(String text, {bool isError = false}) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: isError ? const Color(0xFFFFF1F2) : const Color(0xFFF8F7FB), borderRadius: BorderRadius.circular(12)),
+      child: Text(text, textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 12, color: isError ? Colors.red.shade700 : const Color(0xFF81789A))),
+    );
+  }
+
+  Widget _orderPreview(Map<String, dynamic> order) {
+    final items = order['items'] is List ? List<Map<String, dynamic>>.from((order['items'] as List).whereType<Map>()) : <Map<String, dynamic>>[];
+    final meta = items.isNotEmpty && items.first['meta'] is Map ? Map<String, dynamic>.from(items.first['meta'] as Map) : <String, dynamic>{};
+    final merchant = meta['brand_name']?.toString() ?? meta['brandName']?.toString() ?? 'Gift voucher';
+    final amount = order['pricing'] is Map ? (order['pricing'] as Map)['final_payable'] ?? (order['pricing'] as Map)['subtotal'] : order['total_amount'];
+    final date = orderCreatedAt(order);
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFE8E3F2)), borderRadius: BorderRadius.circular(16)),
       child: Column(
         children: [
-          // Editable username
-          _buildEditableField('Username', user.name, _isEditingName, () {
-            setState(() => _isEditingName = true);
-          }),
-          const SizedBox(height: 20),
-          _buildField('Email', user.email),
-          const SizedBox(height: 20),
-          _buildField('Phone Number', user.mobile),
-          const SizedBox(height: 20),
-          _buildField('Balance', '₹${balance.toStringAsFixed(2)}'),
-          const SizedBox(height: 20),
-          // SuperCoin balance
-          _buildField(
-            'SuperCoins',
-            '${supercoinState.balance.toInt()} coins',
-            icon: Icons.monetization_on,
-            iconColor: Colors.amber,
+          Row(
+            children: [
+              _buildOrderImage(meta),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(merchant, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
+                Text('${items.length} ${items.length == 1 ? 'item' : 'items'} · ${date ?? 'Date unavailable'}', style: _mutedText(fontSize: 11)),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(color: AppColors.primaryPurple.withValues(alpha: .1), borderRadius: BorderRadius.circular(20)),
+                child: Text((order['status'] ?? 'PROCESSING').toString(), style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primaryPurple)),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-          if (AppConfig.biometricLoginEnabled) ...[
-            _buildBiometricLoginAction(user),
-            const SizedBox(height: 30),
-          ],
-          // Contact Us section
-          _buildContactSection(),
-          const SizedBox(height: 20),
-          _buildLogoutButton(context),
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Total bill', style: _mutedText(fontSize: 12)),
+            Text('₹${amount ?? 0}', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700)),
+          ]),
         ],
       ),
     );
+  }
+
+  Widget _buildOrderImage(Map<String, dynamic> meta) {
+    final imageUrl = orderItemImageUrl(meta);
+    return Container(
+      width: 48,
+      height: 48,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.primaryPurple.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: imageUrl == null
+          ? const Icon(Icons.card_giftcard, color: AppColors.primaryPurple)
+          : Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.card_giftcard,
+                color: AppColors.primaryPurple,
+              ),
+            ),
+    );
+  }
+
+  Widget _buildLogoutCard(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        ref.read(authProvider.notifier).logout();
+        if (context.mounted) context.go('/login');
+      },
+      icon: const Icon(Icons.logout, size: 17),
+      label: const Text('Log out'),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        foregroundColor: Colors.red.shade600,
+        side: BorderSide(color: Colors.red.shade200),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _accountCard({required Widget child, EdgeInsets padding = const EdgeInsets.all(16), Key? key}) {
+    return Container(
+      key: key,
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE8E3F2)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: child,
+    );
+  }
+
+  TextStyle _mutedText({double fontSize = 12}) => GoogleFonts.poppins(fontSize: fontSize, color: const Color(0xFF81789A));
+
+  Widget _buildGuestAccountLanding(BuildContext context) {
+    final textTheme = GoogleFonts.poppins();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEDE9FE),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFDCD2FF)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 112,
+                height: 112,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .9),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryPurple.withValues(alpha: .16),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.person_rounded,
+                  size: 68,
+                  color: AppColors.primaryPurple,
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                'Your Account',
+                textAlign: TextAlign.center,
+                style: textTheme.copyWith(
+                  fontSize: 28,
+                  height: 1.15,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF28165F),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Everything you love, all in one place.',
+                textAlign: TextAlign.center,
+                style: textTheme.copyWith(
+                  fontSize: 14,
+                  height: 1.45,
+                  fontWeight: FontWeight.w400,
+                  color: const Color(0xFF665A83),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE7E1F7)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F3F1A55),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildGuestFeatureRow(
+                icon: Icons.local_offer_outlined,
+                title: '370+ brand vouchers',
+                color: AppColors.primaryPurple,
+              ),
+              _buildGuestFeatureDivider(),
+              _buildGuestFeatureRow(
+                icon: Icons.bolt_outlined,
+                title: 'Instant delivery',
+                color: AppColors.primaryPurple,
+              ),
+              _buildGuestFeatureDivider(),
+              _buildGuestFeatureRow(
+                icon: Icons.monetization_on_outlined,
+                title: 'SuperCoins cashback rewards',
+                color: AppColors.primaryPurple,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        SizedBox(
+          height: 56,
+          child: ElevatedButton(
+            onPressed: () => context.push('/login'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryPurple,
+              foregroundColor: Colors.white,
+              elevation: 5,
+              shadowColor: AppColors.primaryPurple.withValues(alpha: .28),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            child: Text(
+              'Sign in / Create account',
+              style: textTheme.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Sign in to unlock your personalised Gift360 experience.',
+          textAlign: TextAlign.center,
+          style: textTheme.copyWith(
+            fontSize: 11,
+            color: const Color(0xFF81789A),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuestFeatureRow({
+    required IconData icon,
+    required String title,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .11),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, size: 22, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF332A4A),
+              ),
+            ),
+          ),
+          const Icon(
+            Icons.arrow_forward_ios_rounded,
+            size: 14,
+            color: Color(0xFFAAA1BD),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestFeatureDivider() {
+    return const Divider(height: 1, indent: 56, color: Color(0xFFF0ECF7));
   }
 
   Widget _buildBiometricLoginAction(dynamic user) {
@@ -434,7 +928,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
           ),
         ),
-        error: (_, __) => _rewardsEmptyState(),
+        error: (_, _) => _rewardsEmptyState(),
         data: (reward) {
           if (reward == null || reward['hasReward'] != true) {
             return _rewardsEmptyState();

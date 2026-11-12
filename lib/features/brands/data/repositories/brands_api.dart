@@ -166,7 +166,14 @@ class BrandsApi {
     final data = response.data;
     if (data is List) return data.cast<Map<String, dynamic>>();
     if (data is Map) {
-      final items = data['data'] ?? data['orders'] ?? data['result'] ?? [];
+      final nestedData = data['data'];
+      if (nestedData is Map) {
+        final nestedItems = nestedData['orders'] ?? nestedData['data'] ?? nestedData['result'];
+        if (nestedItems is List) {
+          return nestedItems.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+        }
+      }
+      final items = data['orders'] ?? data['data'] ?? data['result'] ?? [];
       if (items is List) return items.cast<Map<String, dynamic>>();
     }
     return [];

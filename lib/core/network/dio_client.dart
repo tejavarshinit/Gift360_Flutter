@@ -115,6 +115,14 @@ class _LogInterceptor extends Interceptor {
 class _ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
+    assert(() {
+      debugPrint(
+        '[DIO] underlying error ${err.error.runtimeType}: '
+        '${err.error} | ${err.requestOptions.method} '
+        '${err.requestOptions.uri}',
+      );
+      return true;
+    }());
     String message;
 
     switch (err.type) {

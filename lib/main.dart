@@ -20,6 +20,7 @@ import 'core/widgets/session_expired_dialog.dart';
 import 'config/app_config.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/auth/data/models/auth_user.dart';
+import 'features/notifications/data/repositories/device_token_api.dart';
 import 'features/notifications/presentation/services/push_notification_service.dart';
 import 'features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'features/rewards/data/app_install_reward_service.dart';
@@ -60,6 +61,7 @@ void main() async {
 
   final pushNotificationService = PushNotificationService(
     firebaseAvailable: firebaseAvailable,
+    deviceTokenApi: DeviceTokenApi(baseUrl: AppConfig.notificationApiBaseUrl),
   );
 
   runApp(
@@ -115,11 +117,11 @@ class _Gift360AppState extends ConsumerState<Gift360App>
         unawaited(_claimInstallReward(user));
       }
     });
-    final startupUser = ref.read(authProvider);
-    if (startupUser != null) unawaited(_claimInstallReward(startupUser));
     unawaited(_pushNotificationService.initialize());
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _pushNotificationService.setNavigationReady(true);
+      if (!mounted) return;
+      _pushNotificationService.setNavigationReady(true);
+      unawaited(_claimInstallRewardForCurrentUser());
     });
     // Wire up 401 session expiry handler
     DioClient.onSessionExpired = () {
@@ -143,6 +145,14 @@ class _Gift360AppState extends ConsumerState<Gift360App>
         state == AppLifecycleState.paused) {
       _releaseActiveSuperCoinHolds();
     }
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_claimInstallRewardForCurrentUser());
+    }
+  }
+
+  Future<void> _claimInstallRewardForCurrentUser() async {
+    final user = ref.read(authProvider);
+    if (user != null) await _claimInstallReward(user);
   }
 
   void _releaseActiveSuperCoinHolds() async {
@@ -170,8 +180,18 @@ class _Gift360AppState extends ConsumerState<Gift360App>
 
   Future<void> _claimInstallReward(AuthUser user) async {
     if (kIsWeb) return;
-    final coins = await _installRewardService.claimIfEligible(user.clientId);
-    if (coins <= 0) return;
+    final result = await _installRewardService.claimIfEligible(user.clientId);
+    if (result.status == 'flipkart_user_not_found') {
+      final context = navigatorKey.currentContext;
+      if (context != null && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message!)));
+      }
+      return;
+    }
+    final coins = result.coins;
+    if (coins == null || coins <= 0) return;
 
     ref.read(authProvider.notifier).refreshSuperCoinBalance();
     for (var attempt = 0; attempt < 20; attempt++) {

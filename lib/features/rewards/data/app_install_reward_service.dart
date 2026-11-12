@@ -2,12 +2,46 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gift360/features/rewards/data/rewards_api.dart';
+
+class AppInstallRewardResult {
+  final String status;
+  final int? coins;
+  final String? message;
+  final int? statusCode;
+  final bool retryable;
+
+  const AppInstallRewardResult({
+    required this.status,
+    this.coins,
+    this.message,
+    this.statusCode,
+    this.retryable = false,
+  });
+
+  const AppInstallRewardResult.credited(int coins)
+      : this(status: 'credited', coins: coins);
+
+  const AppInstallRewardResult.failure({
+    this.statusCode,
+    this.retryable = true,
+  })  : status = 'request_failed',
+        coins = null,
+        message = null;
+
+  const AppInstallRewardResult.skipped()
+      : status = 'skipped',
+        coins = null,
+        message = null,
+        statusCode = null,
+        retryable = false;
+}
 
 class AppInstallRewardService {
   static const _deviceIdKey = 'gift360_device_id';
@@ -24,15 +58,20 @@ class AppInstallRewardService {
   AppInstallRewardService(this._api, {FlutterSecureStorage? secureStorage})
     : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  /// Returns the awarded coin count, or zero when no reward was credited.
-  Future<int> claimIfEligible(String clientId) async {
-    if (kIsWeb) return 0;
+  /// Claims the reward when eligible and preserves the backend outcome so the
+  /// app can explain non-credit statuses to the user.
+  Future<AppInstallRewardResult> claimIfEligible(String clientId) async {
+    if (kIsWeb) return const AppInstallRewardResult.skipped();
     final id = clientId.trim();
-    if (id.isEmpty || !_inFlightClients.add(id)) return 0;
+    if (id.isEmpty || !_inFlightClients.add(id)) {
+      return const AppInstallRewardResult.skipped();
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool('$_donePrefix$id') == true) return 0;
+      if (prefs.getBool('$_donePrefix$id') == true) {
+        return const AppInstallRewardResult.skipped();
+      }
 
       final result = await _api.claimFirstLoginReward(
         deviceId: await _deviceId(),
@@ -42,7 +81,7 @@ class AppInstallRewardService {
         'credited',
         'already_awarded',
         'not_eligible',
-        'pending',
+        'device_already_rewarded',
       };
       if (result['success'] == true && terminalStatuses.contains(status)) {
         try {
@@ -54,17 +93,34 @@ class AppInstallRewardService {
         }
       }
 
-      if (result['success'] != true ||
-          status != 'credited' ||
-          result['credited'] != true) {
-        return 0;
-      }
-
       final amount = result['amount'];
-      return amount is num && amount > 0 ? amount.round() : 5;
+      if (status == 'credited' &&
+          result['success'] == true &&
+          result['credited'] == true) {
+        return AppInstallRewardResult.credited(
+          amount is num && amount > 0 ? amount.round() : 5,
+        );
+      }
+      if (status == 'flipkart_user_not_found') {
+        return const AppInstallRewardResult(
+          status: 'flipkart_user_not_found',
+          message:
+              'Please sign up on Flipkart with the same mobile number to receive your SuperCoins.',
+        );
+      }
+      return AppInstallRewardResult(status: status.isEmpty ? 'unknown' : status);
+    } on DioException catch (error) {
+      final code = error.response?.statusCode;
+      debugPrint(
+        '[AppInstallReward] Claim failed (HTTP ${code ?? 'network'}).',
+      );
+      return AppInstallRewardResult.failure(
+        statusCode: code,
+        retryable: true,
+      );
     } catch (error) {
       debugPrint('[AppInstallReward] Claim failed (${error.runtimeType}).');
-      return 0;
+      return const AppInstallRewardResult.failure(retryable: true);
     } finally {
       _inFlightClients.remove(id);
     }
@@ -81,6 +137,7 @@ class AppInstallRewardService {
             'gift360:android:${androidId.trim().toLowerCase()}',
           );
         }
+
       } catch (error) {
         debugPrint(
           '[AppInstallReward] Android ID unavailable (${error.runtimeType}).',

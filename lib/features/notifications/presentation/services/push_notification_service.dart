@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
+import 'package:gift360/features/notifications/data/repositories/device_token_api.dart';
 import 'package:gift360/features/notifications/data/models/push_notification_payload.dart';
 
 const _androidChannelId = 'karatly_default';
@@ -74,6 +75,7 @@ const _localNotificationDetails = NotificationDetails(
 class PushNotificationService {
   final bool firebaseAvailable;
   final FlutterLocalNotificationsPlugin _localNotifications;
+  DeviceTokenApi? _deviceTokenApi;
   final FirebaseMessaging? _messaging;
   late final NotificationTapRouter _tapRouter = NotificationTapRouter(
     onNavigate: (destination) => _navigationHandler(destination),
@@ -81,16 +83,33 @@ class PushNotificationService {
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   StreamSubscription<RemoteMessage>? _tapSubscription;
   StreamSubscription<String>? _tokenSubscription;
+  AuthUser? _authenticatedUser;
+  String? _deviceToken;
   bool _initialized = false;
+  late final DeviceTokenRegistrationCoordinator _tokenCoordinator =
+      DeviceTokenRegistrationCoordinator((token, clientId) async {
+        final user = _authenticatedUser;
+        if (user == null || user.clientId != clientId) return;
+        await _deviceTokens.register(
+          deviceToken: token,
+          deviceType: _deviceType,
+          clientId: clientId,
+        );
+      });
 
   PushNotificationService({
     required this.firebaseAvailable,
     FlutterLocalNotificationsPlugin? localNotifications,
     FirebaseMessaging? messaging,
+    this._deviceTokenApi,
   }) : _localNotifications =
            localNotifications ?? FlutterLocalNotificationsPlugin(),
        _messaging =
            messaging ?? (firebaseAvailable ? FirebaseMessaging.instance : null);
+
+  DeviceTokenApi get _deviceTokens => _deviceTokenApi ??= DeviceTokenApi(
+    baseUrl: AppConfig.notificationApiBaseUrl,
+  );
 
   void setNavigationHandler(void Function(String destination) handler) {
     // Keep the tap coordinator independent of GoRouter for unit testing.
@@ -105,6 +124,32 @@ class PushNotificationService {
 
   void updateAuthenticatedUser(AuthUser? user) {
     _tapRouter.setAuthenticated(user != null);
+    _authenticatedUser = user;
+    _tokenCoordinator.setClientId(user?.clientId);
+    if (user != null) unawaited(_registerDeviceToken());
+  }
+
+  String get _deviceType {
+    if (kIsWeb) return 'WEB';
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'ANDROID',
+      TargetPlatform.iOS => 'IOS',
+      _ => throw StateError(
+        'FCM token registration is unsupported on this platform.',
+      ),
+    };
+  }
+
+  Future<void> _registerDeviceToken() async {
+    final token = _deviceToken;
+    final user = _authenticatedUser;
+    if (token == null || user == null) return;
+    try {
+      await _tokenCoordinator.register(token, user.clientId);
+    } catch (error, stackTrace) {
+      debugPrint('[FCM] Device-token registration failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<void> initialize() async {
@@ -162,14 +207,15 @@ class PushNotificationService {
       // ignore: deprecated_member_use
       _tokenSubscription = messaging.onTokenRefresh.listen(
         (token) {
-          if (kDebugMode) debugPrint('[FCM] Refreshed device token: $token');
+          _deviceToken = token;
+          unawaited(_registerDeviceToken());
         },
         onError: (Object error) =>
             debugPrint('[FCM] Token refresh stream failed: $error'),
       );
       _initialized = true;
 
-      await _requestPermissionAndLogToken(messaging);
+      await _requestPermissionAndRegisterToken(messaging);
 
       final launchDetails = await _localNotifications
           .getNotificationAppLaunchDetails();
@@ -187,7 +233,7 @@ class PushNotificationService {
     }
   }
 
-  Future<void> _requestPermissionAndLogToken(
+  Future<void> _requestPermissionAndRegisterToken(
     FirebaseMessaging messaging,
   ) async {
     try {
@@ -220,7 +266,8 @@ class PushNotificationService {
         debugPrint('[FCM] Firebase did not return a registration token.');
         return;
       }
-      if (kDebugMode) debugPrint('[FCM] Device token: $token');
+      _deviceToken = token;
+      await _registerDeviceToken();
     } catch (error, stackTrace) {
       debugPrint('[FCM] Could not retrieve the device token: $error');
       debugPrintStack(stackTrace: stackTrace);
