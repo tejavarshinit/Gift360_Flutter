@@ -58,7 +58,7 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
           children: [
             Positioned.fill(
               child: Image.asset(
-                'assets/images/diwali-bg.jpg',
+                'assets/images/LoginBackground.png',
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),

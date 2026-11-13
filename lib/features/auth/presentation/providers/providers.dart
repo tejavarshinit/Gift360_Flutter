@@ -54,7 +54,7 @@ final biometricServiceProvider = Provider<BiometricService>((ref) {
   final origin = biometricGatewayOrigin(AppConfig.brandApiUrl);
   if (origin == null) {
     throw const BiometricException(
-      'Biometric login requires a secure HTTPS ValueDesign API host.',
+      'Device-lock login requires a secure HTTPS ValueDesign API host.',
     );
   }
   const secureStorage = FlutterSecureStorage();

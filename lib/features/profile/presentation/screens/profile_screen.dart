@@ -91,8 +91,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           SnackBar(
             content: Text(
               _biometricClientId == null
-                  ? 'Biometric login disabled.'
-                  : 'Biometric login enabled.',
+                  ? 'Device-lock login disabled.'
+                  : 'Device-lock login enabled.',
             ),
           ),
         );
@@ -117,7 +117,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _biometricActionError = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Biometric enrollment removed.')),
+          const SnackBar(content: Text('Device-lock enrollment removed.')),
         );
       }
     } catch (error) {
@@ -864,10 +864,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _biometricClientId != null && _biometricClientId != user.clientId;
     final enabledForUser = _biometricClientId == user.clientId;
     final label = belongsToOtherAccount
-        ? 'Biometric login is enrolled for another account'
+        ? 'Device-lock login is enrolled for another account'
         : enabledForUser
-        ? 'Disable biometric login'
-        : 'Enable biometric login';
+        ? 'Disable device-lock login'
+        : 'Enable device-lock login';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -884,7 +884,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.fingerprint),
+              : const Icon(Icons.lock_outline),
           label: Text(label),
         ),
         if (_biometricEnrollmentIssue != null)

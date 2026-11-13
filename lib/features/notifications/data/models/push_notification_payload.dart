@@ -59,6 +59,9 @@ class PushNotificationPayload {
 class NotificationTapRouter {
   final void Function(String destination) onNavigate;
 
+  /// Every notification tap returns the shopper to the home feed.
+  static const String homeDestination = '/';
+
   bool _navigationReady = false;
   bool _authenticated = false;
   PushNotificationPayload? _pending;
@@ -82,8 +85,7 @@ class NotificationTapRouter {
 
   void _dispatchIfReady() {
     if (!_navigationReady || !_authenticated || _pending == null) return;
-    final payload = _pending!;
     _pending = null;
-    onNavigate(payload.destination);
+    onNavigate(homeDestination);
   }
 }

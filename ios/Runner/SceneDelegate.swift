@@ -5,7 +5,8 @@ import UIKit
 
 class SceneDelegate: FlutterSceneDelegate {
   private let biometricChannelName = "com.gift360.gift360/biometric"
-  private let keyTag = "com.gift360.gift360.biometric.login.rsa"
+  private let keyTag = "com.gift360.gift360.deviceauth.login.rsa"
+  private let legacyBiometricKeyTag = "com.gift360.gift360.biometric.login.rsa"
 
   override func scene(
     _ scene: UIScene,
@@ -20,7 +21,7 @@ class SceneDelegate: FlutterSceneDelegate {
     )
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else {
-        result(FlutterError(code: "biometric_unavailable", message: "Biometric service is unavailable.", details: nil))
+        result(FlutterError(code: "device_credential_unavailable", message: "Device-lock service is unavailable.", details: nil))
         return
       }
       switch call.method {
@@ -33,16 +34,20 @@ class SceneDelegate: FlutterSceneDelegate {
       case "signChallenge":
         guard let arguments = call.arguments as? [String: Any],
               let challenge = arguments["challenge"] as? String else {
-          result(FlutterError(code: "invalid_argument", message: "A biometric challenge is required.", details: nil))
+          result(FlutterError(code: "invalid_argument", message: "A device-lock challenge is required.", details: nil))
           return
         }
-        self.signChallenge(challenge, result: result)
+        self.signChallenge(
+          challenge,
+          method: arguments["method"] as? String,
+          result: result
+        )
       case "deleteKey":
         let status = self.deleteKey()
         if status == errSecSuccess || status == errSecItemNotFound {
           result(nil)
         } else {
-          result(FlutterError(code: "key_delete_failed", message: "The protected biometric key could not be removed.", details: nil))
+          result(FlutterError(code: "key_delete_failed", message: "The protected device-lock key could not be removed.", details: nil))
         }
       default:
         result(FlutterMethodNotImplemented)
@@ -51,38 +56,67 @@ class SceneDelegate: FlutterSceneDelegate {
   }
 
   private func availability() -> [String: Any] {
-    let context = LAContext()
-    var error: NSError?
-    if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-      return ["supported": true, "enrolled": true]
-    }
-    if let laError = error as? LAError, laError.code == .biometryNotEnrolled {
+    let biometricContext = LAContext()
+    var biometricError: NSError?
+    let biometricAvailable = biometricContext.canEvaluatePolicy(
+      .deviceOwnerAuthenticationWithBiometrics,
+      error: &biometricError
+    )
+    let credentialContext = LAContext()
+    var credentialError: NSError?
+    if credentialContext.canEvaluatePolicy(.deviceOwnerAuthentication, error: &credentialError) {
       return [
         "supported": true,
-        "enrolled": false,
-        "reason": "Set up Face ID or Touch ID on this device to enable biometric login."
+        "enrolled": true,
+        "biometricAvailable": biometricAvailable,
+        "credentialAvailable": true
       ]
+    }
+    if let laError = credentialError as? LAError {
+      switch laError.code {
+      case .passcodeNotSet:
+        return [
+          "supported": true,
+          "enrolled": false,
+          "biometricAvailable": biometricAvailable,
+          "credentialAvailable": false,
+          "reason": "Set a passcode (or Face ID/Touch ID) on this device to enable device-lock login."
+        ]
+      case .biometryNotEnrolled:
+        return [
+          "supported": true,
+          "enrolled": false,
+          "biometricAvailable": biometricAvailable,
+          "credentialAvailable": false,
+          "reason": "Set a passcode on this device to enable device-lock login."
+        ]
+      default:
+        break
+      }
     }
     return [
       "supported": false,
       "enrolled": false,
-      "reason": "Biometric authentication is unavailable. Use OTP login instead."
+      "biometricAvailable": biometricAvailable,
+      "credentialAvailable": false,
+      "reason": "Device-lock authentication is unavailable. Use OTP login instead."
     ]
   }
 
   private func createKeyPair(result: @escaping FlutterResult) {
     guard !hasKey() else {
-      result(FlutterError(code: "key_invalidated", message: "An existing protected biometric key has no matching enrollment.", details: nil))
+      result(FlutterError(code: "key_invalidated", message: "An existing protected device-lock key has no matching enrollment.", details: nil))
       return
     }
+    _ = deleteKey(tag: legacyBiometricKeyTag)
     var accessError: Unmanaged<CFError>?
     guard let access = SecAccessControlCreateWithFlags(
       kCFAllocatorDefault,
       kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
-      [.privateKeyUsage, .biometryCurrentSet],
+      [.privateKeyUsage, .userPresence],
       &accessError
     ) else {
-      result(FlutterError(code: "biometric_unavailable", message: "This device cannot create a biometric-protected key.", details: nil))
+      result(FlutterError(code: "device_credential_unavailable", message: "This device cannot create a device-lock protected key.", details: nil))
       return
     }
     let privateAttributes: [String: Any] = [
@@ -97,17 +131,17 @@ class SceneDelegate: FlutterSceneDelegate {
     ]
     var keyError: Unmanaged<CFError>?
     guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &keyError) else {
-      result(FlutterError(code: "biometric_unavailable", message: "Could not create a protected biometric key.", details: nil))
+      result(FlutterError(code: "device_credential_unavailable", message: "Could not create a protected device-lock key.", details: nil))
       return
     }
     guard let publicKey = SecKeyCopyPublicKey(privateKey),
           let publicData = SecKeyCopyExternalRepresentation(publicKey, &keyError) as Data? else {
       let cleanupStatus = deleteKey()
       result(FlutterError(
-        code: "biometric_unavailable",
+        code: "device_credential_unavailable",
         message: cleanupStatus == errSecSuccess || cleanupStatus == errSecItemNotFound
-          ? "Could not export the public biometric key."
-          : "Could not export or safely remove the temporary biometric key.",
+          ? "Could not export the public device-lock key."
+          : "Could not export or safely remove the temporary device-lock key.",
         details: nil
       ))
       return
@@ -115,11 +149,28 @@ class SceneDelegate: FlutterSceneDelegate {
     result(x509PublicKey(publicData).base64EncodedString())
   }
 
-  private func signChallenge(_ challenge: String, result: @escaping FlutterResult) {
+  private func signChallenge(
+    _ challenge: String,
+    method: String?,
+    result: @escaping FlutterResult
+  ) {
+    let biometricOnly = (method ?? "").lowercased() == "biometric"
+    let policy: LAPolicy = biometricOnly
+      ? .deviceOwnerAuthenticationWithBiometrics
+      : .deviceOwnerAuthentication
     let context = LAContext()
     context.localizedReason = "Verify to log in to Gift360"
+    var policyError: NSError?
+    guard context.canEvaluatePolicy(policy, error: &policyError) else {
+      let code = biometricOnly ? "biometric_unavailable" : "device_credential_unavailable"
+      let message = biometricOnly
+        ? "No Face ID or Touch ID is set up on this device. Use your passcode instead."
+        : "Device-lock authentication is unavailable. Use OTP login instead."
+      result(FlutterError(code: code, message: message, details: nil))
+      return
+    }
     context.evaluatePolicy(
-      .deviceOwnerAuthenticationWithBiometrics,
+      policy,
       localizedReason: context.localizedReason
     ) { [weak self] succeeded, error in
       guard let self else { return }
@@ -129,14 +180,17 @@ class SceneDelegate: FlutterSceneDelegate {
         let message: String
         switch laError?.code {
         case .userCancel, .appCancel, .systemCancel:
-          code = "biometric_cancelled"
-          message = "Biometric authentication was cancelled."
+          code = "device_credential_cancelled"
+          message = "Device unlock was cancelled."
         case .biometryLockout:
           code = "biometric_lockout"
-          message = "Biometrics are temporarily locked. Unlock your device and try again."
+          message = "Device lock is temporarily locked. Unlock your device and try again."
+        case .passcodeNotSet:
+          code = "device_credential_unavailable"
+          message = "Set a passcode on this device to use device-lock login."
         default:
-          code = "biometric_unavailable"
-          message = "Biometric authentication failed. Use OTP login instead."
+          code = "device_credential_unavailable"
+          message = "Device-lock authentication failed. Use OTP login instead."
         }
         DispatchQueue.main.async {
           result(FlutterError(code: code, message: message, details: nil))
@@ -159,7 +213,7 @@ class SceneDelegate: FlutterSceneDelegate {
           DispatchQueue.main.async {
             result(FlutterError(
               code: status == errSecItemNotFound ? "key_missing" : "key_invalidated",
-              message: "The protected biometric key is missing or invalidated. Sign in with OTP and enroll again.",
+              message: "The protected device-lock key is missing or invalidated. Sign in with OTP and enroll again.",
               details: nil
             ))
           }
@@ -172,7 +226,7 @@ class SceneDelegate: FlutterSceneDelegate {
           &keyError
         ) as Data? else {
           DispatchQueue.main.async {
-            result(FlutterError(code: "key_invalidated", message: "The protected biometric key could not sign this challenge. Sign in with OTP and enroll again.", details: nil))
+            result(FlutterError(code: "key_invalidated", message: "The protected device-lock key could not sign this challenge. Sign in with OTP and enroll again.", details: nil))
           }
           return
         }
@@ -195,10 +249,19 @@ class SceneDelegate: FlutterSceneDelegate {
   }
 
   private func deleteKey() -> OSStatus {
+    let currentStatus = deleteKey(tag: keyTag)
+    let legacyStatus = deleteKey(tag: legacyBiometricKeyTag)
+    if currentStatus != errSecSuccess && currentStatus != errSecItemNotFound {
+      return currentStatus
+    }
+    return legacyStatus
+  }
+
+  private func deleteKey(tag: String) -> OSStatus {
     let query: [String: Any] = [
       kSecClass as String: kSecClassKey,
       kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-      kSecAttrApplicationTag as String: keyTag.data(using: .utf8)!
+      kSecAttrApplicationTag as String: tag.data(using: .utf8)!
     ]
     return SecItemDelete(query as CFDictionary)
   }

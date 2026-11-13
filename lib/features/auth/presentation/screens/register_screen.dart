@@ -252,10 +252,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       body: SizedBox.expand(
         child: Stack(
           children: [
-            // ── 1. Background image (matching React DiwaliAuthShell's diwali-bg) ──
+            // ── 1. Background image (matching React DiwaliAuthShell's LoginBackground) ──
             Positioned.fill(
               child: Image.asset(
-                'assets/images/diwali-bg.jpg',
+                'assets/images/LoginBackground.png',
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),

@@ -57,7 +57,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background matching React: #f3f5f9 (replaced ganeshbackdrop.png)
+          // Background matching React: flat #f3f5f9
           Positioned.fill(
             child: const ReactBackdropBackground(),
           ),

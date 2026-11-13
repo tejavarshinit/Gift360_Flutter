@@ -300,7 +300,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Background matching React: #f3f5f9 (replaced ganeshbackdrop.png)
+          // Background matching React: flat #f3f5f9
           const Positioned.fill(child: ReactBackdropBackground()),
           Column(
             children: [

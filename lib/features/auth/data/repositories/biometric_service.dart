@@ -41,13 +41,13 @@ class BiometricService {
           clientId.trim().isEmpty) {
         return const BiometricEnrollmentState(
           issue:
-              'Biometric enrollment data is incomplete. Sign in with OTP and enroll again.',
+              'Device-lock enrollment data is incomplete. Sign in with OTP and enroll again.',
         );
       }
       if (!await _keyStore.hasKey()) {
         return const BiometricEnrollmentState(
           issue:
-              'The protected biometric key is missing or invalidated. Sign in with OTP and enroll again.',
+              'The protected device-lock key is missing or invalidated. Sign in with OTP and enroll again.',
         );
       }
       return BiometricEnrollmentState(
@@ -64,14 +64,14 @@ class BiometricService {
     final normalizedClientId = clientId.trim();
     if (normalizedClientId.isEmpty || token.trim().isEmpty) {
       throw const BiometricException(
-        'A valid signed-in account is required to enable biometric login.',
+        'A valid signed-in account is required to enable device-lock login.',
       );
     }
     final current = await enrollmentState();
     if (current.isEnabled) {
       if (current.enrollment!.clientId == normalizedClientId) return;
       throw const BiometricException(
-        'Biometric login is enrolled for another account. Sign in to that account and disable biometrics before switching enrollment.',
+        'Device-lock login is enrolled for another account. Sign in to that account and disable it before switching enrollment.',
       );
     }
     if (current.issue != null) throw BiometricException(current.issue!);
@@ -79,13 +79,13 @@ class BiometricService {
     final availability = await _keyStore.availability();
     if (!availability.supported || !availability.enrolled) {
       throw BiometricException(
-        availability.reason ??
-            'Set up a device biometric before enabling biometric login.',
+            availability.reason ??
+            'Set up a screen lock (PIN, pattern, password, or biometrics) before enabling device-lock login.',
       );
     }
     if (await _keyStore.hasKey()) {
       throw const BiometricException(
-        'A protected biometric key exists without matching enrollment data. Sign in with OTP and contact support before enrolling again.',
+        'A protected device-lock key exists without matching enrollment data. Sign in with OTP and contact support before enrolling again.',
       );
     }
 
@@ -128,18 +128,20 @@ class BiometricService {
       }
       if (cleanupFailed) {
         throw const BiometricException(
-          'Biometric enrollment failed and cleanup could not be fully confirmed. Use OTP login and contact support before trying again.',
+          'Device-lock enrollment failed and cleanup could not be fully confirmed. Use OTP login and contact support before trying again.',
         );
       }
       rethrow;
     }
   }
 
-  Future<BiometricLoginResult> login() async {
+  Future<BiometricLoginResult> login({
+    DeviceAuthMethod method = DeviceAuthMethod.any,
+  }) async {
     final state = await enrollmentState();
     if (!state.isEnabled) {
       throw BiometricException(
-        state.issue ?? 'Biometric login has not been enabled on this device.',
+        state.issue ?? 'Device-lock login has not been enabled on this device.',
       );
     }
     final enrollment = state.enrollment!;
@@ -147,13 +149,16 @@ class BiometricService {
     final deadline = _now().add(Duration(seconds: challenge.expiresIn));
     if (!_now().isBefore(deadline)) {
       throw const BiometricException(
-        'The biometric challenge expired. Please try again.',
+        'The device-lock challenge expired. Please try again.',
       );
     }
-    final signature = await _keyStore.signChallenge(challenge.value);
+    final signature = await _keyStore.signChallenge(
+      challenge.value,
+      method: method,
+    );
     if (!_now().isBefore(deadline)) {
       throw const BiometricException(
-        'The biometric challenge expired. Please try again.',
+        'The device-lock challenge expired. Please try again.',
       );
     }
     final result = await _api.login(
@@ -163,7 +168,7 @@ class BiometricService {
     );
     if (result.clientId != enrollment.clientId) {
       throw const BiometricException(
-        'This device is enrolled for a different account. Use OTP login or disable biometrics from the enrolled account.',
+        'This device is enrolled for a different account. Use OTP login or disable device-lock login from the enrolled account.',
       );
     }
     return result;
@@ -179,7 +184,7 @@ class BiometricService {
     if (enrollment == null) return;
     if (enrollment.clientId != clientId.trim()) {
       throw const BiometricException(
-        'Only the account that enabled biometric login can disable it.',
+        'Only the account that enabled device-lock login can disable it.',
       );
     }
     await _api.revoke(deviceId: enrollment.deviceId, token: token);
@@ -200,7 +205,7 @@ class BiometricService {
         deviceId.trim().isEmpty ||
         enrolledClientId != normalizedClientId) {
       throw const BiometricException(
-        'The biometric enrollment cannot be safely removed for this account. Contact support or sign in to the enrolled account.',
+        'The device-lock enrollment cannot be safely removed for this account. Contact support or sign in to the enrolled account.',
       );
     }
     await _api.revoke(deviceId: deviceId, token: token);

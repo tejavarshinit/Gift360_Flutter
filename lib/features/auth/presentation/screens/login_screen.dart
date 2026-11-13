@@ -8,6 +8,7 @@ import 'package:gift360/core/constants/app_constants.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
+import 'package:gift360/features/auth/data/models/biometric_models.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
 
@@ -32,6 +33,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _error = '';
   String _mobileError = '';
   bool _biometricEnrolled = false;
+  bool _biometricFingerprintAvailable = true;
+  bool _biometricCredentialAvailable = true;
   String? _biometricIssue;
 
   @override
@@ -45,11 +48,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _loadBiometricState() async {
     try {
-      final state = await ref.read(biometricServiceProvider).enrollmentState();
+      final service = ref.read(biometricServiceProvider);
+      final state = await service.enrollmentState();
+      final availability = await service.availability();
       if (!mounted) return;
       setState(() {
         _biometricEnrolled = state.isEnabled;
         _biometricIssue = state.issue;
+        _biometricFingerprintAvailable = availability.biometricAvailable;
+        _biometricCredentialAvailable = availability.credentialAvailable;
       });
     } catch (error) {
       if (!mounted) return;
@@ -57,13 +64,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _handleBiometricLogin() async {
+  Future<void> _handleBiometricLogin(DeviceAuthMethod method) async {
     setState(() {
       _isLoading = true;
       _error = '';
     });
     try {
-      final result = await ref.read(biometricServiceProvider).login();
+      final result = await ref.read(biometricServiceProvider).login(
+        method: method,
+      );
       await ref.read(authProvider.notifier).loginWithBiometrics(result);
       if (mounted) context.go('/');
     } catch (error) {
@@ -74,6 +83,59 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         });
       }
     }
+  }
+
+  Future<void> _showDeviceLockOptions() async {
+    final method = await showModalBottomSheet<DeviceAuthMethod>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Verify to log in',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.dialpad, color: Color(0xFF3F1A55)),
+              title: const Text('MPIN'),
+              subtitle: const Text('Use your device PIN'),
+              enabled: _biometricCredentialAvailable,
+              onTap: () => Navigator.of(
+                sheetContext,
+              ).pop(DeviceAuthMethod.deviceCredential),
+            ),
+            ListTile(
+              leading: const Icon(Icons.fingerprint, color: Color(0xFF3F1A55)),
+              title: const Text('Fingerprint'),
+              subtitle: const Text('Use your biometric'),
+              enabled: _biometricFingerprintAvailable,
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(DeviceAuthMethod.biometric),
+            ),
+            ListTile(
+              leading: const Icon(Icons.grid_on, color: Color(0xFF3F1A55)),
+              title: const Text('Pattern'),
+              subtitle: const Text('Use your device pattern'),
+              enabled: _biometricCredentialAvailable,
+              onTap: () => Navigator.of(
+                sheetContext,
+              ).pop(DeviceAuthMethod.deviceCredential),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (method != null) await _handleBiometricLogin(method);
   }
 
   @override
@@ -249,9 +311,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
       afterMarquee: AppConfig.biometricLoginEnabled && _biometricEnrolled
           ? IconButton(
-              onPressed: _isLoading ? null : _handleBiometricLogin,
-              tooltip: 'Log in with biometrics',
-              icon: const Icon(Icons.fingerprint),
+              onPressed: _isLoading ? null : _showDeviceLockOptions,
+              tooltip: 'Log in with device lock',
+              icon: const Icon(Icons.lock_outline),
               color: const Color(0xFF3F1A55),
               iconSize: 28,
             )
@@ -276,10 +338,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: SizedBox.expand(
         child: Stack(
           children: [
-            // ── 1. Background image (matching React DiwaliAuthShell's diwali-bg) ──
+            // ── 1. Background image (matching React DiwaliAuthShell's LoginBackground) ──
             Positioned.fill(
               child: Image.asset(
-                'assets/images/diwali-bg.jpg',
+                'assets/images/LoginBackground.png',
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),
@@ -420,10 +482,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       child: OutlinedButton.icon(
                                         onPressed: _isLoading
                                             ? null
-                                            : _handleBiometricLogin,
-                                        icon: const Icon(Icons.fingerprint),
+                                            : _showDeviceLockOptions,
+                                        icon: const Icon(Icons.lock_outline),
                                         label: const Text(
-                                          'Log in with biometrics',
+                                          'Log in with device lock',
                                         ),
                                       ),
                                     ),

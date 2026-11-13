@@ -55,7 +55,7 @@ class BiometricApi {
       'deviceId': deviceId,
       'signature': signature,
     }, publicRequest: true);
-    final json = _requireSuccess(response, 'Biometric login failed.');
+    final json = _requireSuccess(response, 'Device-lock login failed.');
     final token = _nonblank(json['token']);
     final userInfo = json['userInfo'];
     if (token == null || userInfo is! Map) {
@@ -82,7 +82,7 @@ class BiometricApi {
     final response = await _post('/api/v1/auth/biometric/revoke', {
       'deviceId': deviceId,
     }, token: token);
-    _requireSuccess(response, 'Could not disable biometric login.');
+    _requireSuccess(response, 'Could not disable device-lock login.');
   }
 
   Future<dynamic> _post(

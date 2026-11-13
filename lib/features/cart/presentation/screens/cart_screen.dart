@@ -97,7 +97,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // Background matching React: #f3f5f9 (replaced ganeshbackdrop.png)
+            // Background matching React: flat #f3f5f9
             Positioned.fill(child: const SizedBox.shrink()),
             // Main content
             Column(

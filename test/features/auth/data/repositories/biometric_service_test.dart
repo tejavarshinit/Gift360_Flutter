@@ -292,7 +292,10 @@ class _FakeKeyStore implements BiometricKeyStore {
   }
 
   @override
-  Future<String> signChallenge(String challenge) async {
+  Future<String> signChallenge(
+    String challenge, {
+    DeviceAuthMethod method = DeviceAuthMethod.any,
+  }) async {
     signedChallenge = challenge;
     if (signError case final error?) throw error;
     return 'signature-base64';

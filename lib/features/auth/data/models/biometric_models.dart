@@ -5,15 +5,25 @@ class BiometricEnrollment {
   const BiometricEnrollment({required this.deviceId, required this.clientId});
 }
 
+enum DeviceAuthMethod {
+  any,
+  biometric,
+  deviceCredential,
+}
+
 class BiometricAvailability {
   final bool supported;
   final bool enrolled;
   final String? reason;
+  final bool biometricAvailable;
+  final bool credentialAvailable;
 
   const BiometricAvailability({
     required this.supported,
     required this.enrolled,
     this.reason,
+    this.biometricAvailable = true,
+    this.credentialAvailable = true,
   });
 }
 

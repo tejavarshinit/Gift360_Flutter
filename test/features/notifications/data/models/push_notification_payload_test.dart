@@ -91,7 +91,7 @@ void main() {
         expect(destinations, isEmpty);
 
         router.setNavigationReady(true);
-        expect(destinations, ['/my-orders/ORD123/checkout']);
+        expect(destinations, ['/']);
       },
     );
 
@@ -103,7 +103,7 @@ void main() {
 
       expect(destinations, isEmpty);
       router.setAuthenticated(true);
-      expect(destinations, ['/notifications']);
+      expect(destinations, ['/']);
       router.setAuthenticated(false);
       expect(destinations, hasLength(1));
     });
