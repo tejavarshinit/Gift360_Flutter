@@ -10,6 +10,7 @@ import 'package:gift360/features/reseller/data/reseller_api.dart';
 import 'package:gift360/features/reseller/data/reseller_csv.dart';
 import 'package:gift360/features/reseller/data/reseller_store.dart';
 import 'package:gift360/features/reseller/presentation/providers/reseller_provider.dart';
+import 'package:gift360/features/reseller/presentation/screens/reseller_order_details_screen.dart';
 
 String _formatResellerMoney(num? value) => NumberFormat.currency(
   locale: 'en_IN',
@@ -210,7 +211,7 @@ class _ResellerDashboardScreenState
     });
   }
 
-  Future<void> _openOrder(String orderNumber) async {
+  Future<void> _openOrder(String orderNumber, {String? createdAt}) async {
     final rootNav = Navigator.of(context, rootNavigator: true);
     showDialog(
       context: context,
@@ -223,11 +224,22 @@ class _ResellerDashboardScreenState
           .fetchOrderDetails(orderNumber);
       if (!mounted) return;
       rootNav.pop();
-      await showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => _OrderDetailsSheet(details: details, onCopy: _copy),
+      await rootNav.push(
+        MaterialPageRoute(
+          builder: (_) => ResellerOrderDetailsScreen(
+            details: details,
+            createdAt: createdAt,
+            avatarInitial: _avatarInitial(),
+            onHome: () {
+              rootNav.pop();
+              _safeSetState(() => _tab = 0);
+            },
+            onProfile: () {
+              rootNav.pop();
+              _openProfileSheet();
+            },
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
@@ -846,7 +858,10 @@ class _ResellerDashboardScreenState
             return _card(
               padding: EdgeInsets.zero,
               child: InkWell(
-                onTap: () => _openOrder(orderNumber),
+                onTap: () => _openOrder(
+                  orderNumber,
+                  createdAt: o['createdAt']?.toString(),
+                ),
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -1000,7 +1015,10 @@ class _ResellerDashboardScreenState
             return _card(
               padding: EdgeInsets.zero,
               child: InkWell(
-                onTap: () => _openOrder(number),
+                onTap: () => _openOrder(
+                  number,
+                  createdAt: o['createdAt']?.toString(),
+                ),
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -1694,144 +1712,6 @@ class _ResellerDashboardScreenState
     if (value.isEmpty) return '—';
     final formatted = value.replaceFirst('T', ' ');
     return formatted.substring(0, formatted.length.clamp(0, 16).toInt());
-  }
-}
-
-class _OrderDetailsSheet extends StatelessWidget {
-  final Map<String, dynamic> details;
-  final void Function(String, String) onCopy;
-
-  const _OrderDetailsSheet({required this.details, required this.onCopy});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = (details['items'] as List?) ?? const [];
-    final total = (details['totalAmount'] as num?)?.toDouble();
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (context, controller) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: ListView(
-            controller: controller,
-            padding: const EdgeInsets.all(18),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                (details['orderNumber'] ?? '').toString(),
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF111827),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${(details['status'] ?? '').toString()} · ${_formatResellerMoney(total ?? 0)}',
-                style: GoogleFonts.poppins(
-                  fontSize: 11,
-                  color: const Color(0xFF6B7280),
-                ),
-              ),
-              const SizedBox(height: 14),
-              ...items.whereType<Map>().map((item) {
-                final credentials = (item['credentials'] as List?) ?? const [];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFF1F1F4)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${item['brandName']} × ${item['quantity']}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF111827),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Unit ${_formatResellerMoney((item['unitPrice'] as num?)?.toDouble() ?? 0)} · Net ${_formatResellerMoney((item['netAmount'] as num?)?.toDouble() ?? 0)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10.5,
-                          color: const Color(0xFF6B7280),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      if (credentials.isEmpty)
-                        Text(
-                          'Credentials pending (${(item['fulfillmentStatus'] ?? 'PROCESSING')})',
-                          style: GoogleFonts.poppins(
-                            fontSize: 10.5,
-                            color: const Color(0xFFB45309),
-                          ),
-                        )
-                      else
-                        ...credentials.whereType<Map>().map((c) {
-                          final card = (c['cardNumber'] ?? '').toString();
-                          final pin = (c['cardPin'] ?? '').toString();
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    [
-                                      card,
-                                      pin,
-                                    ].where((e) => e.isNotEmpty).join(' · '),
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w500,
-                                      color: const Color(0xFF111827),
-                                    ),
-                                  ),
-                                ),
-                                if (card.isNotEmpty)
-                                  GestureDetector(
-                                    onTap: () => onCopy(card, 'Card number'),
-                                    child: const Icon(
-                                      Icons.copy,
-                                      size: 14,
-                                      color: Color(0xFF523DA9),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        }),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
   }
 }
 

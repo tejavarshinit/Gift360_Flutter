@@ -276,3 +276,117 @@ String resellerVouchersToCsv(List<Map<String, dynamic>> rows) {
   );
   return [header.join(','), ...lines].join('\r\n');
 }
+
+/// One export per order, mirroring React's `orderToXlsx` (its "Order" and
+/// "Vouchers" worksheets flattened into a single shareable CSV).
+String resellerOrderToCsv(Map<String, dynamic> order, {String? createdAt}) {
+  String esc(Object? v) {
+    final s = v == null ? '' : v.toString();
+    return RegExp(r'[",\n\r]').hasMatch(s) ? '"${s.replaceAll('"', '""')}"' : s;
+  }
+
+  String line(List<Object?> cells) => cells.map(esc).join(',');
+
+  final orderNumber = (order['orderNumber'] ?? '').toString();
+  final ref = (order['clientOrderRef'] ?? '').toString();
+  final rawDate = (order['createdAt'] ?? order['orderDate'] ?? createdAt ?? '')
+      .toString();
+  final date = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
+  final items = (order['items'] as List?) ?? const [];
+  final rows = items.whereType<Map>().toList();
+
+  final out = <String>[
+    line(['Field', 'Value']),
+    line(['Order Number', orderNumber]),
+    line(['Client Reference', ref]),
+    line(['Order Date', date]),
+    line(['Status', order['status']]),
+    line(['Total Charged (INR)', order['totalAmount']]),
+    line(['Total Discount (INR)', order['discountAmount'] ?? 0]),
+    line(['Line Items', rows.length]),
+    '',
+    line([
+      'Brand',
+      'SKU',
+      'Qty',
+      'Unit Price',
+      'Discount %',
+      'Net Amount',
+      'Status',
+    ]),
+  ];
+
+  for (final item in rows) {
+    out.add(
+      line([
+        item['brandName'],
+        item['brandSku'],
+        item['quantity'],
+        item['unitPrice'],
+        item['discountPercent'],
+        item['netAmount'],
+        item['fulfillmentStatus'],
+      ]),
+    );
+  }
+
+  out
+    ..add('')
+    ..add(
+      line([
+        'Order Number',
+        'Client Reference',
+        'Order Date',
+        'Brand',
+        'Brand SKU',
+        'Face Value (INR)',
+        'Cost to You (INR)',
+        'Card Number',
+        'Card PIN',
+        'Activation Code',
+        'Activation URL',
+        'Expiry',
+        'Line Status',
+      ]),
+    );
+
+  for (final item in rows) {
+    final qty = ((item['quantity'] as num?)?.toInt() ?? 1) < 1
+        ? 1
+        : (item['quantity'] as num).toInt();
+    final perUnitNet =
+        ((item['netAmount'] as num?)?.toDouble() ?? 0) / qty;
+    final net = (perUnitNet * 100).roundToDouble() / 100;
+    final creds = (item['credentials'] as List?) ?? const [];
+    final base = [
+      orderNumber,
+      ref,
+      date,
+      item['brandName'],
+      item['brandSku'],
+      item['unitPrice'],
+      net,
+    ];
+    final status = item['fulfillmentStatus'];
+    if (creds.isEmpty) {
+      out.add(line([...base, '', '', '', '', '', status]));
+      continue;
+    }
+    for (final c in creds.whereType<Map>()) {
+      final expiry = (c['expiry'] ?? '').toString();
+      out.add(
+        line([
+          ...base,
+          c['cardNumber'],
+          c['cardPin'],
+          c['activationCode'],
+          c['activationUrl'],
+          expiry.length >= 10 ? expiry.substring(0, 10) : expiry,
+          status,
+        ]),
+      );
+    }
+  }
+
+  return out.join('\r\n');
+}

@@ -6,8 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:gift360/config/app_config.dart';
-import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
+import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
@@ -30,10 +30,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   int _selectedTab = 0; // 0 = Profile, 1 = Rewards
   Timer? _rewardsTimer;
   int _rewardsTick = 0;
-  bool _biometricActionLoading = false;
-  String? _biometricEnrollmentIssue;
-  String? _biometricActionError;
-  String? _biometricClientId;
+
+  bool _otpLoginEnabled = true;
+  bool _biometricLoginEnabled = true;
+  bool _mpinLoginEnabled = true;
+  bool _biometricEnrolled = false;
+  bool _deviceLockLoading = false;
 
   @override
   void initState() {
@@ -41,7 +43,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.read(authProvider);
     _nameController = TextEditingController(text: user?.name ?? '');
     _restoreDisplayName(user);
-    if (AppConfig.biometricLoginEnabled) _loadBiometricEnrollment();
+    _loadLoginPreferences();
 
     // Rewards tab: 1s countdown refresh + 10s status re-fetch (matches React).
     _rewardsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -53,79 +55,156 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
   }
 
-  Future<void> _loadBiometricEnrollment() async {
+  Future<void> _loadLoginPreferences() async {
     try {
-      final state = await ref.read(biometricServiceProvider).enrollmentState();
+      final prefs = await SharedPreferences.getInstance();
+      var enrolled = false;
+      if (AppConfig.biometricLoginEnabled) {
+        try {
+          final state =
+              await ref.read(biometricServiceProvider).enrollmentState();
+          enrolled = state.isEnabled;
+        } catch (_) {}
+      }
       if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _biometricClientId = state.enrollment?.clientId;
-          _biometricEnrollmentIssue = state.issue;
-        });
+      setState(() {
+        _biometricEnrolled = enrolled;
+        _otpLoginEnabled = prefs.getBool('login_method_otp_enabled') ?? true;
+        _biometricLoginEnabled =
+            prefs.getBool('login_method_biometric_enabled') ?? enrolled;
+        _mpinLoginEnabled =
+            prefs.getBool('login_method_mpin_enabled') ?? enrolled;
       });
-    } catch (error) {
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() => _biometricEnrollmentIssue = error.toString());
-      });
-    }
+    } catch (_) {}
   }
 
-  Future<void> _toggleBiometricLogin(dynamic user) async {
-    setState(() => _biometricActionLoading = true);
+  Future<void> _toggleOtp(bool value) async {
+    if (!value) {
+      if ((!_biometricLoginEnabled || !_biometricEnrolled) &&
+          (!_mpinLoginEnabled || !_biometricEnrolled)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please enable Biometric or MPIN login before turning off OTP.',
+            ),
+            backgroundColor: Color(0xFFD4650F),
+          ),
+        );
+        return;
+      }
+    }
+    setState(() => _otpLoginEnabled = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('login_method_otp_enabled', value);
+  }
+
+  Future<void> _toggleBiometric(bool value, dynamic user) async {
+    if (!value) {
+      if (!_otpLoginEnabled && (!_mpinLoginEnabled || !_biometricEnrolled)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('At least one login method must remain enabled.'),
+            backgroundColor: Color(0xFFD4650F),
+          ),
+        );
+        return;
+      }
+      setState(() => _biometricLoginEnabled = false);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('login_method_biometric_enabled', false);
+      return;
+    }
+
+    // Toggling ON
+    setState(() => _deviceLockLoading = true);
     try {
       final service = ref.read(biometricServiceProvider);
-      if (_biometricClientId == user.clientId) {
-        await service.disable(clientId: user.clientId, token: user.token);
-        _biometricClientId = null;
-      } else {
-        await service.enable(clientId: user.clientId, token: user.token);
-        _biometricClientId = user.clientId;
+      if (!_biometricEnrolled) {
+        await service.resetAndEnable(
+          clientId: user.clientId,
+          token: user.token,
+        );
+        _biometricEnrolled = true;
       }
-      _biometricEnrollmentIssue = null;
-      _biometricActionError = null;
+      setState(() {
+        _biometricLoginEnabled = true;
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('login_method_biometric_enabled', true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _biometricClientId == null
-                  ? 'Device-lock login disabled.'
-                  : 'Device-lock login enabled.',
-            ),
+          const SnackBar(
+            content: Text('Biometric login enabled successfully!'),
+            backgroundColor: Color(0xFF16A34A),
           ),
         );
       }
-    } catch (error) {
-      _biometricActionError = error.toString();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not enable biometric: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _biometricActionLoading = false);
+      if (mounted) setState(() => _deviceLockLoading = false);
     }
   }
 
-  Future<void> _recoverBiometricLogin(dynamic user) async {
-    setState(() => _biometricActionLoading = true);
-    try {
-      await ref
-          .read(biometricServiceProvider)
-          .recoverAfterOtp(clientId: user.clientId, token: user.token);
-      if (mounted) {
-        setState(() {
-          _biometricClientId = null;
-          _biometricEnrollmentIssue = null;
-          _biometricActionError = null;
-        });
+  Future<void> _toggleMpin(bool value, dynamic user) async {
+    if (!value) {
+      if (!_otpLoginEnabled && (!_biometricLoginEnabled || !_biometricEnrolled)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Device-lock enrollment removed.')),
+          const SnackBar(
+            content: Text('At least one login method must remain enabled.'),
+            backgroundColor: Color(0xFFD4650F),
+          ),
+        );
+        return;
+      }
+      setState(() => _mpinLoginEnabled = false);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('login_method_mpin_enabled', false);
+      return;
+    }
+
+    // Toggling ON
+    setState(() => _deviceLockLoading = true);
+    try {
+      final service = ref.read(biometricServiceProvider);
+      if (!_biometricEnrolled) {
+        await service.resetAndEnable(
+          clientId: user.clientId,
+          token: user.token,
+        );
+        _biometricEnrolled = true;
+      }
+      setState(() {
+        _mpinLoginEnabled = true;
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('login_method_mpin_enabled', true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Device MPIN login enabled successfully!'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
         );
       }
-    } catch (error) {
+    } catch (e) {
       if (mounted) {
-        setState(() => _biometricActionError = error.toString());
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not enable MPIN: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     } finally {
-      if (mounted) setState(() => _biometricActionLoading = false);
+      if (mounted) setState(() => _deviceLockLoading = false);
     }
   }
 
@@ -229,6 +308,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ],
                         const SizedBox(height: 16),
                         _buildProfileDetailsCard(user),
+                        const SizedBox(height: 16),
+                        _buildLoginPreferencesCard(user),
                         const SizedBox(height: 16),
                         _buildPastOrdersCard(context, ordersAsync),
                         const SizedBox(height: 16),
@@ -518,12 +599,128 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _buildLightField('Email', user.email),
           const SizedBox(height: 12),
           _buildLightField('Phone Number', user.mobile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginPreferencesCard(dynamic user) {
+    return _accountCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.security_rounded,
+                size: 20,
+                color: Color(0xFF7B3DC3),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Login Methods',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Choose which login options appear on the sign-in screen',
+            style: _mutedText(fontSize: 11),
+          ),
+          const SizedBox(height: 14),
+          _buildLoginMethodToggleRow(
+            icon: Icons.sms_outlined,
+            title: 'OTP Login',
+            subtitle: 'Sign in with verification code via SMS',
+            value: _otpLoginEnabled,
+            onChanged: _toggleOtp,
+          ),
           if (AppConfig.biometricLoginEnabled) ...[
-            const SizedBox(height: 16),
-            _buildBiometricLoginAction(user),
+            const Divider(height: 20, color: Color(0xFFF0ECF7)),
+            _buildLoginMethodToggleRow(
+              icon: Icons.fingerprint_rounded,
+              title: 'Biometric Login',
+              subtitle: 'Sign in with fingerprint or face recognition',
+              value: _biometricLoginEnabled,
+              isLoading: _deviceLockLoading,
+              onChanged: (v) => _toggleBiometric(v, user),
+            ),
+            const Divider(height: 20, color: Color(0xFFF0ECF7)),
+            _buildLoginMethodToggleRow(
+              icon: Icons.dialpad_rounded,
+              title: 'Device MPIN Login',
+              subtitle: 'Sign in with device screen lock PIN or pattern',
+              value: _mpinLoginEnabled,
+              isLoading: _deviceLockLoading,
+              onChanged: (v) => _toggleMpin(v, user),
+            ),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildLoginMethodToggleRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    bool isLoading = false,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3EEF8),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: const Color(0xFF7B3DC3)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  color: const Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isLoading)
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF7B3DC3),
+            ),
+          )
+        else
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: const Color(0xFF7B3DC3),
+          ),
+      ],
     );
   }
 
@@ -857,64 +1054,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildGuestFeatureDivider() {
     return const Divider(height: 1, indent: 56, color: Color(0xFFF0ECF7));
-  }
-
-  Widget _buildBiometricLoginAction(dynamic user) {
-    final belongsToOtherAccount =
-        _biometricClientId != null && _biometricClientId != user.clientId;
-    final enabledForUser = _biometricClientId == user.clientId;
-    final label = belongsToOtherAccount
-        ? 'Device-lock login is enrolled for another account'
-        : enabledForUser
-        ? 'Disable device-lock login'
-        : 'Enable device-lock login';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        OutlinedButton.icon(
-          onPressed:
-              _biometricActionLoading ||
-                  belongsToOtherAccount ||
-                  _biometricEnrollmentIssue != null
-              ? null
-              : () => _toggleBiometricLogin(user),
-          icon: _biometricActionLoading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.lock_outline),
-          label: Text(label),
-        ),
-        if (_biometricEnrollmentIssue != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Column(
-              children: [
-                Text(
-                  _biometricEnrollmentIssue!,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                ),
-                TextButton(
-                  onPressed: _biometricActionLoading
-                      ? null
-                      : () => _recoverBiometricLogin(user),
-                  child: const Text('Remove invalid enrollment after sign-in'),
-                ),
-              ],
-            ),
-          ),
-        if (_biometricActionError != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              _biometricActionError!,
-              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-            ),
-          ),
-      ],
-    );
   }
 
   Widget _buildRewardsTab() {

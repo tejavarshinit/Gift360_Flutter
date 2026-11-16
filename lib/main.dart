@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
@@ -117,7 +118,7 @@ class _Gift360AppState extends ConsumerState<Gift360App>
         unawaited(_claimInstallReward(user));
       }
     });
-    unawaited(_pushNotificationService.initialize());
+    unawaited(_requestAppPermissions());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _pushNotificationService.setNavigationReady(true);
@@ -127,6 +128,26 @@ class _Gift360AppState extends ConsumerState<Gift360App>
     DioClient.onSessionExpired = () {
       _handleSessionExpired();
     };
+  }
+
+  Future<void> _requestAppPermissions() async {
+    final notificationsReady = _pushNotificationService.initialize();
+    // Show the location prompt right after the notification prompt instead of
+    // waiting for FCM token upload to finish.
+    await _pushNotificationService.permissionRequested;
+    await _requestInitialLocationPermission();
+    await notificationsReady;
+  }
+
+  Future<void> _requestInitialLocationPermission() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+    } catch (error) {
+      debugPrint('[Location] Initial permission request error: $error');
+    }
   }
 
   @override

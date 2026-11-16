@@ -135,6 +135,37 @@ class BiometricService {
     }
   }
 
+  /// Resets any stale or invalid local key/enrollment and registers a fresh enrollment for [clientId].
+  Future<void> resetAndEnable({
+    required String clientId,
+    required String token,
+  }) async {
+    final normalizedClientId = clientId.trim();
+    if (normalizedClientId.isEmpty || token.trim().isEmpty) {
+      throw const BiometricException(
+        'A valid signed-in account is required to enable device-lock login.',
+      );
+    }
+    final current = await enrollmentState();
+    if (current.isEnabled && current.enrollment!.clientId == normalizedClientId) {
+      return;
+    }
+    try {
+      final oldDeviceId = await _storage.read(_deviceIdKey);
+      if (oldDeviceId != null && oldDeviceId.trim().isNotEmpty) {
+        try {
+          await _api.revoke(deviceId: oldDeviceId, token: token);
+        } catch (_) {}
+      }
+    } catch (_) {}
+    try {
+      await _keyStore.deleteKey();
+    } catch (_) {}
+    await _clearMetadata();
+
+    await enable(clientId: normalizedClientId, token: token);
+  }
+
   Future<BiometricLoginResult> login({
     DeviceAuthMethod method = DeviceAuthMethod.any,
   }) async {

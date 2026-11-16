@@ -86,6 +86,16 @@ class PushNotificationService {
   AuthUser? _authenticatedUser;
   String? _deviceToken;
   bool _initialized = false;
+  final Completer<void> _permissionRequested = Completer<void>();
+
+  /// Completes as soon as the OS notification-permission prompt has been
+  /// answered (or immediately when notifications are unavailable), so callers
+  /// can chain the next permission prompt without waiting for token upload.
+  Future<void> get permissionRequested => _permissionRequested.future;
+
+  void _completePermissionRequested() {
+    if (!_permissionRequested.isCompleted) _permissionRequested.complete();
+  }
   late final DeviceTokenRegistrationCoordinator _tokenCoordinator =
       DeviceTokenRegistrationCoordinator((token, clientId) async {
         final user = _authenticatedUser;
@@ -153,12 +163,16 @@ class PushNotificationService {
   }
 
   Future<void> initialize() async {
-    if (!firebaseAvailable || _initialized) return;
+    if (!firebaseAvailable || _initialized) {
+      _completePermissionRequested();
+      return;
+    }
     final messaging = _messaging;
     if (messaging == null) {
       debugPrint(
         '[FCM] Notification handling is disabled: Firebase is unavailable.',
       );
+      _completePermissionRequested();
       return;
     }
     if (!kIsWeb &&
@@ -167,6 +181,7 @@ class PushNotificationService {
       debugPrint(
         '[FCM] Notification handling is unsupported on this platform.',
       );
+      _completePermissionRequested();
       return;
     }
     try {
@@ -247,6 +262,7 @@ class PushNotificationService {
         );
         status = requested.authorizationStatus;
       }
+      _completePermissionRequested();
       if (status != AuthorizationStatus.authorized &&
           status != AuthorizationStatus.provisional) {
         debugPrint('[FCM] Notification permission is not enabled.');
@@ -271,6 +287,8 @@ class PushNotificationService {
     } catch (error, stackTrace) {
       debugPrint('[FCM] Could not retrieve the device token: $error');
       debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _completePermissionRequested();
     }
   }
 

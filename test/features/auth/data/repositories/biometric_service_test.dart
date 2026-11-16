@@ -219,6 +219,27 @@ void main() {
       expect(storage.values, isEmpty);
     },
   );
+
+  test(
+    'resetAndEnable cleans stale metadata and key before re-enrolling',
+    () async {
+      final adapter = _GatewayAdapter((_) => {'success': true});
+      final storage = _enrolledStorage();
+      final keys = _FakeKeyStore()..keyExists = true;
+      final service = _service(adapter, storage, keys);
+
+      await service.resetAndEnable(clientId: 'client-new', token: 'auth-token');
+
+      expect(keys.createCount, 1);
+      expect(keys.deleteCount, 1);
+      expect(storage.values['biometric_login_enabled'], 'true');
+      expect(storage.values['biometric_login_client_id'], 'client-new');
+      expect(adapter.requests.map((r) => r.path), [
+        '/api/v1/auth/biometric/revoke',
+        '/api/v1/auth/biometric/register',
+      ]);
+    },
+  );
 }
 
 BiometricService _service(
