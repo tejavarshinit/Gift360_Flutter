@@ -9,6 +9,7 @@ import 'package:gift360/features/auth/presentation/providers/auth_provider.dart'
 import 'package:gift360/features/home/presentation/providers/home_providers.dart';
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
 import 'package:gift360/features/rewards/presentation/widgets/quiz_modal.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/open_supercoin_voucher.dart';
 
 class InstantGiftingCarousel extends ConsumerStatefulWidget {
   final VoidCallback? onExploreBrands;
@@ -495,7 +496,7 @@ class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
     final status =
         (ref.read(rewardStatusProvider).valueOrNull?['status'] ?? '').toString().toUpperCase();
     if (status == 'PENDING') {
-      context.push('/supercoin-voucher');
+      openSuperCoinVoucher(context);
       return;
     }
     setState(() {
@@ -511,7 +512,7 @@ class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
       if (!mounted) return;
       setState(() => _quizBusy = false);
       if (st == 'PENDING') {
-        context.push('/supercoin-voucher');
+        openSuperCoinVoucher(context);
         return;
       }
       if (publicId.isNotEmpty &&

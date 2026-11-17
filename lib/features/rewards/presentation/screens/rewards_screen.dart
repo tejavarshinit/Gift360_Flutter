@@ -9,6 +9,7 @@ import 'package:gift360/core/utils/analytics.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
 import 'package:gift360/features/rewards/presentation/widgets/quiz_modal.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/open_supercoin_voucher.dart';
 
 /// `/rewards` is the destination of the home Rewards tile. Mirrors React
 /// `RewardsPage` + `RewardsModal`: quiz banner, Instagram story/reel reward,
@@ -80,7 +81,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
     }
     setState(() => _quizNote = null);
     if (_quizWon(reward)) {
-      context.push('/supercoin-voucher');
+      openSuperCoinVoucher(context);
       return;
     }
 
@@ -110,7 +111,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
         );
         if (!mounted) return;
       } else if (status == 'PENDING') {
-        context.push('/supercoin-voucher');
+        openSuperCoinVoucher(context);
       } else {
         setState(
           () => _quizNote =

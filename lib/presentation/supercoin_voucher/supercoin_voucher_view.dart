@@ -11,10 +11,11 @@ class SupercoinVoucherView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ConnectedPage<SupercoinVoucherBloc, SupercoinVoucherEvent, SupercoinVoucherState>(
+    // Full-bleed transparent host — no tablet frame so home stays visible.
+    return ConnectedPage<SupercoinVoucherBloc, SupercoinVoucherEvent,
+        SupercoinVoucherState>(
       create: SupercoinVoucherBloc.new,
       started: const SupercoinVoucherStarted(),
-      maxContentWidth: 840,
       child: const SuperCoinVoucherScreen(),
     );
   }

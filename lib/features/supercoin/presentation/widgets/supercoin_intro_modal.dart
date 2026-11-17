@@ -1,8 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/open_supercoin_voucher.dart';
 import 'package:gift360/features/supercoin/presentation/widgets/supercoin_guide_sheet.dart';
 
 /// Port of React `src/components/SuperCoinIntroModal.tsx`.
@@ -55,12 +55,13 @@ class _SuperCoinIntroModalState extends State<SuperCoinIntroModal> {
   }
 
   void _goTryNow() {
-    final router = GoRouter.of(context);
+    final navigatorContext = context;
     widget.onClose();
-    // Defer navigation to next frame so the modal's state update settles
-    // first (mirrors React: onClose() then setLocation()).
+    // Defer so the intro modal closes before the convert sheet opens.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      router.go('/supercoin-voucher');
+      if (navigatorContext.mounted) {
+        openSuperCoinVoucher(navigatorContext);
+      }
     });
   }
 

@@ -489,41 +489,57 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
       }
     }
 
+    final media = MediaQuery.of(context);
+    final screenH = media.size.height;
+    final screenW = media.size.width;
+    // Shorter sheet so dimmed home stays visible above it.
+    final sheetHeight =
+        (screenH * 0.72).clamp(420.0, screenH - media.padding.top - 48);
+    final sheetMaxW = screenW >= 600 ? 420.0 : screenW;
+
     return Stack(
       children: [
-        // Backdrop
+        // Transparent hit target — dialog barrier already dims home.
         Positioned.fill(
           child: GestureDetector(
             onTap: () => _handleClose(),
-            child: Container(color: Colors.black.withValues(alpha: 0.45)),
+            behavior: HitTestBehavior.opaque,
+            child: const ColoredBox(color: Colors.transparent),
           ),
         ),
         // Sheet
         Align(
           alignment: Alignment.bottomCenter,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 390),
-            margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0 + 63),
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                height: 600,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F5F9),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(38)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.28),
-                      blurRadius: 50,
-                      offset: const Offset(0, -18),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    Expanded(child: _buildBody(user, scState, balance, hasEnough)),
-                  ],
+          child: SafeArea(
+            top: false,
+            child: Container(
+              width: sheetMaxW,
+              constraints: BoxConstraints(maxWidth: sheetMaxW),
+              child: Material(
+                color: const Color(0xFFF3F5F9),
+                elevation: 16,
+                shadowColor: Colors.black.withValues(alpha: 0.35),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
+                clipBehavior: Clip.antiAlias,
+                child: SizedBox(
+                  height: sheetHeight,
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      Expanded(
+                        child: ColoredBox(
+                          color: const Color(0xFFF3F5F9),
+                          child: _buildBody(
+                            user,
+                            scState,
+                            balance,
+                            hasEnough,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -567,7 +583,7 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(38)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         children: [
@@ -752,8 +768,13 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
         ? (_totalVoucherValue * cashEarnPercent).round() / 100
         : 0.0;
 
+    final narrow = MediaQuery.sizeOf(context).width < 380;
+    final sidePad = narrow ? 12.0 : 16.0;
+    final thumbW = narrow ? 88.0 : 112.0;
+    final thumbH = narrow ? 56.0 : 70.0;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: EdgeInsets.fromLTRB(sidePad, 8, sidePad, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -768,8 +789,8 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
             child: Row(
               children: [
                 Container(
-                  width: 120,
-                  height: 70,
+                  width: thumbW,
+                  height: thumbH,
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
                   clipBehavior: Clip.antiAlias,
                   child: BrandImage(imageUrl: brand.resolvedImageUrl, fit: BoxFit.contain),
@@ -779,8 +800,13 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(brand.brandName ?? '', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
-                      Text('E-Gift Cards', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
+                      Text(
+                        brand.brandName ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(fontSize: narrow ? 14 : 16, fontWeight: FontWeight.w600),
+                      ),
+                      Text('E-Gift Cards', style: GoogleFonts.poppins(fontSize: narrow ? 13 : 15, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -905,11 +931,32 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Earn upto % SuperCoins', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF7C3AED))),
+                      Flexible(
+                        child: Text(
+                          'Earn upto ${_earnPercent.toStringAsFixed(_earnPercent % 1 == 0 ? 0 : 1)}% SuperCoins',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF7C3AED),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                       const SizedBox(width: 4),
-                      Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 14, height: 14),
+                      Image.asset(
+                        'assets/images/SuperCOin-removebg-preview.png',
+                        width: 14,
+                        height: 14,
+                      ),
                       const SizedBox(width: 4),
-                      Text('upto 100 SuperCoins', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF7C3AED))),
+                      Text(
+                        'upto 100 SuperCoins',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF7C3AED),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -919,43 +966,89 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Quantity:', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                      Text(
+                        'Quantity:',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          _qtyButton('-', () => setState(() => _quantity = (_quantity - 1).clamp(1, 3))),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 221,
-                            height: 30,
-                            child: TextField(
-                              textAlign: TextAlign.center,
-                              keyboardType: TextInputType.number,
-                              controller: TextEditingController(text: _quantity.toString()),
-                              onChanged: (v) {
-                                final n = int.tryParse(v) ?? 1;
-                                setState(() => _quantity = n.clamp(1, 3));
-                              },
-                              decoration: InputDecoration(
-                                contentPadding: EdgeInsets.zero,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFF9747FF))),
-                              ),
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF4E4E4E)),
+                          _qtyButton(
+                            '-',
+                            () => setState(
+                              () => _quantity = (_quantity - 1).clamp(1, 3),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _qtyButton('+', _quantity >= 3 ? null : () => setState(() => _quantity = (_quantity + 1).clamp(1, 3))),
+                          Expanded(
+                            child: SizedBox(
+                              height: 30,
+                              child: TextField(
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                controller: TextEditingController(
+                                  text: _quantity.toString(),
+                                ),
+                                onChanged: (v) {
+                                  final n = int.tryParse(v) ?? 1;
+                                  setState(() => _quantity = n.clamp(1, 3));
+                                },
+                                decoration: InputDecoration(
+                                  contentPadding: EdgeInsets.zero,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(5),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFF9747FF),
+                                    ),
+                                  ),
+                                ),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF4E4E4E),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _qtyButton(
+                            '+',
+                            _quantity >= 3
+                                ? null
+                                : () => setState(
+                                    () =>
+                                        _quantity = (_quantity + 1).clamp(1, 3),
+                                  ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Center(
-                        child: RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.poppins(fontSize: 15, color: Colors.black),
-                            children: [
-                              TextSpan(text: 'Total: ${_formatCurrency(_amount.toDouble())} x $_quantity = '),
-                              TextSpan(text: _formatCurrency(_totalVoucherValue), style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: const Color(0xFF9747FF))),
-                            ],
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: RichText(
+                            text: TextSpan(
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                color: Colors.black,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text:
+                                      'Total: ${_formatCurrency(_amount.toDouble())} x $_quantity = ',
+                                ),
+                                TextSpan(
+                                  text: _formatCurrency(_totalVoucherValue),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF9747FF),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1199,34 +1292,40 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                 ),
             ],
 
-          // Info tabs
+          // Info tabs — same outlined pills as Payment Details sheet.
           const SizedBox(height: 12),
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 20, offset: const Offset(0, 6))]),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _infoTab('i', 'About', 0),
-                _infoTab('*', 'How to Use', 1),
-                _infoTab('#', 'Terms', 2),
-              ],
-            ),
+          Row(
+            children: [
+              _infoTab('About', 0),
+              const SizedBox(width: 8),
+              _infoTab('How to use', 1),
+              const SizedBox(width: 8),
+              _infoTab('Terms', 2),
+            ],
           ),
           if (_activeTab != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 4, offset: const Offset(4, 4))]),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
               child: Text(
                 _activeTab == 0
                     ? (brand.description ?? 'No description available.')
                     : _activeTab == 1
-                        ? ((brand.howToUse ?? '').isNotEmpty ? brand.howToUse! : 'No instructions available.')
+                        ? ((brand.howToUse ?? '').isNotEmpty
+                            ? brand.howToUse!
+                            : 'No instructions available.')
                         : (brand.terms ?? 'No terms available.'),
-                style: GoogleFonts.poppins(fontSize: 12, height: 1.5, color: const Color(0xFF4B5563)),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  height: 1.5,
+                  color: const Color(0xFF4B5563),
+                ),
               ),
             ),
           ],
@@ -1364,24 +1463,30 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
     );
   }
 
-  Widget _infoTab(String icon, String label, int idx) {
+  Widget _infoTab(String label, int idx) {
     final isActive = _activeTab == idx;
-    final width = idx == 0 ? 71.0 : idx == 1 ? 102.0 : 73.0;
-    return SizedBox(
-      width: width,
-      height: 30,
+    const accent = Color(0xFF6C5CE7);
+    return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _activeTab = isActive ? null : idx),
         child: Container(
-          decoration: BoxDecoration(color: const Color(0xFFEDEAFF), borderRadius: BorderRadius.circular(10)),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(icon, style: GoogleFonts.poppins(fontSize: 16, color: const Color(0xFF9747FF))),
-              const SizedBox(width: 4),
-              Text(label, style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFF9747FF))),
-            ],
+          height: 36,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: isActive ? accent : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: accent, width: 1.4),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isActive ? Colors.white : accent,
+            ),
           ),
         ),
       ),

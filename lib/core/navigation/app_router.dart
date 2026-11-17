@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -301,9 +301,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/rewards',
         builder: (context, state) => const RewardsView(),
       ),
-      _backAwareRoute(
+      // Non-opaque page so the shell (home) stays painted underneath.
+      GoRoute(
         path: '/supercoin-voucher',
-        builder: (context, state) => const SupercoinVoucherView(),
+        pageBuilder: (context, state) {
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            opaque: false,
+            barrierDismissible: true,
+            barrierColor: Colors.black54,
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            child: AppBackNavigationScope(
+              router: GoRouter.of(context),
+              child: const SupercoinVoucherView(),
+            ),
+          );
+        },
       ),
       _backAwareRoute(
         path: '/bulk-purchase',

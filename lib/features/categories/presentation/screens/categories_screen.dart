@@ -532,7 +532,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                 physics: const BouncingScrollPhysics(),
                 itemCount: display.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (ctx, i) => _buildProductCard(display[i]),
+                itemBuilder: (ctx, i) => _buildProductCard(
+                  display[i],
+                  width: _horizontalCardWidth(ctx),
+                ),
               ),
             )
           else
@@ -576,11 +579,16 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         ? 6
         : width >= 600
         ? 4
-        : width >= 380
+        : width >= 400
         ? 3
         : 2;
     final gaps = (columns - 1) * 8;
     return (width - 32 - gaps) / columns;
+  }
+
+  double _horizontalCardWidth(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return (width * 0.42).clamp(140.0, 168.0);
   }
 
   void _openBrand(Brand brand) {

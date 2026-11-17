@@ -869,11 +869,13 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     final imageUrl = brand.resolvedImageUrl;
     final brandName = brand.brandName ?? '';
     final discountValue = double.tryParse(brand.discount ?? '0') ?? 0;
+    final cardW =
+        (MediaQuery.sizeOf(context).width * 0.30).clamp(104.0, 124.0);
 
     return GestureDetector(
       onTap: () => _onBrandTap(brand),
       child: Container(
-        width: 112,
+        width: cardW,
         height: 152,
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
         decoration: BoxDecoration(

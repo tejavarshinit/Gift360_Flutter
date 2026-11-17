@@ -2,37 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:gift360/config/app_config.dart';
-import 'package:gift360/features/supercoin/presentation/widgets/supercoin_brand_modal.dart';
+import 'package:gift360/core/navigation/app_navigator.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/open_supercoin_voucher.dart';
 
-/// Standalone full-screen host for the SuperCoin brand modal, mirroring
-/// React's `pages/SuperCoinVoucherPreview.tsx` (`/supercoin-voucher` route).
+/// Deep-link / route host. Immediately hands off to a dialog over the
+/// previous page (home) so the background is never a blank screen.
 class SuperCoinVoucherScreen extends ConsumerStatefulWidget {
   const SuperCoinVoucherScreen({super.key});
 
   @override
-  ConsumerState<SuperCoinVoucherScreen> createState() => _SuperCoinVoucherScreenState();
+  ConsumerState<SuperCoinVoucherScreen> createState() =>
+      _SuperCoinVoucherScreenState();
 }
 
-class _SuperCoinVoucherScreenState extends ConsumerState<SuperCoinVoucherScreen> {
-  bool _open = true;
+class _SuperCoinVoucherScreenState
+    extends ConsumerState<SuperCoinVoucherScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final router = GoRouter.of(context);
+      if (router.canPop()) {
+        router.pop();
+      } else {
+        router.go('/');
+      }
+      await Future<void>.delayed(Duration.zero);
+      final ctx = navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        await openSuperCoinVoucher(ctx);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F9),
-      body: SuperCoinBrandModal(
-        open: _open,
-        brandId: SuperCoinConversionConfig.featuredBrandId,
-        onClose: () {
-          setState(() => _open = false);
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/');
-          }
-        },
-      ),
+    return const Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SizedBox.shrink(),
     );
   }
 }

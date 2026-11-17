@@ -33,6 +33,7 @@ import 'package:gift360/core/providers/notification_provider.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/home/presentation/providers/home_providers.dart';
 import 'package:gift360/features/supercoin/presentation/widgets/supercoin_intro_modal.dart';
+import 'package:gift360/features/supercoin/presentation/widgets/open_supercoin_voucher.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/features/supercoin/data/supercoin_excluded_brands.dart';
 import 'package:gift360/features/feedback/presentation/providers/feedback_provider.dart';
@@ -413,7 +414,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         );
                         return;
                       }
-                      context.push('/supercoin-voucher');
+                      openSuperCoinVoucher(context);
                     },
                   ),
                   const SizedBox(width: 8),
@@ -708,8 +709,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // ActionGrid (Section 3C)
   // ─────────────────────────────────────────────
   Widget _buildActionGrid() {
+    final narrow = MediaQuery.sizeOf(context).width < 380;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(21, 4, 21, 0),
+      padding: EdgeInsets.fromLTRB(narrow ? 12 : 16, 4, narrow ? 12 : 16, 0),
       child: Row(
         children: [
           Expanded(
@@ -719,7 +721,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onTap: _showCategoriesBottomSheet,
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: narrow ? 4 : 6),
           Expanded(
             child: _buildActionItem(
               icon: Icons.send,
@@ -727,7 +729,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onTap: () => context.push('/nearby'),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: narrow ? 4 : 6),
           Expanded(
             child: _buildActionItem(
               icon: Icons.inventory_2_outlined,
@@ -735,7 +737,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onTap: () => context.push('/orders'),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: narrow ? 4 : 6),
           Expanded(
             child: _buildActionItem(
               icon: Icons.person_add_alt_1,
@@ -743,7 +745,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onTap: () => context.push('/distributor'),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: narrow ? 4 : 6),
           Expanded(
             child: _buildActionItem(
               icon: Icons.monetization_on_outlined,
@@ -761,6 +763,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     required String label,
     required VoidCallback onTap,
   }) {
+    final narrow = MediaQuery.sizeOf(context).width < 380;
+    final iconSize = narrow ? 38.0 : 43.0;
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -772,8 +776,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               clipBehavior: Clip.none,
               children: [
                 Container(
-                  width: 43,
-                  height: 43,
+                  width: iconSize,
+                  height: iconSize,
                   decoration: BoxDecoration(
                     color: AppColors.actionIconBg,
                     borderRadius: BorderRadius.circular(6),
@@ -785,7 +789,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ),
                     ],
                   ),
-                  child: Icon(icon, size: 27, color: AppColors.actionIconColor),
+                  child: Icon(
+                    icon,
+                    size: narrow ? 22 : 27,
+                    color: AppColors.actionIconColor,
+                  ),
                 ),
                 if (label == 'Offers Near You')
                   Positioned(
@@ -796,17 +804,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
               ],
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 6),
             SizedBox(
-              height: 26,
+              height: 28,
               child: Text(
                 label,
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+                  fontSize: narrow ? 9 : 10,
+                  fontWeight: FontWeight.w700,
                   color: const Color(0xFF161616),
-                  height: 1.1,
+                  height: 1.15,
                 ),
               ),
             ),
@@ -1933,7 +1943,7 @@ class _SuperCoinCtaWidgetState extends State<_SuperCoinCtaWidget>
           );
           return;
         }
-        context.push('/supercoin-voucher');
+        openSuperCoinVoucher(context);
       },
       child: AnimatedScale(
         scale: _pressed ? 0.96 : 1.0,
@@ -2024,10 +2034,12 @@ class _HomeBrandCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mark = name.trim().isEmpty ? 'G' : name.trim()[0].toUpperCase();
+    final screenW = MediaQuery.sizeOf(context).width;
+    final cardW = (screenW * 0.38).clamp(132.0, 148.0);
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 148,
+        width: cardW,
         height: 164,
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
         decoration: BoxDecoration(
