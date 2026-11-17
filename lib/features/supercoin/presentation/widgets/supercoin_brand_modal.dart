@@ -226,8 +226,6 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
 
   String _normalizeMobile(String? m) => normalizeMobileToE164(m) ?? '';
 
-  String get _normalizeBrandCode => (_brand?.brandCode ?? '').trim().toUpperCase();
-
   SuperCoinIdentity? get _superCoinIdentity {
     final user = ref.read(authProvider);
     final nm = _normalizeMobile(user?.mobile);
@@ -661,7 +659,7 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: brands.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
                 itemBuilder: (_, index) {
                   final b = brands[index];
                   final selected = b.brandId == _selectedBrandId;
@@ -981,7 +979,7 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
               clipBehavior: Clip.antiAlias,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset('assets/images/scScrollableNew.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                child: Image.asset('assets/images/scScrollableNew.png', fit: BoxFit.contain, errorBuilder: (_, _, _) => const SizedBox.shrink()),
               ),
             ),
           ),
@@ -1028,7 +1026,7 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                           children: [
                             Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 16, height: 16),
                             const SizedBox(width: 4),
-                            Text('${scState.balance.toStringAsFixed(0)}', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: hasEnough ? const Color(0xFF059669) : Colors.red.shade500)),
+                            Text(scState.balance.toStringAsFixed(0), style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: hasEnough ? const Color(0xFF059669) : Colors.red.shade500)),
                           ],
                         ),
                       ],

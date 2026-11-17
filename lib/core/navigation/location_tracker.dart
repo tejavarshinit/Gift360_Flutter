@@ -9,9 +9,12 @@ final ValueNotifier<String> appLocation = ValueNotifier<String>('/');
 class LocationObserver extends NavigatorObserver {
   void _update(Route<dynamic>? route) {
     final name = route?.settings.name;
-    if (name != null && name.isNotEmpty) {
-      appLocation.value = name;
-    }
+    if (name == null || name.isEmpty || name == appLocation.value) return;
+    // Navigation notifies observers during the build. Updating the notifier
+    // immediately marks listeners dirty and throws.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (appLocation.value != name) appLocation.value = name;
+    });
   }
 
   @override

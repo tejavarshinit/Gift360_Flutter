@@ -3,46 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
-import 'package:gift360/features/auth/presentation/screens/login_screen.dart';
-import 'package:gift360/features/auth/presentation/screens/register_screen.dart';
-import 'package:gift360/features/auth/presentation/screens/forgot_password_screen.dart';
-import 'package:gift360/features/auth/presentation/screens/reset_password_screen.dart';
-import 'package:gift360/features/home/presentation/screens/home_screen.dart';
-import 'package:gift360/features/brands/presentation/screens/brands_screen.dart';
-import 'package:gift360/features/categories/presentation/screens/categories_screen.dart';
-import 'package:gift360/features/cart/presentation/screens/cart_screen.dart';
-import 'package:gift360/features/orders/presentation/screens/orders_screen.dart';
-import 'package:gift360/features/profile/presentation/screens/profile_screen.dart';
-import 'package:gift360/features/onboarding/presentation/screens/onboarding_screen.dart';
-import 'package:gift360/features/landing/presentation/screens/distributor_screen.dart';
-import 'package:gift360/features/landing/presentation/screens/reseller_screen.dart';
-import 'package:gift360/features/reseller/presentation/screens/reseller_login_screen.dart';
-import 'package:gift360/features/reseller/presentation/screens/reseller_dashboard_screen.dart';
-import 'package:gift360/features/reseller/presentation/screens/reseller_catalog_screen.dart';
-import 'package:gift360/features/reseller/presentation/screens/reseller_cart_screen.dart';
-import 'package:gift360/features/reseller/presentation/screens/reseller_reset_password_screen.dart';
-import 'package:gift360/features/landing/presentation/screens/corporate_screen.dart';
-import 'package:gift360/features/legal/presentation/screens/privacy_screen.dart';
-import 'package:gift360/features/legal/presentation/screens/terms_screen.dart';
-import 'package:gift360/features/legal/presentation/screens/refund_screen.dart';
-import 'package:gift360/features/legal/presentation/screens/delete_account_screen.dart';
-import 'package:gift360/features/faq/presentation/screens/faq_screen.dart';
-import 'package:gift360/features/blogs/presentation/screens/blog_screen.dart';
-import 'package:gift360/features/blog/presentation/screens/single_blog_page.dart';
-import 'package:gift360/features/nearby/presentation/screens/nearby_screen.dart';
-import 'package:gift360/features/brands/presentation/screens/brand_details_screen.dart';
-import 'package:gift360/features/spin_wheel/presentation/screens/spin_wheel_screen.dart';
-import 'package:gift360/features/rewards/presentation/screens/rewards_screen.dart';
-import 'package:gift360/features/offers/presentation/screens/offers_screen.dart';
-import 'package:gift360/features/faq/presentation/screens/faq_topic_screen.dart';
-import 'package:gift360/features/legal/presentation/screens/login_issues_screen.dart';
-import 'package:gift360/features/supercoin/presentation/screens/supercoin_voucher_screen.dart';
-import 'package:gift360/features/bulk_purchase/presentation/screens/bulk_purchase_screen.dart';
-import 'package:gift360/features/payment/presentation/screens/payment_webview_screen.dart';
-import 'package:gift360/features/payment/presentation/screens/payment_result_screen.dart';
-import 'package:gift360/features/notifications/presentation/screens/notifications_screen.dart';
-import 'package:gift360/features/orders/presentation/screens/my_orders_screen.dart';
-import 'package:gift360/features/order/presentation/screens/order_checkout_screen.dart';
+import 'package:gift360/presentation/presentation.dart';
 import 'package:gift360/core/navigation/app_navigator.dart';
 import 'app_back_navigation_scope.dart';
 import 'location_tracker.dart';
@@ -51,7 +12,7 @@ import 'scaffold_with_nav.dart';
 /// Tracks onboarding completion, persisted in SharedPreferences under
 /// `g360_onboarding_v3` (matches React's `localStorage["g360_onboarding_v3"]`).
 class OnboardingNotifier extends StateNotifier<bool> {
-  OnboardingNotifier(bool initial) : super(initial);
+  OnboardingNotifier(super.initial);
 
   /// Mark onboarding complete — persists to SharedPreferences and updates state.
   Future<void> complete() async {
@@ -121,39 +82,39 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       _backAwareRoute(
         path: '/onboarding',
-        builder: (context, state) => const OnboardingPage(),
+        builder: (context, state) => const OnboardingView(),
       ),
       _backAwareRoute(
         path: '/login',
         builder: (context, state) {
           final isSessionExpired =
               state.uri.queryParameters['session'] == 'expired';
-          return LoginScreen(isSessionExpired: isSessionExpired);
+          return LoginView(isSessionExpired: isSessionExpired);
         },
       ),
       _backAwareRoute(
         path: '/register',
-        builder: (context, state) => const RegisterScreen(),
+        builder: (context, state) => const RegisterView(),
       ),
       _backAwareRoute(
         path: '/forgot-password',
-        builder: (context, state) => const ForgotPasswordScreen(),
+        builder: (context, state) => const ForgotPasswordView(),
       ),
       _backAwareRoute(
         path: '/reset-password',
         builder: (context, state) =>
-            ResetPasswordScreen(token: state.uri.queryParameters['token']),
+            ResetPasswordView(token: state.uri.queryParameters['token']),
       ),
       _backAwareRoute(
         path: '/brand/:id',
         builder: (context, state) =>
-            BrandDetailsScreen(brandId: state.pathParameters['id']!),
+            BrandDetailsView(brandId: state.pathParameters['id']!),
       ),
       _backAwareRoute(
         path: '/payment-webview',
         builder: (context, state) {
           final extras = state.extra as Map<String, dynamic>? ?? {};
-          return PaymentWebViewScreen(
+          return PaymentWebviewView(
             paymentUrl: extras['paymentUrl'] as String? ?? '',
             orderNumber: extras['orderNumber'] as String?,
           );
@@ -163,7 +124,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/payment-result',
         builder: (context, state) {
           final params = state.uri.queryParameters;
-          return PaymentResultScreen(
+          return PaymentResultView(
             status: params['status'],
             txnId: params['txnid'] ?? params['txnId'],
             error: params['error'],
@@ -183,7 +144,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/',
-                builder: (context, state) => const HomeScreen(),
+                builder: (context, state) => const HomepageView(),
               ),
             ],
           ),
@@ -191,7 +152,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/categories',
-                builder: (context, state) => const CategoriesScreen(),
+                builder: (context, state) => const CategoriesView(),
               ),
             ],
           ),
@@ -207,7 +168,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   final discounts =
                       state.uri.queryParametersAll['discount'] ??
                       const <String>[];
-                  return BrandsScreen(
+                  return BrandsView(
                     initialSearch: search,
                     initialCategory: categories,
                     initialSuperCoinsOnly: supercoins,
@@ -221,7 +182,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/cart',
-                builder: (context, state) => const CartScreen(),
+                builder: (context, state) => const CartView(),
               ),
             ],
           ),
@@ -229,128 +190,128 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       _backAwareRoute(
         path: '/orders',
-        builder: (context, state) => const OrdersScreen(),
+        builder: (context, state) => const OrdersView(),
       ),
       _backAwareRoute(
         path: '/my-orders',
-        builder: (context, state) => const MyOrdersScreen(),
+        builder: (context, state) => const MyOrdersView(),
       ),
       _backAwareRoute(
         path: '/my-orders/:orderNumber/checkout',
-        builder: (context, state) => OrderCheckoutScreen(
+        builder: (context, state) => OrderCheckoutView(
           orderNumber: state.pathParameters['orderNumber']!,
         ),
       ),
       _backAwareRoute(
         path: '/notifications',
-        builder: (context, state) => const NotificationsScreen(),
+        builder: (context, state) => const NotificationsView(),
       ),
       _backAwareRoute(
         path: '/profile',
-        builder: (context, state) => const ProfileScreen(),
+        builder: (context, state) => const ProfileView(),
       ),
       _backAwareRoute(
         path: '/distributor',
-        builder: (context, state) => const DistributorScreen(),
+        builder: (context, state) => const DistributorView(),
       ),
       _backAwareRoute(
         path: '/reseller',
-        builder: (context, state) => const ResellerScreen(),
+        builder: (context, state) => const ResellerView(),
       ),
       _backAwareRoute(
         path: '/reseller/login',
-        builder: (context, state) => const ResellerLoginScreen(),
+        builder: (context, state) => const ResellerLoginView(),
       ),
       _backAwareRoute(
         path: '/reseller/dashboard',
-        builder: (context, state) => const ResellerDashboardScreen(),
+        builder: (context, state) => const ResellerDashboardView(),
       ),
       _backAwareRoute(
         path: '/reseller/catalog',
-        builder: (context, state) => const ResellerCatalogScreen(),
+        builder: (context, state) => const ResellerCatalogView(),
       ),
       _backAwareRoute(
         path: '/reseller/cart',
-        builder: (context, state) => const ResellerCartScreen(),
+        builder: (context, state) => const ResellerCartView(),
       ),
       _backAwareRoute(
         path: '/reseller/reset-password',
-        builder: (context, state) => ResellerResetPasswordScreen(
+        builder: (context, state) => ResellerResetPasswordView(
           token: state.uri.queryParameters['token'],
         ),
       ),
       _backAwareRoute(
         path: '/changepassword',
-        builder: (context, state) => ResellerResetPasswordScreen(
+        builder: (context, state) => ResellerResetPasswordView(
           token: state.uri.queryParameters['token'],
         ),
       ),
       _backAwareRoute(
         path: '/corporate',
-        builder: (context, state) => const CorporateScreen(),
+        builder: (context, state) => const CorporateView(),
       ),
       _backAwareRoute(
         path: '/privacy',
-        builder: (context, state) => const PrivacyScreen(),
+        builder: (context, state) => const PrivacyView(),
       ),
       _backAwareRoute(
         path: '/terms',
-        builder: (context, state) => const TermsScreen(),
+        builder: (context, state) => const TermsView(),
       ),
       _backAwareRoute(
         path: '/refund',
-        builder: (context, state) => const RefundScreen(),
+        builder: (context, state) => const RefundView(),
       ),
       _backAwareRoute(
         path: '/delete-account',
-        builder: (context, state) => const DeleteAccountScreen(),
+        builder: (context, state) => const DeleteAccountView(),
       ),
       _backAwareRoute(
         path: '/offers',
-        builder: (context, state) => const OffersScreen(),
+        builder: (context, state) => const OffersView(),
       ),
       _backAwareRoute(
         path: '/login-issues',
-        builder: (context, state) => const LoginIssuesScreen(),
+        builder: (context, state) => const LoginIssuesView(),
       ),
       _backAwareRoute(
         path: '/faq',
-        builder: (context, state) => const FaqScreen(),
+        builder: (context, state) => const FaqView(),
       ),
       _backAwareRoute(
         path: '/faq/:id',
         builder: (context, state) =>
-            FaqTopicScreen(topicId: state.pathParameters['id'] ?? ''),
+            FaqTopicView(topicId: state.pathParameters['id'] ?? ''),
       ),
       _backAwareRoute(
         path: '/blogs',
-        builder: (context, state) => const BlogScreen(),
+        builder: (context, state) => const BlogsView(),
       ),
       _backAwareRoute(
         path: '/blogs/:id',
-        builder: (context, state) => SingleBlogPage(
+        builder: (context, state) => BlogDetailView(
           id: int.tryParse(state.pathParameters['id'] ?? '0') ?? 0,
         ),
       ),
       _backAwareRoute(
         path: '/spin-wheel',
-        builder: (context, state) => const SpinWheelScreen(),
+        builder: (context, state) => const SpinWheelView(),
       ),
       _backAwareRoute(
         path: '/rewards',
-        builder: (context, state) => const RewardsScreen(),
+        builder: (context, state) => const RewardsView(),
       ),
       _backAwareRoute(
         path: '/supercoin-voucher',
-        builder: (context, state) => const SuperCoinVoucherScreen(),
+        builder: (context, state) => const SupercoinVoucherView(),
       ),
       _backAwareRoute(
         path: '/bulk-purchase',
-        builder: (context, state) => const BulkPurchaseScreen(),
+        builder: (context, state) => const BulkPurchaseView(),
       ),
       _backAwareRoute(
         path: '/nearby',
-        builder: (context, state) => const NearbyScreen(),
+        builder: (context, state) => const NearbyView(),
       ),
     ],
   );

@@ -1,4 +1,3 @@
-﻿import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -156,11 +155,11 @@ class _ScratchCardState extends ConsumerState<ScratchCard> {
         'clientId': widget.clientId,
         'orderItemId': widget.voucher.orderItemId,
         if (itemId != null && itemId.isNotEmpty) 'itemId': itemId,
-        if (recipientEmail != null) 'recipientEmail': recipientEmail,
-        if (senderName != null) 'senderName': senderName,
-        if (personalMessage != null) 'personalMessage': personalMessage,
-        if (mediaUrl != null) 'mediaUrl': mediaUrl,
-        if (recipientMobile != null) 'recipientMobile': recipientMobile,
+        'recipientEmail': ?recipientEmail,
+        'senderName': ?senderName,
+        'personalMessage': ?personalMessage,
+        'mediaUrl': ?mediaUrl,
+        'recipientMobile': ?recipientMobile,
         'deliveryChannel': deliveryChannel.apiValue,
       });
       if (!mounted) return;

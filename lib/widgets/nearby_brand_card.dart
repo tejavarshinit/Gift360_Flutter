@@ -41,7 +41,7 @@ class NearbyBrandCard extends StatelessWidget {
                     fit: BoxFit.contain,
                     width: 56,
                     height: 56,
-                    errorWidget: (_, __, ___) => _buildAvatar(initial),
+                    errorWidget: (_, _, _) => _buildAvatar(initial),
                   ))
                 : _buildAvatar(initial),
           ),

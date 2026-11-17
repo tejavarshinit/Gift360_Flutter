@@ -1,11 +1,9 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gift360/core/widgets/session_expired_dialog.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -15,11 +13,9 @@ import 'package:gift360/features/brands/data/models/brand.dart';
 import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
 import 'package:gift360/features/payment/presentation/widgets/payment_details_sheet.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
-import 'package:gift360/features/payment/data/models/payment.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/cart/data/models/cart.dart';
-import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
 import 'package:gift360/core/widgets/app_bottom_nav.dart';
 import 'package:gift360/theme/app_colors.dart';
@@ -91,15 +87,18 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
 
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!mounted) return;
       if (!serviceEnabled) {
         setState(() => _locationStatus = _LocationStatus.denied);
         return;
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
+      if (!mounted) return;
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
+      if (!mounted) return;
       if (permission == LocationPermission.deniedForever) {
         setState(() => _locationStatus = _LocationStatus.deniedForever);
         return;
@@ -115,6 +114,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
           timeLimit: Duration(seconds: 10),
         ),
       );
+      if (!mounted) return;
       setState(() {
         _position = position;
         _isGeocoding = true;
@@ -154,6 +154,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
         debugPrint('Geocoding error: $e');
         debugPrint('Stack: $stack');
       }
+      if (!mounted) return;
       setState(() => _isGeocoding = false);
 
       if (_detectedAddress.isNotEmpty) {
@@ -167,6 +168,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       }
     } catch (e) {
       debugPrint('Location request error: $e');
+      if (!mounted) return;
       setState(() => _locationStatus = _LocationStatus.denied);
     }
   }
@@ -205,12 +207,14 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
               ?.map((b) => NearbyBrand.fromJson(b))
               .toList() ??
           [];
+      if (!mounted) return;
       setState(() {
         _brands = brandsList;
         _isLoadingBrands = false;
       });
     } catch (e) {
       debugPrint('Nearby brands fetch error: $e');
+      if (!mounted) return;
       setState(() {
         _hasError = true;
         _isLoadingBrands = false;
@@ -425,6 +429,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           Column(
@@ -505,7 +510,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 20,
                   ),
                 ],
@@ -539,10 +544,12 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
 
   Widget _buildContent() {
     if (_showLoading || _showConfirmModal) return const SizedBox.shrink();
-    if (_locationStatus == _LocationStatus.deniedForever)
+    if (_locationStatus == _LocationStatus.deniedForever) {
       return LocationDenied(onOpenSettings: _openAppSettings);
-    if (_locationStatus == _LocationStatus.denied)
+    }
+    if (_locationStatus == _LocationStatus.denied) {
       return LocationPrompt(onRequest: _requestLocation);
+    }
     if (_hasError) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -586,7 +593,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
           child: ListView.separated(
             padding: const EdgeInsets.only(bottom: 80),
             itemCount: _filteredBrands.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) => NearbyBrandCard(
               brand: _filteredBrands[index],
               onBuy: () => _onBuy(_filteredBrands[index].brandId),

@@ -93,7 +93,7 @@ class _OrderCheckoutScreenState extends ConsumerState<OrderCheckoutScreen> {
   double _feeMax = 20;
 
   /// Selected cash payment method (UPI/DC/CC/NB) — drives the DB-backed fee.
-  String _selectedPaymentMethod = 'UPI';
+  final String _selectedPaymentMethod = 'UPI';
 
   // ── Brand discounts / multipliers ──
   final Map<String, double> _brandDiscountMap = {};
@@ -267,11 +267,11 @@ class _OrderCheckoutScreenState extends ConsumerState<OrderCheckoutScreen> {
   double get _superCoinCapPercent =>
       ref.watch(superCoinConfigProvider).valueOrNull?.capPercent ?? 20;
   double get _walletBalance =>
-      ref.read(walletBalanceProvider).value?.totalBalance ?? 0;
+      ref.read(walletBalanceProvider).valueOrNull?.totalBalance ?? 0;
   double get _cashbackRedeemPercent =>
-      ref.read(walletBalanceProvider).value?.cashbackRedeemPercent ?? 50.0;
+      ref.read(walletBalanceProvider).valueOrNull?.cashbackRedeemPercent ?? 50.0;
   double get _maxRedeemAmount =>
-      ref.read(walletBalanceProvider).value?.maxRedeemAmount ?? 100.0;
+      ref.read(walletBalanceProvider).valueOrNull?.maxRedeemAmount ?? 100.0;
 
   Map<String, double> get _brandShares =>
       ref.read(superCoinBrandSharesProvider).valueOrNull ??
@@ -348,8 +348,9 @@ class _OrderCheckoutScreenState extends ConsumerState<OrderCheckoutScreen> {
     final scState = ref.read(supercoinProvider);
     if (_allItemsSuperCoinExcluded ||
         !_superCoinAuthorized ||
-        !scState.isEnrolled)
+        !scState.isEnrolled) {
       return 0;
+    }
     final holdAmount = _superCoinHoldContext?.amount ?? scState.balance;
     return math.min(
           math.min(holdAmount, _maxSuperCoinRedeemable),

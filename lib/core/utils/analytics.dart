@@ -1,16 +1,18 @@
+import 'package:flutter/foundation.dart';
+
 class AnalyticsService {
   static Future<void> trackPageView(String path, {String? title}) async {
     // GA4 gtag.js equivalent - web only
     // On mobile, use firebase_analytics if available
     assert(() {
-      print('[Analytics] page_view: $path');
+      debugPrint('[Analytics] page_view: $path');
       return true;
     }());
   }
 
   static Future<void> trackEvent(String eventName, {Map<String, dynamic>? params}) async {
     assert(() {
-      print('[Analytics] event: $eventName, params: $params');
+      debugPrint('[Analytics] event: $eventName, params: $params');
       return true;
     }());
   }

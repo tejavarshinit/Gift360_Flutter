@@ -5,8 +5,6 @@ import 'package:gift360/core/widgets/react_backdrop.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gift360/config/app_config.dart';
-import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/core/constants/app_colors.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
@@ -15,7 +13,6 @@ import 'package:gift360/features/brands/presentation/providers/filter_meta_provi
 import 'package:gift360/core/widgets/brand_image.dart';
 import 'package:gift360/features/payment/presentation/widgets/payment_details_sheet.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
-import 'package:gift360/features/payment/data/models/payment.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
@@ -84,10 +81,11 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   ]) async {
     final user = ref.read(authProvider);
     if (user == null) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Please log in')));
+      }
       return;
     }
     final brandId = brand.brandId ?? '';
@@ -138,10 +136,11 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         );
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Payment error: $e')));
+      }
     }
   }
 
@@ -182,14 +181,14 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         return _selectedDiscountRanges.any((rk) {
           final r = meta!.discountRanges.firstWhere(
             (d) =>
-                (d.value?.trim().isNotEmpty == true
-                    ? d.value!.trim()
+                (d.value.trim().isNotEmpty == true
+                    ? d.value.trim()
                     : d.label) ==
                 rk,
             orElse: () => const DiscountRange(label: '', value: ''),
           );
           final bounds = _inferDiscountBounds(
-            r.value?.isNotEmpty == true ? r.value! : r.label,
+            r.value.isNotEmpty == true ? r.value : r.label,
           );
           return dv >= bounds.$1 && dv <= bounds.$2;
         });
@@ -251,24 +250,19 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       );
     }
     if (nums.length == 1) {
-      if (RegExp(r'\b(up to|under|below|less than|max|maximum)\b').hasMatch(n))
+      if (RegExp(r'\b(up to|under|below|less than|max|maximum)\b').hasMatch(n)) {
         return (0, nums[0]);
+      }
       if (RegExp(
             r'\b(above|over|more than|greater than|min|minimum|at least)\b',
           ).hasMatch(n) ||
           n.endsWith('+') ||
-          n.contains('plus'))
+          n.contains('plus')) {
         return (nums[0], 99999);
+      }
       return (nums[0], nums[0]);
     }
     return (0, 99999);
-  }
-
-  bool _hasActiveFilters() {
-    return _selectedCategories.isNotEmpty ||
-        _priceRangeLabel != 'all' ||
-        _selectedDiscountRanges.isNotEmpty ||
-        _sortOrder != 'none';
   }
 
   void _clearAllFilters() {
@@ -298,6 +292,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // Background matching React: flat #f3f5f9
@@ -315,7 +310,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   loading: () => const Center(
                     child: CircularProgressIndicator(color: Color(0xFF6C5CE7)),
                   ),
-                  error: (e, _) => Center(child: Text('Error: $e')),
+                  error: (error, _) => _CategoriesUnavailable(error: error),
                 ),
               ),
             ],
@@ -356,7 +351,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   _paymentBrand = null;
                 });
                 await Future.delayed(const Duration(milliseconds: 2200));
-                if (mounted) StatefulNavigationShell.of(context).goBranch(3);
+                if (context.mounted) {
+                  StatefulNavigationShell.of(context).goBranch(3);
+                }
               },
               onPay: (brand, amount, quantity, paymentMethod) =>
                   _handlePay(brand, amount, quantity, paymentMethod),
@@ -456,7 +453,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           ? m.categories
           : _extractCategories(allBrands),
       loading: () => _extractCategories(allBrands),
-      error: (_, __) => _extractCategories(allBrands),
+      error: (_, _) => _extractCategories(allBrands),
     );
     final categoryMap = <String, List<Brand>>{};
     for (final b in filteredBrands) {
@@ -529,12 +526,12 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           ),
           if (!expanded)
             SizedBox(
-              height: 130,
+              height: 172,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 itemCount: display.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (ctx, i) => _buildProductCard(display[i]),
               ),
             )
@@ -545,9 +542,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
               runSpacing: 8,
               children: brands
                   .map(
-                    (b) => SizedBox(
-                      width: (MediaQuery.of(context).size.width - 32 - 16) / 3,
-                      child: _buildProductCard(b, height: 80),
+                    (b) => _buildProductCard(
+                      b,
+                      width: _categoryCardWidth(context),
                     ),
                   )
                   .toList(),
@@ -573,127 +570,159 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     );
   }
 
-  Widget _buildProductCard(Brand brand, {double height = 130}) {
+  double _categoryCardWidth(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final columns = width >= 1024
+        ? 6
+        : width >= 600
+        ? 4
+        : width >= 380
+        ? 3
+        : 2;
+    final gaps = (columns - 1) * 8;
+    return (width - 32 - gaps) / columns;
+  }
+
+  void _openBrand(Brand brand) {
+    if (brand.brandId?.isNotEmpty == true) {
+      _openBuySheet(brand.brandId!);
+    }
+  }
+
+  Widget _buildProductCard(
+    Brand brand, {
+    double height = 160,
+    double width = 168,
+  }) {
     final img = brand.resolvedImageUrl;
     final name = brand.brandName ?? '';
     final price = brand.effectiveStartingPrice;
-    final compact = height <= 80;
-    return Container(
-      width: 120,
-      height: height,
-      padding: EdgeInsets.all(compact ? 5 : 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          SizedBox(
-            height: compact ? 28 : 32,
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: compact ? 28 : 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: img != null
-                      ? BrandImage(
-                          imageUrl: img,
-                          fit: BoxFit.contain,
-                          placeholder: (_, __) => const SizedBox(),
-                          errorWidget: (_, __, ___) => const SizedBox(),
-                        )
-                      : const SizedBox(),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: GoogleFonts.poppins(
-                          fontSize: compact ? 11 : 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF111827),
-                          height: 1,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: compact ? 1 : 2),
-                      Text(
-                        'E-Gift Card',
-                        style: GoogleFonts.poppins(
-                          fontSize: compact ? 9 : 10,
-                          fontWeight: FontWeight.w400,
-                          color: const Color(0xFF6B7280),
-                          height: 1,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openBrand(brand),
+      child: Container(
+        width: width,
+        height: height,
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
             ),
-          ),
-          SizedBox(height: compact ? 1 : 6),
-          Container(height: 1, color: const Color(0xFFE5E7EB)),
-          SizedBox(height: compact ? 1 : 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                price > 0 ? '₹${price.toInt()}' : '-',
-                style: GoogleFonts.poppins(
-                  fontSize: compact ? 9 : 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF111827),
-                ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: 78, width: double.infinity, child: _brandArt(img, name)),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF111827),
+                height: 1.1,
               ),
-              GestureDetector(
-                onTap: () {
-                  if (brand.brandId?.isNotEmpty == true)
-                    _openBuySheet(brand.brandId!);
-                },
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 8 : 10,
-                    vertical: compact ? 2 : 6,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)],
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Text(
-                    'Buy',
-                    style: GoogleFonts.poppins(
-                      fontSize: compact ? 9 : 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              'E-Gift Card',
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w400,
+                color: const Color(0xFF6B7280),
+                height: 1.1,
               ),
-            ],
-          ),
-        ],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const Spacer(),
+            SizedBox(
+              height: 28,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      price > 0 ? '₹${price.toInt()}' : '-',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF111827),
+                        height: 1,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => _openBrand(brand),
+                    child: Container(
+                      height: 30,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6C5CE7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Buy',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _brandArt(String? img, String name) {
+    final mark = name.trim().isEmpty ? 'G' : name.trim()[0].toUpperCase();
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F6FB),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(6),
+      alignment: Alignment.center,
+      child: img != null
+          ? BrandImage(
+              imageUrl: img,
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.contain,
+              placeholder: (_, _) => _brandMark(mark),
+              errorWidget: (_, _, _) => _brandMark(mark),
+            )
+          : _brandMark(mark),
+    );
+  }
+
+  Widget _brandMark(String mark) {
+    return Text(
+      mark,
+      style: GoogleFonts.poppins(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF6C5CE7),
       ),
     );
   }
@@ -929,8 +958,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                               children: [
                                 ...meta.discountRanges.map((dr) {
                                   final key =
-                                      dr.value?.trim().isNotEmpty == true
-                                      ? dr.value!.trim()
+                                      dr.value.trim().isNotEmpty == true
+                                      ? dr.value.trim()
                                       : dr.label;
                                   final sel = _selectedDiscountRanges.contains(
                                     key,
@@ -1073,16 +1102,49 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     String groupValue,
     ValueChanged<String> onChanged,
   ) {
-    return RadioListTile<String>(
-      value: value,
+    return RadioGroup<String>(
       groupValue: groupValue,
       onChanged: (v) {
         if (v != null) onChanged(v);
       },
-      title: Text(label, style: GoogleFonts.poppins(fontSize: 13)),
-      activeColor: const Color(0xFF6C5CE7),
-      contentPadding: EdgeInsets.zero,
-      dense: true,
+      child: RadioListTile<String>(
+        value: value,
+        title: Text(label, style: GoogleFonts.poppins(fontSize: 13)),
+        activeColor: const Color(0xFF6C5CE7),
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+      ),
+    );
+  }
+}
+
+class _CategoriesUnavailable extends StatelessWidget {
+  const _CategoriesUnavailable({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = error.toString();
+    final missingApi =
+        raw.contains('No API address') || raw.contains('No host');
+    final width = MediaQuery.sizeOf(context).width;
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: width >= 600 ? 48 : 28),
+        child: Text(
+          missingApi
+              ? 'Dev has no category API yet.\nStaging will load the real list.'
+              : 'Could not load categories. Try again.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            fontSize: width >= 600 ? 16 : 14,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF6B7280),
+            height: 1.45,
+          ),
+        ),
+      ),
     );
   }
 }

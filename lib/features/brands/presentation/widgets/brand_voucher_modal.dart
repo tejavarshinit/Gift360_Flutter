@@ -97,7 +97,10 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
     if (!widget.isOpen) return const SizedBox.shrink();
 
     final screenHeight = MediaQuery.of(context).size.height;
-    final sheetHeight = (screenHeight * 0.72).clamp(560.0, double.infinity);
+    final rows = widget.loading || widget.error != null
+        ? 2
+        : widget.vouchers.length.clamp(1, 5);
+    final sheetHeight = (150.0 + rows * 96.0).clamp(300.0, screenHeight * 0.78);
 
     return PopScope(
       canPop: false,
@@ -119,15 +122,13 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
                   onTap: () {},
                   child: SlideTransition(
                     position: _slideAnimation,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 390),
-                      child: Container(
+                    child: Container(
                         width: double.infinity,
                         height: sheetHeight,
                         decoration: const BoxDecoration(
                           color: Color(0xFFF5F6FA),
                           borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(40),
+                            top: Radius.circular(24),
                           ),
                           boxShadow: [
                             BoxShadow(
@@ -140,12 +141,12 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
                         child: Column(
                           children: [
                             Container(
-                              margin: const EdgeInsets.only(top: 12),
-                              width: 100,
-                              height: 10,
+                              margin: const EdgeInsets.only(top: 10),
+                              width: 42,
+                              height: 4,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFD9D9D9),
-                                borderRadius: BorderRadius.circular(5),
+                                color: const Color(0xFFD0D5DD),
+                                borderRadius: BorderRadius.circular(4),
                               ),
                             ),
                             Padding(
@@ -180,7 +181,6 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
                           ],
                         ),
                       ),
-                    ),
                   ),
                 ),
               ),
@@ -365,6 +365,21 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
     );
   }
 
+  Widget _voucherMark(Brand voucher) {
+    final name = (voucher.brandName ?? '').trim();
+    final mark = name.isEmpty ? 'G' : name[0].toUpperCase();
+    return Center(
+      child: Text(
+        mark,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF7C3AED),
+        ),
+      ),
+    );
+  }
+
   Widget _buildVoucherCard(Brand voucher) {
     final price = voucher.effectiveStartingPrice;
     return GestureDetector(
@@ -385,21 +400,23 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
         child: Row(
           children: [
             Container(
-              width: 50,
-              height: 50,
+              width: 64,
+              height: 64,
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: voucher.resolvedImageUrl != null
                   ? BrandImage(
                       imageUrl: voucher.resolvedImageUrl!,
+                      width: double.infinity,
+                      height: double.infinity,
                       fit: BoxFit.contain,
-                      placeholder: (_, s) => const SizedBox(),
-                      errorWidget: (_, s, e) =>
-                          const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                      placeholder: (_, _) => _voucherMark(voucher),
+                      errorWidget: (_, _, _) => _voucherMark(voucher),
                     )
-                  : const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                  : _voucherMark(voucher),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -408,10 +425,12 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
                 children: [
                   Text(
                     voucher.brandName ?? '',
+                    maxLines: 2,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF101828),
+                      height: 1.2,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),

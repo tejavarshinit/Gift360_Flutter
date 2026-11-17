@@ -56,12 +56,14 @@ class _AppBottomNavState extends ConsumerState<AppBottomNav> with SingleTickerPr
     final isOrdersRoute = GoRouterState.of(context).uri.path.startsWith('/orders');
     if (isOrdersRoute) return const SizedBox.shrink();
     final cartCount = ref.watch(cartItemCountProvider);
+    final media = MediaQuery.of(context);
+    final bottomInset = media.padding.bottom;
+    final wide = media.size.width >= 600;
 
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
-          height: 63,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.82),
             border: const Border(top: BorderSide(color: Color(0xFFE5E7EB))),
@@ -73,8 +75,11 @@ class _AppBottomNavState extends ConsumerState<AppBottomNav> with SingleTickerPr
               ),
             ],
           ),
-          child: SafeArea(
-            child: Row(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: SizedBox(
+              height: wide ? 68 : 58,
+              child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _NavItem(
@@ -107,6 +112,7 @@ class _AppBottomNavState extends ConsumerState<AppBottomNav> with SingleTickerPr
                   onTap: () => context.go('/cart'),
                 ),
               ],
+            ),
             ),
           ),
         ),
@@ -141,6 +147,9 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isActive ? const Color(0xFF10AEEc) : const Color(0xFF092F82);
+    final width = MediaQuery.sizeOf(context).width;
+    final iconSize = width >= 600 ? 24.0 : 22.0;
+    final labelSize = width >= 600 ? 12.0 : 11.0;
 
     return Expanded(
       child: GestureDetector(
@@ -152,7 +161,7 @@ class _NavItem extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Icon(isActive ? (fillIcon ?? icon) : icon, size: 20, color: color),
+                Icon(isActive ? (fillIcon ?? icon) : icon, size: iconSize, color: color),
                 if (label == 'Cart' && cartCount > 0)
                   Positioned(
                     top: -5,
@@ -183,7 +192,7 @@ class _NavItem extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 7,
+                fontSize: labelSize,
                 fontWeight: FontWeight.w500,
                 color: color,
                 fontFamily: 'Poppins',

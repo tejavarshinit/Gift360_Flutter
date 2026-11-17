@@ -9,10 +9,9 @@ class AuthRepository {
   final FlutterSecureStorage _secureStorage;
 
   AuthRepository({
-    required AuthApi authApi,
+    required this._authApi,
     FlutterSecureStorage? secureStorage,
-  })  : _authApi = authApi,
-        _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  })  : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   Future<AuthUser?> getStoredUser() async {
     try {

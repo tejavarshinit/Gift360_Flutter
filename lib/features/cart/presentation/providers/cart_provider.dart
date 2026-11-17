@@ -29,7 +29,7 @@ class CartNotifier extends StateNotifier<Cart?> {
   Future<void> _loadCart() async {
     if (_clientId == null) return;
     try {
-      state = await _api.getCart(_clientId!);
+      state = await _api.getCart(_clientId);
     } catch (_) {}
   }
 
@@ -63,12 +63,10 @@ class CartNotifier extends StateNotifier<Cart?> {
         return;
       }
 
-      bool hadInvalidItem = false;
-
       // Merge each guest item into the backend cart
       for (final item in guestItems) {
         try {
-          await _api.addToCart(_clientId!, AddToCartRequest(
+          await _api.addToCart(_clientId, AddToCartRequest(
             brandId: item['brandId'] as String? ?? '',
             brandName: item['brandName'] as String? ?? '',
             quantity: (item['quantity'] as num?)?.toInt() ?? 1,
@@ -77,8 +75,7 @@ class CartNotifier extends StateNotifier<Cart?> {
           ));
         } on DioException catch (e) {
           if (e.response?.statusCode == 400) {
-            // HTTP 400 = invalid item — clear guest cart, skip this item
-            hadInvalidItem = true;
+            // HTTP 400 = invalid item — skip it. Guest cart is cleared below.
           }
           // Other errors: continue merging other items
         } catch (_) {
@@ -112,14 +109,6 @@ class CartNotifier extends StateNotifier<Cart?> {
     }
   }
 
-  /// Get placeholder cart from guest items while backend loads.
-  Cart? _getGuestCartPlaceholder() {
-    if (_clientId != null) return null;
-    // Synchronous read not possible, but we can return null
-    // The actual placeholder is handled by the UI
-    return null;
-  }
-
   /// Add to cart with optimistic update and analytics.
   /// Mirrors React's addMutation with onMutate/onError/onSuccess.
   Future<bool> addToCart(AddToCartRequest item) async {
@@ -133,7 +122,7 @@ class CartNotifier extends StateNotifier<Cart?> {
 
     try {
       // Optimistic: show updated cart immediately
-      final newState = await _api.addToCart(_clientId!, item);
+      final newState = await _api.addToCart(_clientId, item);
       state = newState;
 
       // Fire analytics on successful backend add
@@ -181,7 +170,7 @@ class CartNotifier extends StateNotifier<Cart?> {
       );
 
       // Then sync with backend
-      await _api.updateQuantity(_clientId!, itemId, clamped);
+      await _api.updateQuantity(_clientId, itemId, clamped);
       return true;
     } catch (e) {
       // Rollback on error
@@ -210,7 +199,7 @@ class CartNotifier extends StateNotifier<Cart?> {
       );
 
       // Then sync with backend
-      await _api.removeFromCart(_clientId!, itemId);
+      await _api.removeFromCart(_clientId, itemId);
       return true;
     } catch (e) {
       // Rollback on error
@@ -222,7 +211,7 @@ class CartNotifier extends StateNotifier<Cart?> {
   Future<void> clearCart() async {
     if (_clientId == null) return;
     try {
-      await _api.clearCart(_clientId!);
+      await _api.clearCart(_clientId);
       state = const Cart(clientId: '', items: [], totalAmount: 0, totalItems: 0);
     } catch (_) {}
   }

@@ -87,62 +87,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   // ─────────────────────────────────────────────
-  // Aurora Background (matches Cart)
-  // ─────────────────────────────────────────────
-  Widget _buildAuroraBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            const Color(0xFF9747FF).withValues(alpha: 0.05),
-            Colors.white,
-          ],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -40,
-            left: -40,
-            child: Container(
-              width: 288,
-              height: 288,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF9747FF).withValues(alpha: 0.55),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 128,
-            right: -64,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF3B82F6).withValues(alpha: 0.5),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────
   // Header (Section 4A)
   // ─────────────────────────────────────────────
   Widget _buildHeader(
@@ -542,7 +486,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 96),
           itemCount: pendingOrders.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          separatorBuilder: (_, _) => const SizedBox(height: 16),
           itemBuilder: (context, index) => PendingCard(
             key: ValueKey(orderId(pendingOrders[index])),
             order: pendingOrders[index],
@@ -566,7 +510,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 96),
           itemCount: redeemed.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          separatorBuilder: (_, _) => const SizedBox(height: 16),
           itemBuilder: (context, index) => RedeemedCard(
             key: ValueKey(redeemed[index].id),
             item: redeemed[index],

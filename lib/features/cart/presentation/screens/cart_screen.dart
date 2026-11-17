@@ -12,7 +12,6 @@ import 'package:gift360/features/payment/presentation/providers/payment_provider
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/cart/presentation/widgets/cart_item_card.dart';
-import 'package:gift360/features/cart/presentation/widgets/cart_tabs.dart';
 import 'package:gift360/features/cart/presentation/widgets/order_summary_section.dart';
 import 'package:gift360/features/cart/presentation/widgets/supercoin_otp_modal.dart';
 import 'package:gift360/features/cart/presentation/widgets/supercoin_redeemed_modal.dart';
@@ -27,7 +26,6 @@ class CartScreen extends ConsumerStatefulWidget {
 }
 
 class _CartScreenState extends ConsumerState<CartScreen> {
-  String _activeTab = 'cart';
   String? _itemToDeleteId;
   String? _itemToDeleteName;
   bool _showSuperCoinOtp = false;
@@ -146,68 +144,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   }
 
   // ─────────────────────────────────────────────
-  // Aurora Background (Section 2)
-  // ─────────────────────────────────────────────
-  Widget _buildAuroraBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            const Color(0xFF9747FF).withValues(alpha: 0.05),
-            Colors.white,
-          ],
-        ),
-      ),
-      child: Stack(
-        children: [
-          // Purple aurora blob
-          Positioned(
-            top: -40,
-            left: -40,
-            child: Container(
-              width: 288,
-              height: 288,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF9747FF).withValues(alpha: 0.55),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Blue aurora blob
-          Positioned(
-            top: 128,
-            right: -64,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF3B82F6).withValues(alpha: 0.5),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Grain texture overlay
-          Positioned.fill(
-            child: Container(color: Colors.white.withValues(alpha: 0.5)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────
   // Header (Section 4A)
   // ─────────────────────────────────────────────
   Widget _buildHeader(Cart? cart) {
@@ -216,7 +152,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       bottom: false,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -400,10 +336,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   Widget _buildCartContent(Cart cart, CartCheckoutState checkout) {
     return Column(
       children: [
-        CartTabs(
-          activeTab: _activeTab,
-          onTabChange: (tab) => setState(() => _activeTab = tab),
-        ),
         Expanded(
           child: SingleChildScrollView(
             child: Column(
@@ -487,8 +419,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     return SuperCoinOTPModal(
       merchantWalletId: AppConfig.supercoinMerchantWalletId,
       orderNumber: orderNumber,
-      displayName: (user?.name?.isNotEmpty == true)
-          ? user!.name!
+      displayName: (user?.name.isNotEmpty == true)
+          ? user!.name
           : 'Gift360 Checkout',
       preloadedBalance: superCoinState.balance,
       maxRedeemable: breakdown.maxSuperCoinRedeemable,

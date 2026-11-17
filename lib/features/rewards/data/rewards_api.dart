@@ -96,8 +96,9 @@ class RewardsApi {
   Future<Map<String, dynamic>?> scFacts() async {
     try {
       final response = await _dio.get('/v1/support/facts/supercoin');
-      if (response.data is Map)
+      if (response.data is Map) {
         return (response.data as Map).cast<String, dynamic>();
+      }
     } catch (_) {}
     return null;
   }

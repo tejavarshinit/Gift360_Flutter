@@ -14,7 +14,7 @@ class LocationConfirmModal extends StatelessWidget {
         Positioned.fill(
           child: GestureDetector(
             onTap: onConfirm,
-            child: Container(color: Colors.black.withOpacity(0.5)),
+            child: Container(color: Colors.black.withValues(alpha: 0.5)),
           ),
         ),
         Center(
@@ -24,7 +24,7 @@ class LocationConfirmModal extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(32),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 24, offset: const Offset(0, 12))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 24, offset: const Offset(0, 12))],
             ),
             child: Stack(
               children: [

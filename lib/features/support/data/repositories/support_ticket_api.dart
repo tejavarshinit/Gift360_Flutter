@@ -37,7 +37,7 @@ class SupportTicketApi {
         'name': name,
         if (email?.isNotEmpty ?? false) 'email': email,
         if (mobile?.isNotEmpty ?? false) 'mobile': mobile,
-        if (subject != null) 'subject': subject,
+        'subject': ?subject,
         'message': message,
       },
     );

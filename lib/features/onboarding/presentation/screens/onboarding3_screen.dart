@@ -400,7 +400,7 @@ class _VoucherCard extends StatelessWidget {
       child: Stack(children: [
         Positioned.fill(child: Image.asset(
             'assets/images/voucher-revealed.png', fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
+            errorBuilder: (_, _, _) => Container(
                 decoration: const BoxDecoration(gradient: LinearGradient(
                     begin: Alignment(-1, -1), end: Alignment(1, 1),
                     colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)])),

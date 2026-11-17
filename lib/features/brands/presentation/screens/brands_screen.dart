@@ -6,14 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:gift360/core/widgets/session_expired_dialog.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/widgets/brand_image.dart';
-import 'package:gift360/core/utils/encryption.dart';
-import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
 import 'package:gift360/features/brands/data/models/brand.dart';
 import 'package:gift360/features/brands/presentation/widgets/brand_voucher_modal.dart';
 import 'package:gift360/features/payment/presentation/widgets/payment_details_sheet.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
-import 'package:gift360/features/payment/data/models/payment.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/brands/presentation/providers/filter_meta_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
@@ -212,6 +209,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // Background matching React: flat #f3f5f9
@@ -242,7 +240,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
             Consumer(
               builder: (context, ref, _) {
                 final filterMetaAsync = ref.watch(filterMetaProvider);
-                final filterMeta = filterMetaAsync.value;
+                final filterMeta = filterMetaAsync.valueOrNull;
                 return _buildFilterModal(
                   availableCategories: filterMeta?.categories.isNotEmpty == true
                       ? filterMeta!.categories
@@ -336,54 +334,6 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
               onPay: (brand, amount, quantity, paymentMethod) =>
                   _handlePay(brand, amount, quantity, paymentMethod),
             ),
-        ],
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // Aurora Background (Section 2)
-  // ─────────────────────────────────────────────
-  Widget _buildAuroraBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            const Color(0xFF9747FF).withValues(alpha: 0.05),
-            Colors.white,
-          ],
-        ),
-      ),
-      child: Stack(
-        children: [
-          // Amber glow blob top-left
-          Positioned(
-            top: -128,
-            left: -96,
-            child: Container(
-              width: 384,
-              height: 384,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFF59E0B).withValues(alpha: 0.08),
-              ),
-            ),
-          ),
-          // Yellow glow blob right-center
-          Positioned(
-            top: MediaQuery.of(context).size.height * 0.33,
-            right: -96,
-            child: Container(
-              width: 384,
-              height: 384,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFFACC15).withValues(alpha: 0.08),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -647,7 +597,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
             );
           },
           loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
         );
       },
     );
@@ -899,14 +849,14 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
   // ─────────────────────────────────────────────
   Widget _buildBrandScrollRow(List<Brand> brands, ScrollController controller) {
     return SizedBox(
-      height: 130,
+      height: 164,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         controller: controller,
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 0),
         itemCount: brands.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, index) => _buildBrandCard(brands[index]),
       ),
     );
@@ -923,97 +873,101 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     return GestureDetector(
       onTap: () => _onBrandTap(brand),
       child: Container(
-        width: 100,
-        padding: const EdgeInsets.all(8),
+        width: 112,
+        height: 152,
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
               color: const Color(0xFF111827).withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 70,
-                  height: 70,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F6FB),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
-                  ),
-                  child: imageUrl != null
-                      ? BrandImage(
-                          imageUrl: imageUrl,
-                          fit: BoxFit.contain,
-                          placeholder: (_, s) => const SizedBox(),
-                          errorWidget: (_, s, e) =>
-                              const Icon(Icons.store, color: Color(0xFF94A3B8)),
-                        )
-                      : const Icon(Icons.store, color: Color(0xFF94A3B8)),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  brandName,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF111827),
-                    height: 1.2,
-                  ),
-                ),
-              ],
-            ),
-            if (discountValue > 0)
-              Positioned(
-                top: 4,
-                left: 4,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6C5CE7), Color(0xFF5A4BD1)],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${discountValue.toStringAsFixed(0)}%',
-                    style: GoogleFonts.poppins(
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      child: imageUrl != null
+                          ? BrandImage(
+                              imageUrl: imageUrl,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.contain,
+                              placeholder: (_, _) => const SizedBox(),
+                              errorWidget: (_, _, _) => const Icon(
+                                Icons.store,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            )
+                          : const Icon(Icons.store, color: Color(0xFF94A3B8)),
                     ),
                   ),
-                ),
+                  if (discountValue > 0)
+                    Positioned(
+                      top: 4,
+                      left: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6C5CE7), Color(0xFF5A4BD1)],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${discountValue.toStringAsFixed(0)}%',
+                          style: GoogleFonts.poppins(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Image.asset(
+                      'assets/images/SuperCOin-removebg-preview.png',
+                      width: 16,
+                      height: 16,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ],
               ),
-            Positioned(
-              top: 4,
-              right: 4,
-              child: Image.asset(
-                'assets/images/SuperCOin-removebg-preview.png',
-                width: 16,
-                height: 16,
-                fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 32,
+              width: double.infinity,
+              child: Text(
+                brandName,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF111827),
+                  height: 1.2,
+                ),
               ),
             ),
           ],
@@ -1298,16 +1252,17 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
     ValueChanged<String> onChanged,
   ) {
     final isSelected = value == groupValue;
-    return Row(
+    return RadioGroup<String>(
+      groupValue: groupValue,
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+      child: Row(
       children: [
         Radio<String>(
           value: value,
-          groupValue: groupValue,
           activeColor: const Color(0xFF6C5CE7),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
         ),
         const SizedBox(width: 8),
         Text(
@@ -1319,6 +1274,7 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
           ),
         ),
       ],
+    ),
     );
   }
 

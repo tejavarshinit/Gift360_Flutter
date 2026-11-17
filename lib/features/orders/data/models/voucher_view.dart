@@ -239,8 +239,9 @@ double _toDouble(dynamic v) {
 /// Equivalent of the `total_amount` derivation in `mapOrder()`.
 double orderTotalAmount(Map<String, dynamic> order) {
   final pricing = _asMap(order['pricing']);
-  if (pricing['final_payable'] != null)
+  if (pricing['final_payable'] != null) {
     return _toDouble(pricing['final_payable']);
+  }
   if (pricing['subtotal'] != null) return _toDouble(pricing['subtotal']);
   if (order['total_amount'] != null) return _toDouble(order['total_amount']);
   return 0;

@@ -492,7 +492,7 @@ class _ResellerCartScreenState extends ConsumerState<ResellerCartScreen> {
                   ? Image.network(
                       images,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Center(
+                      errorBuilder: (_, _, _) => const Center(
                         child: Icon(
                           Icons.card_giftcard,
                           color: Color(0xFF9747FF),

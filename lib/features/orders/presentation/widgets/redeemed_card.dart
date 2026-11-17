@@ -46,8 +46,8 @@ class RedeemedCard extends StatelessWidget {
                 ? BrandImage(
                     imageUrl: item.image!,
                     fit: BoxFit.contain,
-                    placeholder: (_, __) => const SizedBox(),
-                    errorWidget: (_, __, ___) => const Icon(Icons.storefront, color: Color(0xFF94A3B8)),
+                    placeholder: (_, _) => const SizedBox(),
+                    errorWidget: (_, _, _) => const Icon(Icons.storefront, color: Color(0xFF94A3B8)),
                   )
                 : const Icon(Icons.storefront, color: Color(0xFF94A3B8)),
           ),

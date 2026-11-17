@@ -14,26 +14,22 @@ class AppException implements Exception {
 }
 
 class NetworkException extends AppException {
-  NetworkException({String message = 'No internet connection'})
-      : super(message: message);
+  NetworkException({super.message = 'No internet connection'});
 }
 
 class TimeoutException extends AppException {
-  TimeoutException({String message = 'Connection timeout'})
-      : super(message: message);
+  TimeoutException({super.message = 'Connection timeout'});
 }
 
 class AuthException extends AppException {
-  AuthException({String message = 'Authentication failed'})
-      : super(message: message);
+  AuthException({super.message = 'Authentication failed'});
 }
 
 class ServerException extends AppException {
-  ServerException({String message = 'Server error'})
-      : super(message: message, statusCode: 500);
+  ServerException({super.message = 'Server error'})
+      : super(statusCode: 500);
 }
 
 class CacheException extends AppException {
-  CacheException({String message = 'Cache error'})
-      : super(message: message);
+  CacheException({super.message = 'Cache error'});
 }

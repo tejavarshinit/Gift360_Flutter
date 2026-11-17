@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:gift360/config/app_config.dart';
+import 'package:gift360/config/app_flavor.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 
 /// Phases of the Juspay UPI-intent flow (React `UpiIntentPhase`).
@@ -139,6 +140,14 @@ class _UpiIntentSheetState extends ConsumerState<UpiIntentSheet>
   }
 
   Future<void> _start() async {
+    if (!AppFlavorConfig.allowsUpi) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _UpiPhase.failed;
+        _error = 'UPI is off in the dev build. Use staging or prod to pay with UPI.';
+      });
+      return;
+    }
     if (widget.orderNumber.isEmpty) return;
     _stopped = false;
     _pollTimer?.cancel();
@@ -193,8 +202,9 @@ class _UpiIntentSheetState extends ConsumerState<UpiIntentSheet>
       if (_stopped || !mounted) return;
       final done = await _pollOnce();
       if (!mounted || _stopped || done) return;
-      if (_phase == _UpiPhase.awaiting)
+      if (_phase == _UpiPhase.awaiting) {
         setState(() => _phase = _UpiPhase.confirming);
+      }
       _schedulePoll();
     });
   }
@@ -249,8 +259,9 @@ class _UpiIntentSheetState extends ConsumerState<UpiIntentSheet>
         _phase == _UpiPhase.expired) {
       return;
     }
-    if (_phase == _UpiPhase.awaiting)
+    if (_phase == _UpiPhase.awaiting) {
       setState(() => _phase = _UpiPhase.confirming);
+    }
     final done = await _pollOnce();
     if (done || !mounted) return;
     setState(() => _phase = _UpiPhase.awaiting);

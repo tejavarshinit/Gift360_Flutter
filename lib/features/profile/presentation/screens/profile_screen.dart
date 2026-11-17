@@ -14,6 +14,7 @@ import 'package:gift360/features/rewards/presentation/providers/rewards_provider
 import 'package:gift360/features/orders/presentation/providers/orders_provider.dart';
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
 import 'package:gift360/core/widgets/gift_header.dart';
+import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
 import 'package:gift360/core/constants/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -276,7 +277,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
     }
 
-    final balance = walletAsync.value?.totalBalance ?? 0;
+    final balance = walletAsync.valueOrNull?.totalBalance ?? 0;
     final initial = user.name.trim().isNotEmpty
         ? user.name.trim().characters.first.toUpperCase()
         : 'U';
@@ -498,7 +499,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             assetIcon: 'assets/images/SuperCOin-removebg-preview.png',
           ),
           _accountMenuRow(Icons.card_giftcard_outlined, 'My Vouchers', 'Open your purchased and redeemed vouchers', () => context.push('/orders')),
-          _accountMenuRow(Icons.storefront_outlined, 'Partner with us', 'Sell gift vouchers at your own margins', () => context.push('/reseller')),
+          _accountMenuRow(Icons.receipt_long_outlined, 'My Orders', 'Track purchases and order history', () => context.push('/my-orders')),
+          _accountMenuRow(Icons.notifications_none_rounded, 'Notifications', 'Alerts and updates', () => context.push('/notifications')),
+          _accountMenuRow(Icons.rate_review_outlined, 'Feedback', 'Tell us how Gift360 is doing', _showFeedback),
+          _accountMenuRow(Icons.local_shipping_outlined, 'Distributor', 'Partner as a distributor', () => context.push('/distributor')),
+          _accountMenuRow(Icons.storefront_outlined, 'Reseller', 'Sell gift vouchers at your own margins', () => context.push('/reseller')),
+          _accountMenuRow(Icons.apartment_outlined, 'Corporate', 'Bulk gifting for companies', () => context.push('/corporate')),
+          _accountMenuRow(Icons.menu_rounded, 'Menu', 'The full shortcut list, including feedback', () {
+            showGift360Menu(
+              context,
+              isAuthenticated: ref.read(isAuthenticatedProvider),
+            );
+          }),
           _accountMenuRow(Icons.mail_outline, 'Contact Us', 'Get help with vouchers or payments', _showContactDialog),
         ],
       ),
@@ -718,7 +730,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: const Color(0xFF7B3DC3),
+            activeThumbColor: const Color(0xFF7B3DC3),
           ),
       ],
     );
@@ -1315,66 +1327,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildContactSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Need help?',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Having a voucher or payment issue? We\'re here to help.',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: Colors.white70,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => _showContactDialog(),
-            child: Container(
-              height: 40,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.mail_outline,
-                    size: 14,
-                    color: Color(0xFF7C3AED),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Contact Us',
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF7C3AED),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+  void _showFeedback() {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+        child: const FeedbackForm(),
       ),
     );
   }
@@ -1497,175 +1457,4 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildEditableField(
-    String label,
-    String value,
-    bool isEditing,
-    VoidCallback onEdit,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.normal,
-                color: Colors.white,
-              ),
-            ),
-            if (isEditing)
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: _saveDisplayName,
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.greenAccent,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isEditingName = false;
-                        _nameController.text = value;
-                      });
-                    },
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.redAccent,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              )
-            else
-              GestureDetector(
-                onTap: onEdit,
-                child: const Icon(Icons.edit, color: Colors.white70, size: 18),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 44,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(7),
-          ),
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          child: isEditing
-              ? TextField(
-                  controller: _nameController,
-                  autofocus: true,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF333333),
-                  ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                )
-              : Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF333333),
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildField(
-    String label,
-    String value, {
-    IconData? icon,
-    Color? iconColor,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 44,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(7),
-          ),
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          child: Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 18, color: iconColor),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF333333),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLogoutButton(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: 174,
-        height: 44,
-        child: ElevatedButton(
-          onPressed: () async {
-            ref.read(authProvider.notifier).logout();
-            if (context.mounted) context.go('/login');
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFF06DA6),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
-            ),
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.logout, size: 15),
-              SizedBox(width: 5),
-              Text(
-                'Log Out',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

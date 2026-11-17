@@ -22,7 +22,7 @@ class RecentlyUsedBrand {
     final meta = firstItem['meta'];
     Map<String, dynamic> metaMap = const {};
     if (meta is Map) {
-      metaMap = Map<String, dynamic>.from(meta as Map);
+      metaMap = Map<String, dynamic>.from(meta);
     }
 
     final brandId = _stringValue(metaMap, ['brandId', 'brand_id']) ??

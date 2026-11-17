@@ -48,7 +48,7 @@ class MapCard extends StatelessWidget {
                   right: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), borderRadius: BorderRadius.circular(999)),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.8), borderRadius: BorderRadius.circular(999)),
                     child: Text('Live location', style: AppTextStyles.mapLabel),
                   ),
                 ),
@@ -64,7 +64,7 @@ class MapCard extends StatelessWidget {
 class _MapGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = AppColors.mapGridLine.withOpacity(0.65)..strokeWidth = 0.5;
+    final paint = Paint()..color = AppColors.mapGridLine.withValues(alpha: 0.65)..strokeWidth = 0.5;
     canvas.drawLine(Offset(0, size.height * 0.3), Offset(size.width, size.height * 0.3), paint);
     canvas.drawLine(Offset(0, size.height * 0.7), Offset(size.width, size.height * 0.7), paint);
     canvas.drawLine(Offset(size.width * 0.2, 0), Offset(size.width * 0.2, size.height), paint);

@@ -7,8 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
-import 'package:gift360/features/feedback/presentation/providers/feedback_provider.dart';
+import 'package:gift360/config/app_flavor.dart';
+import 'package:gift360/core/navigation/app_navigator.dart';
 import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
 
 const _coachmarkKey = 'sc_header_coachmark_seen';
@@ -43,224 +43,92 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(72);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isAuthenticated = ref.watch(isAuthenticatedProvider);
-    final themeMode = ref.watch(themeModeProvider);
+  Widget build(BuildContext context, WidgetRef _) {
+    final width = MediaQuery.sizeOf(context).width;
+    final phone = width < 600;
+    final compact = width < 400;
+    final horizontal = width >= 1024 ? 28.0 : phone ? (compact ? 8.0 : 12.0) : 20.0;
+    final logoHeight = compact ? 52.0 : phone ? 62.0 : 72.0;
+    final showOnline = width >= 390;
 
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Color(0x669747FF), width: 1)),
       ),
       child: SafeArea(
         bottom: false,
-        child: Row(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(horizontal, phone ? 6 : 8, horizontal, phone ? 6 : 8),
+          child: Row(
           children: [
-            // ── Logo + live online indicator ──
-            GestureDetector(
-              onTap: () => context.go('/'),
-              child: Image.asset(
-                'assets/images/gift360full.png',
-                height: 65,
-                fit: BoxFit.contain,
+            Flexible(
+              child: GestureDetector(
+                onTap: () => context.go('/'),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: showOnline ? (phone ? 270 : 320) : width * 0.78,
+                    maxHeight: logoHeight,
+                  ),
+                  child: Image.asset(
+                    'assets/images/gift360full.png',
+                    height: logoHeight,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.centerLeft,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 8),
-            const _OnlineIndicator(),
+            if (showOnline) ...[
+              SizedBox(width: compact ? 4 : 8),
+              const _OnlineIndicator(),
+            ],
 
             const Spacer(),
 
-            // ── Feedback icon (with red dot badge) ──
-            _FeedbackIconButton(isAuthenticated: isAuthenticated),
-
-            // ── SuperCoin header icon ──
-            // ── Notifications ──
-            _iconButton(
-              icon: Icons.notifications_none_rounded,
-              badge: isAuthenticated,
-              onTap: () => context.push('/notifications'),
-            ),
-
-            // ── Theme toggle ──
-            _iconButton(
-              icon: themeMode == ThemeMode.light
-                  ? Icons.dark_mode_outlined
-                  : Icons.light_mode_outlined,
-              onTap: () => ref.read(themeModeProvider.notifier).state =
-                  themeMode == ThemeMode.light
-                  ? ThemeMode.dark
-                  : ThemeMode.light,
-            ),
-
-            // ── Hamburger menu ──
-            _iconButton(
-              icon: Icons.menu_rounded,
-              onTap: () => _openMenu(context, isAuthenticated),
-            ),
+            if (!AppFlavorConfig.isProd) const _FlavorChip(),
           ],
+        ),
         ),
       ),
     );
   }
 
-  Widget _iconButton({
-    required IconData icon,
-    VoidCallback? onTap,
-    bool badge = false,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 36,
-        height: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        alignment: Alignment.center,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Icon(icon, size: 20, color: const Color(0xFF1A1A1A)),
-            if (badge)
-              Positioned(
-                top: -1,
-                right: -1,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEF4444),
-                    shape: BoxShape.circle,
-                    border: Border.fromBorderSide(
-                      BorderSide(color: Colors.white, width: 1.5),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openMenu(BuildContext context, bool isAuthenticated) {
-    showGeneralDialog(
-      context: context,
-      barrierLabel: 'Menu',
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (ctx, anim1, anim2) => Material(
-        type: MaterialType.transparency,
-        child: const SizedBox.shrink(),
-      ),
-      transitionBuilder: (ctx, anim1, anim2, child) {
-        final offset = Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic));
-        return Align(
-          alignment: Alignment.centerRight,
-          child: SlideTransition(
-            position: offset,
-            child: _MenuPanel(isAuthenticated: isAuthenticated),
-          ),
-        );
-      },
-    );
-  }
 }
 
-/// Feedback icon button with red dot badge (matches React Header feedback icon).
-/// Shows red dot if user hasn't submitted feedback and hasn't been prompted yet.
-/// Opens FeedbackForm dialog on tap.
-class _FeedbackIconButton extends ConsumerStatefulWidget {
-  final bool isAuthenticated;
-  const _FeedbackIconButton({required this.isAuthenticated});
-
-  @override
-  ConsumerState<_FeedbackIconButton> createState() =>
-      _FeedbackIconButtonState();
-}
-
-class _FeedbackIconButtonState extends ConsumerState<_FeedbackIconButton> {
-  bool _showBadge = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkBadge();
-  }
-
-  Future<void> _checkBadge() async {
-    if (!widget.isAuthenticated) return;
-    final hasSubmitted = await FeedbackNotifier.hasSubmittedFeedback();
-    final hasBeenPrompted = await FeedbackNotifier.hasBeenPrompted();
-    if (mounted) {
-      setState(() => _showBadge = !hasSubmitted && !hasBeenPrompted);
-    }
-  }
-
-  void _openFeedback() {
-    setState(() => _showBadge = false);
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        clipBehavior: Clip.antiAlias,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
-        child: const FeedbackForm(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: _openFeedback,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 36,
-        height: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        alignment: Alignment.center,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            const Icon(
-              Icons.message_outlined,
-              size: 20,
-              color: Color(0xFF1A1A1A),
-            ),
-            if (_showBadge)
-              Positioned(
-                top: -1,
-                right: -1,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEF4444),
-                    shape: BoxShape.circle,
-                    border: Border.fromBorderSide(
-                      BorderSide(color: Colors.white, width: 1.5),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+void showGift360Menu(BuildContext context, {required bool isAuthenticated}) {
+  hideGlobalSupportChat();
+  showGeneralDialog(
+    context: context,
+    barrierLabel: 'Menu',
+    barrierDismissible: true,
+    barrierColor: Colors.black54,
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (ctx, anim1, anim2) => Material(
+      type: MaterialType.transparency,
+      child: const SizedBox.shrink(),
+    ),
+    transitionBuilder: (ctx, anim1, anim2, child) {
+      final offset = Tween<Offset>(
+        begin: const Offset(1, 0),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic));
+      return Align(
+        alignment: Alignment.centerRight,
+        child: SlideTransition(
+          position: offset,
+          child: _MenuPanel(isAuthenticated: isAuthenticated),
         ),
-      ),
-    );
-  }
+      );
+    },
+  ).whenComplete(showGlobalSupportChat);
 }
 
 /// SuperCoin header icon with auto-expand/collapse animation and coachmark.
 /// Matches React's SuperCoinHeaderIcon component exactly.
 class SuperCoinHeaderIcon extends StatefulWidget {
   final VoidCallback onTap;
-  const SuperCoinHeaderIcon({required this.onTap});
+  const SuperCoinHeaderIcon({super.key, required this.onTap});
 
   @override
   State<SuperCoinHeaderIcon> createState() => SuperCoinHeaderIconState();
@@ -500,7 +368,7 @@ class _MenuPanel extends StatelessWidget {
     return Material(
       color: Colors.white,
       child: SizedBox(
-        width: 280,
+        width: min(360, MediaQuery.sizeOf(context).width * 0.86),
         height: double.infinity,
         child: SafeArea(
           child: Padding(
@@ -591,6 +459,50 @@ class _MenuPanel extends StatelessWidget {
                   Icons.apartment_outlined,
                   '/corporate',
                 ),
+                const Divider(height: 24),
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final root = navigatorKey.currentContext;
+                    if (root == null) return;
+                    showDialog(
+                      context: root,
+                      builder: (_) => Dialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        insetPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 40,
+                        ),
+                        child: const FeedbackForm(),
+                      ),
+                    );
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.rate_review_outlined,
+                          size: 18,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Feedback',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const Spacer(),
                 if (!isAuthenticated)
                   SizedBox(
@@ -649,6 +561,36 @@ class _MenuPanel extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FlavorChip extends StatelessWidget {
+  const _FlavorChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final dev = AppFlavorConfig.isDev;
+    return Padding(
+      padding: const EdgeInsets.only(right: 2),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: dev ? const Color(0xFFE36A00) : const Color(0xFF1D4ED8),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          child: Text(
+            AppFlavorConfig.label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
         ),
       ),
     );

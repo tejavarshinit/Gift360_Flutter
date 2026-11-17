@@ -33,12 +33,22 @@ class GlobalSupportChatOverlay extends StatelessWidget {
           valueListenable: supportChatHideCount,
           builder: (context, hideCount, _) {
             if (hideCount > 0) return const SizedBox.shrink();
-            return const Positioned.fill(
+            final media = MediaQuery.of(context);
+            final wide = media.size.width >= 1024;
+            final navHeight = wide
+                ? 0.0
+                : media.size.width >= 600
+                ? 68.0
+                : 58.0;
+            return Positioned.fill(
               child: Align(
                 alignment: Alignment.bottomRight,
                 child: Padding(
-                  padding: EdgeInsets.only(right: 16, bottom: 72),
-                  child: SupportChatWidget(),
+                  padding: EdgeInsets.only(
+                    right: 16,
+                    bottom: media.padding.bottom + navHeight + 12,
+                  ),
+                  child: const SupportChatWidget(),
                 ),
               ),
             );

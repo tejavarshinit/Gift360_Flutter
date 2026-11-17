@@ -239,8 +239,8 @@ class Brand {
     // fetchbrands/occasions API returns imageUrl (camelCase) as a direct URL string
     final imageUrl = _normalizeImageValue(json['imageUrl']);
     if (imageUrl != null) return imageUrl;
-    final ImageUrl = _normalizeImageValue(json['ImageUrl']);
-    if (ImageUrl != null) return ImageUrl;
+    final legacyImageUrl = _normalizeImageValue(json['ImageUrl']);
+    if (legacyImageUrl != null) return legacyImageUrl;
     return null;
   }
 

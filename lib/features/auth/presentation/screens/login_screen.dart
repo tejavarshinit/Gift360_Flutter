@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_constants.dart';
 import 'package:gift360/config/app_config.dart';
+import 'package:gift360/config/app_flavor.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/data/models/biometric_models.dart';
@@ -39,9 +40,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _enableBiometricOnOtp = true;
   bool _otpSent = false;
   bool _isLoading = false;
+  bool _acceptedTerms = false;
   String _otpMessage = '';
   String _error = '';
   String _mobileError = '';
+  String _termsError = '';
   bool _biometricEnrolled = false;
   bool _biometricFingerprintAvailable = true;
   bool _biometricCredentialAvailable = true;
@@ -162,6 +165,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _error = '';
       _mobileError = '';
+      _termsError = '';
     });
   }
 
@@ -208,6 +212,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_validateMobile(mobile)) {
       setState(
         () => _mobileError = 'Please enter a valid 10-digit mobile number',
+      );
+      return;
+    }
+    if (!_acceptedTerms) {
+      setState(
+        () => _termsError =
+            'Please accept the Terms & Conditions and Privacy Policy',
       );
       return;
     }
@@ -259,7 +270,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(authProvider.notifier)
           .loginWithOtp(LoginWithOtpRequest(mobileNumber: mobile, otp: otp));
       if (response.success && response.token != null) {
-        if (AppConfig.biometricLoginEnabled &&
+        if (!AppFlavorConfig.isDev &&
+            AppConfig.biometricLoginEnabled &&
             (_isBiometricConfigured || _isMpinConfigured)) {
           final currentUser = ref.read(authProvider);
           if (currentUser != null) {
@@ -336,9 +348,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
 
-      // 2. Register device key in secure hardware and link to account
+      // 2. Register device key in secure hardware and link to account.
+      // Dev has no auth gateway, so the local OTP session stands on its own.
       final currentUser = ref.read(authProvider);
-      if (currentUser != null && AppConfig.biometricLoginEnabled) {
+      if (!AppFlavorConfig.isDev &&
+          currentUser != null &&
+          AppConfig.biometricLoginEnabled) {
         await ref.read(biometricServiceProvider).resetAndEnable(
               clientId: currentUser.clientId,
               token: currentUser.token,
@@ -372,6 +387,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   String _friendlyError(Object e) {
     final msg = e.toString();
+    if (msg.contains('No API address')) {
+      return 'Login server is not configured in this build.';
+    }
     if (msg.contains('connection error') ||
         msg.contains('No internet') ||
         msg.contains('SocketException')) {
@@ -500,7 +518,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       onTap: () => _onSelectMethod(method),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        height: 36,
+        height: 46,
         decoration: BoxDecoration(
           gradient: isSelected
               ? const LinearGradient(
@@ -529,14 +547,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 Icon(
                   icon,
-                  size: 14,
+                  size: 18,
                   color: isSelected ? Colors.white : const Color(0xFF4A4458),
                 ),
                 const SizedBox(width: 4),
                 Text(
                   label,
                   style: GoogleFonts.poppins(
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                     color: isSelected ? Colors.white : const Color(0xFF4A4458),
                   ),
@@ -583,6 +601,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       children: [
         _buildMobileInput(),
         if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
+        _buildTermsCheckbox(),
         if ((_showBiometricMethod || _showMpinMethod) && !_otpSent)
           _buildBiometricEnableToggle(),
         const SizedBox(height: 8),
@@ -590,7 +609,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _buildActionButton(
             label: _isLoading ? 'Sending...' : 'Send OTP',
             icon: Icons.send_rounded,
-            onTap: (_isLoading || !_validateMobile(_mobileController.text))
+            onTap: (_isLoading ||
+                    !_acceptedTerms ||
+                    !_validateMobile(_mobileController.text))
                 ? null
                 : _handleSendOtp,
           )
@@ -783,12 +804,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 10),
         _buildMobileInput(),
         if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
+        _buildTermsCheckbox(),
         const SizedBox(height: 8),
         if (!_otpSent)
           _buildActionButton(
             label: _isLoading ? 'Sending Code...' : 'Register Biometric',
             icon: Icons.fingerprint_rounded,
-            onTap: (_isLoading || !_validateMobile(_mobileController.text))
+            onTap: (_isLoading ||
+                    !_acceptedTerms ||
+                    !_validateMobile(_mobileController.text))
                 ? null
                 : _handleSendOtp,
           )
@@ -916,12 +940,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 10),
         _buildMobileInput(),
         if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
+        _buildTermsCheckbox(),
         const SizedBox(height: 8),
         if (!_otpSent)
           _buildActionButton(
             label: _isLoading ? 'Sending Code...' : 'Register MPIN',
             icon: Icons.dialpad_rounded,
-            onTap: (_isLoading || !_validateMobile(_mobileController.text))
+            onTap: (_isLoading ||
+                    !_acceptedTerms ||
+                    !_validateMobile(_mobileController.text))
                 ? null
                 : _handleSendOtp,
           )
@@ -950,7 +977,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         opacity: onTap == null ? 0.6 : 1.0,
         child: Container(
           width: double.infinity,
-          height: 38,
+          height: 50,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topCenter,
@@ -970,12 +997,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16, color: Colors.white),
-                const SizedBox(width: 6),
+                Icon(icon, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
                 Text(
                   label,
                   style: GoogleFonts.poppins(
-                    fontSize: 11.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
@@ -1102,45 +1129,119 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  Widget _buildTermsCheckbox() {
+    final link = GoogleFonts.poppins(
+      fontSize: 12,
+      height: 1.35,
+      fontWeight: FontWeight.w600,
+      color: const Color(0xFF7C3AED),
+      decoration: TextDecoration.underline,
+    );
+    final body = GoogleFonts.poppins(
+      fontSize: 12,
+      height: 1.35,
+      color: const Color(0xFF4E4E4E),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: _acceptedTerms,
+                  activeColor: const Color(0xFF7C3AED),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (value) => setState(() {
+                    _acceptedTerms = value ?? false;
+                    _termsError = '';
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text('I agree to the ', style: body),
+                    GestureDetector(
+                      onTap: () => context.push('/terms'),
+                      child: Text('Terms & Conditions', style: link),
+                    ),
+                    Text(' and ', style: body),
+                    GestureDetector(
+                      onTap: () => context.push('/privacy'),
+                      child: Text('Privacy Policy', style: link),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_termsError.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 32),
+              child: Text(
+                _termsError,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  color: const Color(0xFFB42318),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   // ── Mobile Input ──
   Widget _buildMobileInput() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          height: 36,
+          height: 56,
           decoration: BoxDecoration(
             border: Border.all(color: const Color(0xFFD9D9D9)),
             color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
             children: [
               // Country code prefix
               Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: const BoxDecoration(
                   color: Color(0xFFF7F7FA),
                   border: Border(right: BorderSide(color: Color(0xFFEBEBEB))),
+                  borderRadius: BorderRadius.horizontal(
+                    left: Radius.circular(13),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('🇮🇳', style: TextStyle(fontSize: 13)),
-                    const SizedBox(width: 4),
+                    const Text('🇮🇳', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 6),
                     Text(
                       '+91',
                       style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
                         color: Colors.black,
                       ),
                     ),
                     const SizedBox(width: 2),
                     const Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      size: 10,
+                      size: 18,
                       color: Color(0xFFA1A1A1),
                     ),
                   ],
@@ -1155,18 +1256,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   enabled: !_otpSent,
                   onChanged: (_) => _clearErrors(),
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: GoogleFonts.poppins(fontSize: 11, color: Colors.black),
+                  style: GoogleFonts.poppins(fontSize: 16, color: Colors.black),
                   decoration: InputDecoration(
                     hintText: 'Enter mobile number',
                     hintStyle: GoogleFonts.poppins(
-                      fontSize: 11,
+                      fontSize: 15,
                       color: const Color(0xFFA6A4A4),
                     ),
                     counterText: '',
                     border: InputBorder.none,
+                    isCollapsed: true,
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
+                      horizontal: 14,
+                      vertical: 16,
                     ),
                   ),
                 ),
@@ -1211,46 +1313,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       children: [
         // 4-digit OTP boxes
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(4, (i) {
-            return Container(
-              width: 52,
-              height: 52,
-              margin: EdgeInsets.only(right: i < 3 ? 12 : 0),
-              child: TextField(
-                controller: _otpControllers[i],
-                focusNode: _otpFocusNodes[i],
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                maxLength: 1,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black,
-                ),
-                decoration: InputDecoration(
-                  counterText: '',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF7C3AED),
-                      width: 1.5,
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: i < 3 ? 10 : 0),
+                child: TextField(
+                    controller: _otpControllers[i],
+                    focusNode: _otpFocusNodes[i],
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    textAlignVertical: TextAlignVertical.center,
+                    maxLength: 1,
+                    maxLines: 1,
+                    cursorHeight: 24,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      height: 1.2,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black,
                     ),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF7C3AED),
+                          width: 1.5,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                    ),
+                    onChanged: (v) => _handleOtpInput(i, v),
+                    onTapOutside: (_) => FocusScope.of(context).unfocus(),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                onChanged: (v) => _handleOtpInput(i, v),
-                onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
             );
           }),
@@ -1319,32 +1426,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         const SizedBox(height: 8),
         // Resend code link
-        Center(
-          child: Text.rich(
-            TextSpan(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Didn't Receive? ",
               style: GoogleFonts.poppins(
-                fontSize: 10,
+                fontSize: 14,
                 color: const Color(0xFF4E4E4E),
               ),
-              children: [
-                const TextSpan(text: "Didn't Receive? "),
-                WidgetSpan(
-                  child: GestureDetector(
-                    onTap: _handleSendOtp,
-                    child: Text(
-                      'Resend Code',
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF7C3AED),
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
-          ),
+            GestureDetector(
+              onTap: _handleSendOtp,
+              child: Text(
+                'Resend Code',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF7C3AED),
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

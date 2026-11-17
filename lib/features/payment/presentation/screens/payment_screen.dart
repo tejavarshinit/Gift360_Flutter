@@ -33,8 +33,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   String? _detectCouponType(String code) {
     final upper = code.toUpperCase();
     if (upper.startsWith('EMP') || upper.startsWith('EMPID')) return 'employee';
-    if (upper.startsWith('CORP') || upper.startsWith('CORPID'))
+    if (upper.startsWith('CORP') || upper.startsWith('CORPID')) {
       return 'corporate';
+    }
     return 'normal';
   }
 
@@ -66,10 +67,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     }
 
     final subtotal = cart.totalAmount;
-    final walletBalance = (walletAsync.value?.totalBalance ?? 0).toDouble();
+    final walletBalance = (walletAsync.valueOrNull?.totalBalance ?? 0).toDouble();
     final cashbackRedeemPercent =
-        walletAsync.value?.cashbackRedeemPercent ?? 50.0;
-    final maxRedeemAmount = walletAsync.value?.maxRedeemAmount ?? 100.0;
+        walletAsync.valueOrNull?.cashbackRedeemPercent ?? 50.0;
+    final maxRedeemAmount = walletAsync.valueOrNull?.maxRedeemAmount ?? 100.0;
     // Compute wallet cap: min(cashbackValue * cashbackRedeemPercent / 100, maxRedeemAmount)
     // cashbackValue = sum of per-item cashback amounts (itemTotal * discount% / 100)
     final cashbackValueScale4 = cart.items.fold<int>(0, (sum, item) {
@@ -181,13 +182,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               width: 56,
               height: 56,
               fit: BoxFit.contain,
-              placeholder: (_, __) => Container(
+              placeholder: (_, _) => Container(
                 width: 56,
                 height: 56,
                 color: Colors.grey.shade100,
                 child: const Icon(Icons.card_giftcard, color: Colors.grey),
               ),
-              errorWidget: (_, __, ___) => Container(
+              errorWidget: (_, _, _) => Container(
                 width: 56,
                 height: 56,
                 color: Colors.grey.shade100,
@@ -282,7 +283,6 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   }
 
   Widget _buildCouponSection(PaymentState paymentState) {
-    final couponCode = _couponController.text.trim();
     final showIdField = _couponType == 'employee' || _couponType == 'corporate';
     return Container(
       padding: const EdgeInsets.all(16),
@@ -643,7 +643,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           totalAmount: cart.totalAmount,
           walletUsed: _useWallet,
           walletAmount: _useWallet
-              ? (ref.read(walletBalanceProvider).value?.totalBalance ?? 0) * 0.5
+              ? (ref.read(walletBalanceProvider).valueOrNull?.totalBalance ?? 0) * 0.5
               : 0,
         );
 
@@ -741,7 +741,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             .toList();
 
         final walletAmount = _useWallet
-            ? (ref.read(walletBalanceProvider).value?.totalBalance ?? 0)
+            ? (ref.read(walletBalanceProvider).valueOrNull?.totalBalance ?? 0)
                       .toDouble() *
                   0.5
             : 0.0;
@@ -767,7 +767,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
 
       // Step 2: Validate order
       final walletAmount = _useWallet
-          ? (ref.read(walletBalanceProvider).value?.totalBalance ?? 0)
+          ? (ref.read(walletBalanceProvider).valueOrNull?.totalBalance ?? 0)
                     .toDouble() *
                 0.5
           : 0.0;

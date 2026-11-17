@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/feedback/data/repositories/feedback_api.dart';
@@ -63,19 +62,19 @@ class FeedbackNotifier extends StateNotifier<FeedbackState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _api.submitFeedback({
-        if (speed != null) 'speed': speed,
-        if (usability != null) 'usability': usability,
-        if (payment != null) 'payment': payment,
-        if (overall != null) 'overall': overall,
-        if (nps != null) 'nps': nps,
-        if (locationShare != null) 'locationShare': locationShare,
-        if (userLocation != null) 'userLocation': userLocation,
-        if (gender != null) 'gender': gender,
-        if (occupation != null) 'occupation': occupation,
-        if (brandBought != null) 'brandBought': brandBought,
-        if (hasSuggestion != null) 'hasSuggestion': hasSuggestion,
-        if (suggestion != null) 'suggestion': suggestion,
-        if (clientId != null) 'clientId': clientId,
+        'speed': ?speed,
+        'usability': ?usability,
+        'payment': ?payment,
+        'overall': ?overall,
+        'nps': ?nps,
+        'locationShare': ?locationShare,
+        'userLocation': ?userLocation,
+        'gender': ?gender,
+        'occupation': ?occupation,
+        'brandBought': ?brandBought,
+        'hasSuggestion': ?hasSuggestion,
+        'suggestion': ?suggestion,
+        'clientId': ?clientId,
       });
       state = state.copyWith(isLoading: false, isSuccess: true);
       // Track feedback submission to prevent re-prompting (matches React localStorage)

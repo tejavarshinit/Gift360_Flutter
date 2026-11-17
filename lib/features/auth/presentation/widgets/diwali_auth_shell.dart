@@ -127,8 +127,8 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                         _buildStats(theme),
                         const SizedBox(height: 8),
                         Container(
-                          width: 342,
-                          padding: const EdgeInsets.all(12),
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: .95),
                             borderRadius: BorderRadius.circular(16),
@@ -212,7 +212,7 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          width: 342,
+                          width: double.infinity,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 4,
@@ -369,7 +369,7 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                 child: Text(
                   'TRUSTED BY 400+ BRANDS',
                   style: theme.copyWith(
-                    fontSize: 9,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     letterSpacing: .5,
                     color: const Color(0xB33F1A55),
@@ -379,31 +379,38 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
               const Expanded(child: Divider(color: Color(0xFFC9C9C9))),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           SizedBox(
-            height: 20,
+            height: 46,
             child: ClipRect(
-              child: AnimatedBuilder(
-                animation: _marqueeController,
-                builder: (context, child) => FractionalTranslation(
-                  translation: Offset(-_marqueeController.value, 0),
-                  child: child,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [..._logos, ..._logos]
-                      .map(
-                        (asset) => Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Image.asset(
-                            asset,
-                            height: 20,
-                            fit: BoxFit.contain,
-                            opacity: const AlwaysStoppedAnimation(.8),
+              child: OverflowBox(
+                alignment: Alignment.centerLeft,
+                minWidth: 0,
+                maxWidth: double.infinity,
+                minHeight: 46,
+                maxHeight: 46,
+                child: AnimatedBuilder(
+                  animation: _marqueeController,
+                  builder: (context, child) => FractionalTranslation(
+                    translation: Offset(-_marqueeController.value, 0),
+                    child: child,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [..._logos, ..._logos]
+                        .map(
+                          (asset) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Image.asset(
+                              asset,
+                              height: 40,
+                              fit: BoxFit.contain,
+                              opacity: const AlwaysStoppedAnimation(.8),
+                            ),
                           ),
-                        ),
-                      )
-                      .toList(),
+                        )
+                        .toList(),
+                  ),
                 ),
               ),
             ),

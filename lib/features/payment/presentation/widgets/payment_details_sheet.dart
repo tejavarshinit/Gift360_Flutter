@@ -262,7 +262,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
   /// Prices the order exactly like Cart/React: wallet cap from cashback value,
   /// SuperCoin cap from the DB share/cap × multiplier, DB method fee on cash.
   _SheetPricing _pricing(Brand brand, double total, double discountPercent) {
-    final walletData = ref.read(walletBalanceProvider).value;
+    final walletData = ref.read(walletBalanceProvider).valueOrNull;
     final scState = ref.read(supercoinProvider);
     final configAsync = ref.read(superCoinConfigProvider);
     final config = configAsync.hasValue && !configAsync.hasError
@@ -604,6 +604,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
   /// Hosted (Easebuzz/SabbPe) checkout: initiate + redirect. UPI is never
   /// offered here — the payload carries every mode EXCEPT UPI.
   Future<void> _startHostedPayment(String orderNumber) async {
+    final router = GoRouter.of(context);
     final methods =
         ref.read(paymentMethodFeesProvider).valueOrNull ??
         const <PaymentMethodFee>[];
@@ -621,7 +622,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     if (paymentUrl == null || paymentUrl.toString().isEmpty) {
       throw 'Payment URL not received from gateway';
     }
-    final router = GoRouter.of(context);
+    if (!context.mounted) return;
     final extra = <String, dynamic>{
       'paymentUrl': paymentUrl.toString(),
       'orderNumber': orderNumber,
@@ -836,9 +837,6 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     final discount = double.tryParse(brand.discount ?? '0') ?? 0;
     final cashback = total > 0 ? (total * discount / 100).toInt() : 0;
 
-    final topPadding = MediaQuery.of(context).padding.top;
-    final navBarHeight = topPadding + 56;
-
     return Stack(
       children: [
         GestureDetector(
@@ -849,12 +847,34 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
               onTap: () {},
               child: SlideTransition(
                 position: _slideAnimation,
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    height: MediaQuery.of(context).size.height - navBarHeight,
-                    margin: EdgeInsets.only(top: navBarHeight),
-                    decoration: const BoxDecoration(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final media = MediaQuery.of(context);
+                    final keyboard = media.viewInsets.bottom;
+                    final screen = media.size.height;
+                    final incoming = constraints.maxHeight.isFinite
+                        ? constraints.maxHeight
+                        : screen;
+                    // Home has no bar above this sheet, so the body runs
+                    // under the status bar. Keep the rounded top on screen.
+                    final topInset = media.padding.top;
+                    // Sit above the keyboard without subtracting it twice.
+                    // The page body is often already shorter than the screen.
+                    final aboveKeyboard = (screen - keyboard).clamp(0.0, screen);
+                    final bottomPad = incoming > aboveKeyboard
+                        ? incoming - aboveKeyboard
+                        : 0.0;
+                    final height = (incoming - bottomPad - topInset).clamp(
+                      0.0,
+                      incoming,
+                    );
+                    return Padding(
+                      padding: EdgeInsets.only(top: topInset, bottom: bottomPad),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Container(
+                          height: height,
+                          decoration: const BoxDecoration(
                       color: Color(0xFFF3F5F9),
                       borderRadius: BorderRadius.vertical(
                         top: Radius.circular(50),
@@ -915,60 +935,25 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                                   minPrice,
                                   maxPrice,
                                 ),
-                                if (cashback > 0 && _payMode == 0) ...[
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFECFDF5),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.currency_rupee,
-                                          size: 16,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          '+ ₹$cashback cashback',
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF10B981),
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        Container(
-                                          width: 60,
-                                          height: 2,
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF10B981),
-                                            borderRadius: BorderRadius.circular(
-                                              1,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 12),
                                 _buildQuantitySection(amount),
                                 const SizedBox(height: 16),
                                 _buildInfoTabs(_brandWithFetchedDetails(brand)),
+                                if (keyboard > 0) ...[
+                                  const SizedBox(height: 16),
+                                  _buildBottomBar(brand, total, cashback),
+                                ],
                               ],
                             ),
                           ),
                         ),
-                        _buildBottomBar(brand, total, cashback),
+                        if (keyboard == 0) _buildBottomBar(brand, total, cashback),
                       ],
                     ),
-                  ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -988,10 +973,9 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     final discount = brand.discount ?? '';
     final imageUrl = brand.resolvedImageUrl;
     return SizedBox(
-      width: 342,
-      height: 86,
+      width: double.infinity,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
@@ -1125,8 +1109,6 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     double minPrice,
     double maxPrice,
   ) {
-    final discountPercent = double.tryParse(brand.discount ?? '0') ?? 0;
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1155,8 +1137,6 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
           if (minPrice > 0 && minPrice == maxPrice) ...[
             const SizedBox(height: 4),
             _denomPill(minPrice, active: true, onTap: null),
-            const SizedBox(height: 4),
-            _cashbackRow((minPrice * discountPercent / 100).round()),
           ] else if (isFixed) ...[
             const SizedBox(height: 4),
             Wrap(
@@ -1206,45 +1186,11 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                 );
               }).toList(),
             ),
-            const SizedBox(height: 4),
-            if (_selectedAmount != null)
-              _cashbackRow(
-                ((double.tryParse(_selectedAmount!) ?? 0) *
-                        discountPercent /
-                        100)
-                    .round(),
-              ),
           ] else ...[
-            _buildVariableAmountInput(minPrice, maxPrice, discountPercent),
+            _buildVariableAmountInput(minPrice, maxPrice),
           ],
         ],
       ),
-    );
-  }
-
-  Widget _cashbackRow(int cashback) {
-    if (cashback <= 0 || _payMode != 0) return const SizedBox.shrink();
-    return Row(
-      children: [
-        Text(
-          '+₹$cashback cashback',
-          style: GoogleFonts.poppins(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFF10B981),
-          ),
-        ),
-        const SizedBox(width: 8),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 40,
-          height: 2,
-          decoration: BoxDecoration(
-            color: const Color(0xFF10B981),
-            borderRadius: BorderRadius.circular(1),
-          ),
-        ),
-      ],
     );
   }
 
@@ -1289,17 +1235,8 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     );
   }
 
-  /// Variable amount input matching the React PaymentDetailsSheet:
-  /// hint text "Enter amount between ₹min - ₹max", a text input with
-  /// purple focus border, and a live "+₹n cashback" preview below.
-  Widget _buildVariableAmountInput(
-    double min,
-    double max,
-    double discountPercent,
-  ) {
-    final amount = double.tryParse(_selectedAmount ?? '') ?? 0;
-    final cashback = (amount * discountPercent / 100).round();
-
+  /// Variable amount input: range hint and a purple focus border.
+  Widget _buildVariableAmountInput(double min, double max) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1333,6 +1270,10 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
         TextFormField(
           controller: _amountController,
           keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          scrollPadding: const EdgeInsets.only(bottom: 140),
+          onTapOutside: (_) => FocusScope.of(context).unfocus(),
+          onEditingComplete: () => FocusScope.of(context).unfocus(),
           onChanged: (value) {
             final raw = value.replaceAll(RegExp(r'[^0-9]'), '');
             setState(() {
@@ -1343,6 +1284,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
             });
           },
           onFieldSubmitted: (_) {
+            FocusScope.of(context).unfocus();
             if (_selectedAmount != null && _selectedAmount!.isNotEmpty) {
               final val = double.tryParse(_selectedAmount!) ?? 0;
               if (val < min || val > max) {
@@ -1381,134 +1323,143 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
             ),
           ),
         ),
-        const SizedBox(height: 4),
-        // Cashback preview
-        Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            '+₹$cashback cashback',
-            style: GoogleFonts.poppins(
-              fontSize: 9,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF10B981),
-            ),
-          ),
-        ),
       ],
+    );
+  }
+
+  Widget _qtyButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: enabled ? const Color(0xFFF3F0FF) : const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: enabled ? const Color(0xFF6C5CE7) : const Color(0xFFC4C4C4),
+        ),
+      ),
     );
   }
 
   Widget _buildQuantitySection(double amount) {
     final total = amount * _quantity;
     final discount = double.tryParse(widget.brand?.discount ?? '0') ?? 0;
+    final earn = _payMode == 0 ? (total * discount / 100).round() : 0;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
+            color: Color(0x14000000),
+            blurRadius: 12,
             offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text(
-                'Quantity:',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              Text(
+                'Quantity',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF111827),
+                ),
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: () => _quantity > 1
-                    ? setState(() {
-                        _quantity--;
-                        _invalidateOrder();
-                      })
-                    : null,
-                child: Container(
-                  width: 40,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF6C5CE7)),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: const Icon(
-                    Icons.remove,
-                    size: 18,
-                    color: Color(0xFF6C5CE7),
-                  ),
-                ),
+              _qtyButton(
+                icon: Icons.remove,
+                enabled: _quantity > 1,
+                onTap: () => setState(() {
+                  _quantity--;
+                  _invalidateOrder();
+                }),
               ),
               SizedBox(
-                width: 48,
-                child: Center(
-                  child: Text(
-                    '$_quantity',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                width: 36,
+                child: Text(
+                  '$_quantity',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111827),
                   ),
                 ),
               ),
-              GestureDetector(
-                onTap: _quantity >= 3
-                    ? null
-                    : () => setState(() {
-                        _quantity++;
-                        _invalidateOrder();
-                      }),
-                child: Container(
-                  width: 40,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF6C5CE7)),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: const Icon(
-                    Icons.add,
-                    size: 18,
-                    color: Color(0xFF6C5CE7),
-                  ),
-                ),
+              _qtyButton(
+                icon: Icons.add,
+                enabled: _quantity < 3,
+                onTap: () => setState(() {
+                  _quantity++;
+                  _invalidateOrder();
+                }),
               ),
             ],
           ),
           if (total > 0) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F0FF),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.receipt_long,
-                    size: 16,
-                    color: Color(0xFF6C5CE7),
+            const Divider(height: 1, color: Color(0xFFF0F0F5)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'You pay',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      ),
+                      Text(
+                        '₹${total.toInt()}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF111827),
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                ),
+                if (earn > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     child: Text(
-                      'Total: ₹${amount.toInt()} x $_quantity = ₹${total.toInt()}${discount > 0 && _payMode == 0 ? ' + ₹${(total * discount / 100).toInt()} cashback' : ''}',
-                      style: const TextStyle(
+                      'Earn ₹$earn',
+                      style: GoogleFonts.poppins(
                         fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF6C5CE7),
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF047857),
                       ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ],
         ],
@@ -1527,30 +1478,14 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
 
     return Column(
       children: [
-        // Tab buttons row
-        Container(
-          height: 44,
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x40000000),
-                blurRadius: 20,
-                offset: Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildInfoTabButton('i', 'About', 'about', 71),
-              _buildInfoTabButton('*', 'How to Use', 'howtouse', 102),
-              _buildInfoTabButton('#', 'Terms', 'terms', 73),
-            ],
-          ),
+        Row(
+          children: [
+            _buildInfoTabButton('About', 'about'),
+            const SizedBox(width: 8),
+            _buildInfoTabButton('How to use', 'howtouse'),
+            const SizedBox(width: 8),
+            _buildInfoTabButton('Terms', 'terms'),
+          ],
         ),
         // Expandable content
         AnimatedSize(
@@ -1591,41 +1526,31 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     );
   }
 
-  Widget _buildInfoTabButton(
-    String symbol,
-    String label,
-    String tab,
-    double width,
-  ) {
+  Widget _buildInfoTabButton(String label, String tab) {
     final isSelected = _infoTab == tab;
-    return GestureDetector(
-      onTap: () => setState(() => _infoTab = isSelected ? '' : tab),
-      child: Container(
-        width: width,
-        height: 30,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEDEAFF),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              symbol,
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: const Color(0xFF9747FF),
-              ),
+    const accent = Color(0xFF6C5CE7);
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _infoTab = isSelected ? '' : tab),
+        child: Container(
+          height: 36,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? accent : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: accent, width: 1.4),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : accent,
             ),
-            const SizedBox(width: 2),
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: const Color(0xFF9747FF),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1633,20 +1558,13 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
 
   Widget _buildInfoContent(String content, bool isTerms) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.only(top: 8),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x40000000),
-              blurRadius: 4,
-              offset: Offset(4, 4),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Text(
           content,
@@ -1672,6 +1590,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
           .transparent, // AddToCartSuccessModal paints its own dim backdrop
       builder: (dialogContext) {
         Future.delayed(const Duration(milliseconds: 2200), () {
+          if (!dialogContext.mounted) return;
           if (Navigator.of(dialogContext).canPop()) {
             Navigator.of(dialogContext).pop();
           }

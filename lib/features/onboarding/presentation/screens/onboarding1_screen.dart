@@ -154,7 +154,9 @@ class _Onboarding1ScreenState extends State<Onboarding1Screen>
   void dispose() {
     _phoneScaleCtrl.dispose();
     _fadeUpCtrl.dispose();
-    for (final c in _marqueeCtrls) c.dispose();
+    for (final c in _marqueeCtrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -379,7 +381,7 @@ class _LogoTagState extends State<_LogoTag>
               child: Image.asset(
                 'assets/images/gift360-logo.png',
                 height: 24,
-                errorBuilder: (_, __, ___) => const Icon(Icons.card_giftcard, size: 24),
+                errorBuilder: (_, _, _) => const Icon(Icons.card_giftcard, size: 24),
               ),
             ),
           ),
@@ -465,7 +467,7 @@ class _PortraitChipState extends State<PortraitChip>
                 'assets/images/${widget.asset}',
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: Colors.grey[200],
                   child: Icon(Icons.person, size: widget.size * 0.5),
                 ),
@@ -573,7 +575,7 @@ class _PhoneMockup extends StatelessWidget {
                           child: Image.asset(
                             'assets/images/gift360-logo.png',
                             height: 20,
-                            errorBuilder: (_, __, ___) => Text('Gift360',
+                            errorBuilder: (_, _, _) => Text('Gift360',
                               style: OnboardingDesign.poppins(fontSize: 8, fontWeight: FontWeight.w700)),
                           ),
                         ),
@@ -757,7 +759,7 @@ class _BrandTile extends StatelessWidget {
         child: Image.asset(
           tile.asset!,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const SizedBox(),
+          errorBuilder: (_, _, _) => const SizedBox(),
         ),
       );
     }

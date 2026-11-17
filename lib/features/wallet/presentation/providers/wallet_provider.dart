@@ -18,7 +18,7 @@ final walletRepositoryProvider = Provider<WalletRepository>((ref) {
 final walletBalanceProvider = FutureProvider.autoDispose<WalletBalance?>((ref) async {
   final user = ref.watch(authProvider);
   if (user?.clientId == null) return null;
-  final clientId = user!.clientId!;
+  final clientId = user!.clientId;
   final repo = ref.watch(walletRepositoryProvider);
   return repo.getWalletBalance(clientId);
 });

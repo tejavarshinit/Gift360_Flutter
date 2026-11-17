@@ -7,32 +7,36 @@ class AppConfig {
   // Biometric login entry points (login screen + profile enable/disable).
   static const bool biometricLoginEnabled = true;
 
-  static String get authApiUrl => dotenv.env['AUTH_API_URL'] ?? '';
-  static String get brandApiUrl => dotenv.env['BRAND_API_URL'] ?? '';
-  static String get cartApiUrl => dotenv.env['CART_API_URL'] ?? '';
-  static String get orderApiUrl => dotenv.env['ORDER_API_URL'] ?? '';
-  static String get paymentApiUrl => dotenv.env['PAYMENT_API_URL'] ?? '';
-  static String get walletApiUrl => dotenv.env['WALLET_API_URL'] ?? '';
-  static String get couponApiUrl => dotenv.env['COUPON_API_URL'] ?? '';
-  static String get storeApiUrl => dotenv.env['STORE_API_URL'] ?? '';
-  static String get supercoinApiUrl => dotenv.env['SUPERCOIN_API_URL'] ?? '';
-  static String get giftingApiUrl => dotenv.env['GIFTING_API_URL'] ?? '';
+  /// Empty when `.env` is missing. The dev flavor is allowed to start that way.
+  static String _env(String key) {
+    if (!dotenv.isInitialized) return '';
+    return dotenv.env[key]?.trim() ?? '';
+  }
+
+  static String get authApiUrl => _env('AUTH_API_URL');
+  static String get brandApiUrl => _env('BRAND_API_URL');
+  static String get cartApiUrl => _env('CART_API_URL');
+  static String get orderApiUrl => _env('ORDER_API_URL');
+  static String get paymentApiUrl => _env('PAYMENT_API_URL');
+  static String get walletApiUrl => _env('WALLET_API_URL');
+  static String get couponApiUrl => _env('COUPON_API_URL');
+  static String get storeApiUrl => _env('STORE_API_URL');
+  static String get supercoinApiUrl => _env('SUPERCOIN_API_URL');
+  static String get giftingApiUrl => _env('GIFTING_API_URL');
   static String get notificationApiBaseUrl {
     const configuredUrl = String.fromEnvironment('NOTIFICATION_API_URL');
     final url = configuredUrl.trim().isNotEmpty
         ? configuredUrl
-        : dotenv.env['NOTIFICATION_API_URL'] ?? '';
+        : _env('NOTIFICATION_API_URL');
     return url.trim().isEmpty ? brandApiUrl.trim() : url.trim();
   }
 
-  static String get firebaseWebVapidKey =>
-      dotenv.env['FIREBASE_WEB_VAPID_KEY'] ?? '';
+  static String get firebaseWebVapidKey => _env('FIREBASE_WEB_VAPID_KEY');
   static FirebaseOptions? get firebaseWebOptions {
-    final apiKey = dotenv.env['FIREBASE_WEB_API_KEY']?.trim() ?? '';
-    final appId = dotenv.env['FIREBASE_WEB_APP_ID']?.trim() ?? '';
-    final messagingSenderId =
-        dotenv.env['FIREBASE_MESSAGING_SENDER_ID']?.trim() ?? '';
-    final projectId = dotenv.env['FIREBASE_PROJECT_ID']?.trim() ?? '';
+    final apiKey = _env('FIREBASE_WEB_API_KEY');
+    final appId = _env('FIREBASE_WEB_APP_ID');
+    final messagingSenderId = _env('FIREBASE_MESSAGING_SENDER_ID');
+    final projectId = _env('FIREBASE_PROJECT_ID');
     if (apiKey.isEmpty ||
         appId.isEmpty ||
         messagingSenderId.isEmpty ||
@@ -44,59 +48,70 @@ class AppConfig {
       appId: appId,
       messagingSenderId: messagingSenderId,
       projectId: projectId,
-      authDomain: dotenv.env['FIREBASE_AUTH_DOMAIN'],
-      storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'],
-      measurementId: dotenv.env['FIREBASE_MEASUREMENT_ID'],
+      authDomain: _env('FIREBASE_AUTH_DOMAIN').isEmpty
+          ? null
+          : _env('FIREBASE_AUTH_DOMAIN'),
+      storageBucket: _env('FIREBASE_STORAGE_BUCKET').isEmpty
+          ? null
+          : _env('FIREBASE_STORAGE_BUCKET'),
+      measurementId: _env('FIREBASE_MEASUREMENT_ID').isEmpty
+          ? null
+          : _env('FIREBASE_MEASUREMENT_ID'),
     );
   }
 
   /// Notifications/mail service (React `VITE_MAIL_URL`) — voucher emails
   /// (`/mail/send`) are posted straight to it.
-  static String get mailApiUrl => dotenv.env['MAIL_URL'] ?? '';
-  static String get imageBaseUrl => dotenv.env['IMAGE_BASE_URL'] ?? '';
-  static String get encryptionKey => dotenv.env['ENCRYPTION_KEY'] ?? '';
-  static String get encryptionIv => dotenv.env['ENCRYPTION_IV'] ?? '';
-  static String get sabbpeUserId => dotenv.env['SABBPE_USERID'] ?? '';
-  static String get sabbpeMerchantId => dotenv.env['SABBPE_MERCHANTID'] ?? '';
-  static String get sabbpePassword => dotenv.env['SABBPE_PASSWORD'] ?? '';
-  static String get sabbpeFrontendUrl =>
-      dotenv.env['SABBPE_FRONTEND_URL'] ?? '';
-  static String get paymentProductInfo =>
-      dotenv.env['PAYMENT_PRODUCT_INFO'] ?? 'Gift Voucher Purchase';
+  static String get mailApiUrl => _env('MAIL_URL');
+  static String get imageBaseUrl => _env('IMAGE_BASE_URL');
+  static String get encryptionKey => _env('ENCRYPTION_KEY');
+  static String get encryptionIv => _env('ENCRYPTION_IV');
+  static String get sabbpeUserId => _env('SABBPE_USERID');
+  static String get sabbpeMerchantId => _env('SABBPE_MERCHANTID');
+  static String get sabbpePassword => _env('SABBPE_PASSWORD');
+  static String get sabbpeFrontendUrl => _env('SABBPE_FRONTEND_URL');
+  static String get paymentProductInfo {
+    final value = _env('PAYMENT_PRODUCT_INFO');
+    return value.isEmpty ? 'Gift Voucher Purchase' : value;
+  }
 
   // SabbPe's /initiate API expects the MERCHANT's own registered contact
   // details here, not the end customer's — sending shopper details fails
   // with "Invalid email or phone. Please use your registered account
   // email and phone, not end-user customer details".
-  static String get paymentCustFirstName =>
-      dotenv.env['PAYMENT_CUSTFIRSTNAME'] ?? 'GIFT360';
-  static String get paymentCustEmail =>
-      dotenv.env['PAYMENT_CUSTEMAIL'] ?? 'contact@gift360.io';
-  static String get paymentCustMobile =>
-      dotenv.env['PAYMENT_CUSTMOBILE'] ?? '9876501234';
+  static String get paymentCustFirstName {
+    final value = _env('PAYMENT_CUSTFIRSTNAME');
+    return value.isEmpty ? 'GIFT360' : value;
+  }
+
+  static String get paymentCustEmail {
+    final value = _env('PAYMENT_CUSTEMAIL');
+    return value.isEmpty ? 'contact@gift360.io' : value;
+  }
+
+  static String get paymentCustMobile {
+    final value = _env('PAYMENT_CUSTMOBILE');
+    return value.isEmpty ? '9876501234' : value;
+  }
+
   static String get supercoinMerchantWalletId =>
-      dotenv.env['flipkart.supercoin.walletId'] ?? '';
+      _env('flipkart.supercoin.walletId');
 
   /// Cashback wallet redemption — fallback when wallet API doesn't provide values.
   static double get cashbackRedeemPercent {
-    final raw = dotenv.env['CASHBACK_REDEEM_PERCENT'];
-    return double.tryParse(raw ?? '') ?? 50;
+    return double.tryParse(_env('CASHBACK_REDEEM_PERCENT')) ?? 50;
   }
 
   static double get maxRedeemAmount {
-    final raw = dotenv.env['MAX_REDEEM_AMOUNT'];
-    return double.tryParse(raw ?? '') ?? 100;
+    return double.tryParse(_env('MAX_REDEEM_AMOUNT')) ?? 100;
   }
 
   static double get quizCashbackReward {
-    final raw = dotenv.env['QUIZ_CASHBACK_REWARD'];
-    return double.tryParse(raw ?? '') ?? 10;
+    return double.tryParse(_env('QUIZ_CASHBACK_REWARD')) ?? 10;
   }
 
   static int get upiPollIntervalMs {
-    final configured = int.tryParse(
-      dotenv.env['VITE_UPI_POLL_INTERVAL_MS'] ?? '',
-    );
+    final configured = int.tryParse(_env('VITE_UPI_POLL_INTERVAL_MS'));
     return configured == null || configured < 500 ? 2000 : configured;
   }
 
@@ -129,7 +144,7 @@ class SuperCoinConversionConfig {
   /// Rupee → coin conversion ratio (default 1.00, matches React's VITE_SUPERCOIN_BURN_RATIO).
   /// Reads from .env at runtime so changing the ratio doesn't require rebuild.
   static double get burnRatio {
-    final raw = dotenv.env['SUPERCOIN_BURN_RATIO'];
-    return double.tryParse(raw ?? '') ?? 1.0;
+    if (!dotenv.isInitialized) return 1.0;
+    return double.tryParse(dotenv.env['SUPERCOIN_BURN_RATIO'] ?? '') ?? 1.0;
   }
 }

@@ -100,6 +100,7 @@ class PushNotificationService {
       DeviceTokenRegistrationCoordinator((token, clientId) async {
         final user = _authenticatedUser;
         if (user == null || user.clientId != clientId) return;
+        if (AppConfig.notificationApiBaseUrl.trim().isEmpty) return;
         await _deviceTokens.register(
           deviceToken: token,
           deviceType: _deviceType,

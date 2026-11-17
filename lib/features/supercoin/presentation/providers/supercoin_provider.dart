@@ -128,8 +128,9 @@ String? normalizeMobileToE164(String? mobile) {
   final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
   if (trimmed.startsWith('+') && digitsOnly.length >= 10) return '+$digitsOnly';
   if (digitsOnly.length == 10) return '+91$digitsOnly';
-  if (digitsOnly.length == 12 && digitsOnly.startsWith('91'))
+  if (digitsOnly.length == 12 && digitsOnly.startsWith('91')) {
     return '+$digitsOnly';
+  }
   return trimmed.startsWith('+')
       ? trimmed
       : '+${digitsOnly.isNotEmpty ? digitsOnly : trimmed}';
@@ -235,7 +236,7 @@ class SuperCoinNotifier extends StateNotifier<SuperCoinState> {
 
   SuperCoinNotifier(this._api, this._mobile, [this._clientId])
     : super(const SuperCoinState()) {
-    if (_mobile != null && _mobile!.isNotEmpty) {
+    if (_mobile != null && _mobile.isNotEmpty) {
       _searchAndLoadBalance();
     }
   }
@@ -392,19 +393,14 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
   Timer? _countdownTimer;
 
   SuperCoinOtpNotifier({
-    required SuperCoinApi api,
-    required SuperCoinIdentity? identity,
-    required String merchantWalletId,
-    required String orderNumber,
-    required String displayName,
+    required this._api,
+    required this._identity,
+    required this._merchantWalletId,
+    required this._orderNumber,
+    required this._displayName,
     required double preloadedBalance,
     required double maxRedeemable,
-  }) : _api = api,
-       _identity = identity,
-       _merchantWalletId = merchantWalletId,
-       _orderNumber = orderNumber,
-       _displayName = displayName,
-       _preloadedBalance = preloadedBalance,
+  }) : _preloadedBalance = preloadedBalance,
        _maxRedeemable = maxRedeemable,
        super(
          SuperCoinOtpState(
@@ -435,7 +431,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
     }
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final result = await _api.fetchBalance(_identity!);
+      final result = await _api.fetchBalance(_identity);
       if (!mounted) return;
       double bal = 0;
       for (final key in [
@@ -484,7 +480,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
       return;
     }
 
-    final txnId = '${_orderNumber}-SC';
+    final txnId = '$_orderNumber-SC';
     state = state.copyWith(
       isLoading: true,
       clearError: true,
@@ -492,7 +488,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
     );
     try {
       final response = await _api.initHold({
-        'identity': _identity!.toJson(),
+        'identity': _identity.toJson(),
         'merchantWalletId': _merchantWalletId,
         'merchantTransactionId': txnId,
         'merchantReferenceId': _orderNumber,
@@ -656,7 +652,7 @@ class SuperCoinOtpNotifier extends StateNotifier<SuperCoinOtpState> {
         'stampExpiry': context.stampExpiry,
         'transactionTime': context.transactionTime,
       };
-      await prefs.setString('superCoinHold_${_orderNumber}', jsonEncode(data));
+      await prefs.setString('superCoinHold_$_orderNumber', jsonEncode(data));
     } catch (_) {}
   }
 

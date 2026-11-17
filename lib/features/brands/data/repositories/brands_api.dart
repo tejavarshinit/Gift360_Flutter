@@ -161,7 +161,7 @@ class BrandsApi {
     final response = await _dio.post('/v1/neworders', data: {
       'clientId': clientId,
       'timeline': timeline,
-      if (type != null) 'type': type,
+      'type': ?type,
     });
     final data = response.data;
     if (data is List) return data.cast<Map<String, dynamic>>();

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:gift360/config/app_flavor.dart';
 import 'package:gift360/features/payment/data/models/payment_method_fee.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 import 'package:gift360/features/payment/presentation/widgets/upi_intent_sheet.dart';
@@ -165,6 +166,7 @@ class _PayUsingSheetState extends ConsumerState<PayUsingSheet> {
   }
 
   Future<void> _handleApp(_UpiApp app) async {
+    if (!AppFlavorConfig.allowsUpi) return;
     final intent = await _createIntent();
     if (intent == null || !mounted) return;
     final url = _resolveUrl(intent, app.key);
@@ -183,6 +185,7 @@ class _PayUsingSheetState extends ConsumerState<PayUsingSheet> {
   }
 
   Future<void> _handleOtherApps() async {
+    if (!AppFlavorConfig.allowsUpi) return;
     final intent = await _createIntent();
     if (intent == null || !mounted) return;
     final url = _resolveUrl(intent, null);
@@ -199,6 +202,7 @@ class _PayUsingSheetState extends ConsumerState<PayUsingSheet> {
   }
 
   Future<void> _handleQr() async {
+    if (!AppFlavorConfig.allowsUpi) return;
     final intent = await _createIntent();
     if (intent == null || !mounted) return;
     _openProcessing(intent, qrValue: intent['deeplink']?.toString());
@@ -254,7 +258,8 @@ class _PayUsingSheetState extends ConsumerState<PayUsingSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final upiFee = _upiFee;
+    final showUpi = AppFlavorConfig.allowsUpi;
+    final upiFee = showUpi ? _upiFee : null;
     final cardMethods = widget.methods.where((m) => !isUpiPaymentMethod(m.code)).toList();
 
     return Align(
@@ -294,6 +299,7 @@ class _PayUsingSheetState extends ConsumerState<PayUsingSheet> {
                         ),
                         const SizedBox(height: 12),
                       ],
+                      if (showUpi) ...[
                       Row(
                         children: [
                           Text(
@@ -359,6 +365,7 @@ class _PayUsingSheetState extends ConsumerState<PayUsingSheet> {
                         onTap: _starting ? null : _handleQr,
                         filled: true,
                       ),
+                      ],
                       if (cardMethods.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         Text(

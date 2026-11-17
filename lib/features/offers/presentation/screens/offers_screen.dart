@@ -41,7 +41,7 @@ class OffersScreen extends ConsumerWidget {
             Expanded(
               child: brandsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9747FF))),
-                error: (_, __) => Center(
+                error: (_, _) => Center(
                   child: Text('Could not load offers', style: GoogleFonts.poppins(color: const Color(0xFF6B7280))),
                 ),
                 data: (brands) {

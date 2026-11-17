@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gift360/config/app_flavor.dart';
+import 'package:gift360/config/dev_session.dart';
 import 'package:gift360/core/utils/jwt_utils.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/data/models/biometric_models.dart';
@@ -54,6 +56,7 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
   /// fetchSuperCoinBalance persists on every balance fetch while logged in.
   /// Non-Flipkart users (upstream 404) store "NA". Fire-and-forget.
   void _syncSuperCoinBalanceOnAuth(String clientId, String? mobile) {
+    if (AppFlavorConfig.isDev) return;
     final dio = _brandsDio;
     if (dio == null || clientId.trim().isEmpty) return;
     final normalized = _normalizeMobile(mobile);
@@ -103,10 +106,22 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
   }
 
   Future<SendOtpResponse> sendOtp(SendOtpRequest request) async {
+    if (AppFlavorConfig.usesMockOtp) {
+      return const SendOtpResponse(
+        success: true,
+        message: 'Dev build: enter OTP 1234. No SMS is sent.',
+      );
+    }
     return _authApi.sendOtp(request);
   }
 
   Future<LoginResponse> loginWithOtp(LoginWithOtpRequest request) async {
+    if (AppFlavorConfig.usesMockOtp) {
+      return _loginWithDevOtp(
+        mobile: request.mobileNumber,
+        otp: request.otp,
+      );
+    }
     final response = await _authApi.loginWithOtp(request);
     if (response.success &&
         response.token != null &&
@@ -144,6 +159,23 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
     );
   }
 
+  Future<LoginResponse> _loginWithDevOtp({
+    required String mobile,
+    required String otp,
+    String name = 'Dev User',
+    String? email,
+  }) async {
+    if (otp != AppFlavorConfig.devOtp) {
+      return const LoginResponse(
+        success: false,
+        message: 'Dev OTP is 1234.',
+      );
+    }
+    final user = devAuthUser(mobile: mobile, name: name, email: email);
+    await _establishSession(user);
+    return devLoginResponse(user);
+  }
+
   Future<void> _establishSession(AuthUser user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('showSuperCoinIntro', true);
@@ -163,6 +195,12 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
     required String mobileNumber,
     required String email,
   }) async {
+    if (AppFlavorConfig.usesMockOtp) {
+      return const SendOtpResponse(
+        success: true,
+        message: 'Dev build: enter OTP 1234. No SMS is sent.',
+      );
+    }
     return _authApi.registerSendOtp(mobileNumber: mobileNumber, email: email);
   }
 
@@ -172,6 +210,14 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
     required String mobileNumber,
     required String otp,
   }) async {
+    if (AppFlavorConfig.usesMockOtp) {
+      return _loginWithDevOtp(
+        mobile: mobileNumber,
+        otp: otp,
+        name: fullName,
+        email: email,
+      );
+    }
     final response = await _authApi.registerVerifyOtp(
       fullName: fullName,
       email: email,

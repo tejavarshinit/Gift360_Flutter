@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/onboarding_design.dart';
 import 'package:gift360/features/onboarding/presentation/widgets/navigation_bar.dart';
@@ -46,7 +45,9 @@ class _Onboarding2ScreenState extends State<Onboarding2Screen>
   void dispose() {
     _fadeUpCtrl.dispose();
     _scratchCtrl.dispose();
-    for (final c in _sparkleCtrls) c.dispose();
+    for (final c in _sparkleCtrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -421,7 +422,7 @@ class _VoucherStack extends StatelessWidget {
             alignment: Alignment.center,
             transform: Matrix4.identity()
               ..rotateZ(-7 * pi / 180)
-              ..translate(0.0, 8.0),
+              ..translateByDouble(0.0, 8.0, 0.0, 1.0),
             child: Opacity(
               opacity: 0.55,
               child: Container(
@@ -448,7 +449,7 @@ class _VoucherStack extends StatelessWidget {
             alignment: Alignment.center,
             transform: Matrix4.identity()
               ..rotateZ(4 * pi / 180)
-              ..translate(0.0, 4.0),
+              ..translateByDouble(0.0, 4.0, 0.0, 1.0),
             child: Opacity(
               opacity: 0.75,
               child: Container(
@@ -529,7 +530,7 @@ class _VoucherStack extends StatelessWidget {
                             'assets/images/voucher-revealed.png',
                             width: 170, height: 118,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder: (_, _, _) => Container(
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
                                   begin: Alignment(-1, -1),
@@ -557,7 +558,7 @@ class _VoucherStack extends StatelessWidget {
                               'assets/images/voucher-cover.png',
                               width: 170, height: 118,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+                              errorBuilder: (_, _, _) => Container(
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
                                     begin: Alignment(-1, -1),

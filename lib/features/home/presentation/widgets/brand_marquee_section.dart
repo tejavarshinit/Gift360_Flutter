@@ -209,7 +209,7 @@ class _BrandMarqueeSectionState extends State<BrandMarqueeSection>
           fit: BoxFit.contain,
           width: 362,
           height: 164,
-          errorBuilder: (_, __, ___) => Center(
+          errorBuilder: (_, _, _) => Center(
             child: Text(
               brand.toUpperCase(),
               style: const TextStyle(

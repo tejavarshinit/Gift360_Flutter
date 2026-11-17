@@ -480,7 +480,7 @@ final paymentBreakdownProvider = Provider.autoDispose<PaymentBreakdown>((ref) {
   // ── Wallet cap — exact integer HALF_UP math (matches React walletCapPaise) ──
   // cashbackValue = sum of per-item itemCashbackScale4(lineTotal, pct).
   // maxWalletUsage = min(cashbackValue * redeemPercent / 100, maxRedeemAmount).
-  final walletData = walletAsync.value;
+  final walletData = walletAsync.valueOrNull;
   final cashbackRedeemPercent = walletData?.cashbackRedeemPercent ?? 50.0;
   final maxRedeemAmount = walletData?.maxRedeemAmount ?? 100.0;
   int cartCashbackValueScale4 = 0;
@@ -498,7 +498,7 @@ final paymentBreakdownProvider = Provider.autoDispose<PaymentBreakdown>((ref) {
       ) /
       100;
 
-  final walletBalance = (walletAsync.value?.totalBalance ?? 0).toDouble();
+  final walletBalance = (walletAsync.valueOrNull?.totalBalance ?? 0).toDouble();
   final walletDeduction = checkout.useWalletBalance
       ? (walletBalance < maxWalletUsage ? walletBalance : maxWalletUsage)
       : 0.0;

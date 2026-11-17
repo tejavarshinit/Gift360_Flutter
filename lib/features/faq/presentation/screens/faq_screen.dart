@@ -113,7 +113,7 @@ class _FaqScreenState extends State<FaqScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _faqCategories.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final cat = _faqCategories[index];
                     final active = _activeCategory == cat['id'];

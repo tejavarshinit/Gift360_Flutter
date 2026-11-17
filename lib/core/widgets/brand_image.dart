@@ -81,8 +81,8 @@ class _BrandImageState extends State<BrandImage> {
       fit: widget.fit,
       width: widget.width,
       height: widget.height,
-      placeholder: widget.placeholder ?? (_, __) => const SizedBox(),
-      errorWidget: widget.errorWidget ?? (_, __, ___) => const SizedBox(),
+      placeholder: widget.placeholder ?? (_, _) => const SizedBox(),
+      errorWidget: widget.errorWidget ?? (_, _, _) => const SizedBox(),
     );
   }
 }

@@ -37,11 +37,11 @@ final ordersProvider =
     api.fetchNewOrders(user.clientId, timeline: 12, type: 'SUPERCOIN'),
   ]);
 
-  final sortFn = (Map<String, dynamic> a, Map<String, dynamic> b) {
+  int sortFn(Map<String, dynamic> a, Map<String, dynamic> b) {
     final da = DateTime.tryParse(orderCreatedAt(a) ?? '') ?? DateTime(1970);
     final db = DateTime.tryParse(orderCreatedAt(b) ?? '') ?? DateTime(1970);
     return db.compareTo(da);
-  };
+  }
 
   final cashOrders = results[0]..sort(sortFn);
   final superCoinOrders = results[1]..sort(sortFn);

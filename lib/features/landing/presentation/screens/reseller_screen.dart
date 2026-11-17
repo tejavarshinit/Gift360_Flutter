@@ -268,7 +268,7 @@ class _ResellerScreenState extends State<ResellerScreen> {
                   width: 120,
                   height: 120,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.sell_outlined, size: 60, color: Color(0xFF9747FF)),
+                  errorBuilder: (_, _, _) => const Icon(Icons.sell_outlined, size: 60, color: Color(0xFF9747FF)),
                 ),
               ),
             ],

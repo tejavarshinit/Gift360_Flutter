@@ -68,9 +68,9 @@ class OrderSummarySection extends ConsumerWidget {
           ),
         );
 
-    final walletBalance = (walletAsync.value?.totalBalance ?? 0).toDouble();
+    final walletBalance = (walletAsync.valueOrNull?.totalBalance ?? 0).toDouble();
     final cashbackRedeemPercent =
-        walletAsync.value?.cashbackRedeemPercent ?? 50.0;
+        walletAsync.valueOrNull?.cashbackRedeemPercent ?? 50.0;
 
     String countdownDisplay(int seconds) {
       final mins = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -149,59 +149,51 @@ class OrderSummarySection extends ConsumerWidget {
           ...brandTotals.entries.map((entry) {
             final data = entry.value;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            data.brand,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              color: const Color(0xFF6B7280),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          data.brand,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF2D2D2D),
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (data.discount > 0) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF10B981,
-                              ).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '${data.discount.toStringAsFixed(0)}% Cashback',
-                              style: GoogleFonts.poppins(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF10B981),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '₹${data.total.toStringAsFixed(2)}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF2D2D2D),
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    '${data.quantity} × ₹${data.price.toStringAsFixed(2)} = ₹${data.total.toStringAsFixed(2)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF2D2D2D),
-                    ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${data.quantity} × ₹${data.price.toStringAsFixed(0)}'
+                          '${data.discount > 0 ? '  ·  ${data.discount.toStringAsFixed(0)}% cashback' : ''}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                            color: const Color(0xFF6B7280),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -230,45 +222,40 @@ class OrderSummarySection extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         vertical: 8,
-                        horizontal: 16,
+                        horizontal: 8,
                       ),
                       decoration: BoxDecoration(
                         color: checkout.rewardMode == RewardMode.cashbackWallet
                             ? const Color(0xFFD1FAE5)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(999),
-                        boxShadow:
-                            checkout.rewardMode == RewardMode.cashbackWallet
-                            ? [
-                                BoxShadow(
-                                  blurRadius: 4,
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                ),
-                              ]
-                            : [],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             Icons.auto_awesome,
-                            size: 16,
+                            size: 14,
                             color:
                                 checkout.rewardMode == RewardMode.cashbackWallet
-                                ? const Color(0xFF2D2D2D)
+                                ? const Color(0xFF047857)
                                 : const Color(0xFF6B7280),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Cashback & Wallet',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color:
-                                  checkout.rewardMode ==
-                                      RewardMode.cashbackWallet
-                                  ? const Color(0xFF2D2D2D)
-                                  : const Color(0xFF6B7280),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Cashback',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    checkout.rewardMode ==
+                                        RewardMode.cashbackWallet
+                                    ? const Color(0xFF047857)
+                                    : const Color(0xFF6B7280),
+                              ),
                             ),
                           ),
                         ],
@@ -289,42 +276,37 @@ class OrderSummarySection extends ConsumerWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           vertical: 8,
-                          horizontal: 16,
+                          horizontal: 8,
                         ),
                         decoration: BoxDecoration(
                           color: checkout.rewardMode == RewardMode.superCoins
-                              ? const Color(0xFFD1FAE5)
+                              ? const Color(0xFFFFF4D6)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(999),
-                          boxShadow:
-                              checkout.rewardMode == RewardMode.superCoins
-                              ? [
-                                  BoxShadow(
-                                    blurRadius: 4,
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                  ),
-                                ]
-                              : [],
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Image.asset(
                               'assets/images/SuperCOin-removebg-preview.png',
-                              width: 16,
-                              height: 16,
+                              width: 14,
+                              height: 14,
                               fit: BoxFit.contain,
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'SuperCoins',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color:
-                                    checkout.rewardMode == RewardMode.superCoins
-                                    ? const Color(0xFF2D2D2D)
-                                    : const Color(0xFF6B7280),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'SuperCoins',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: checkout.rewardMode ==
+                                          RewardMode.superCoins
+                                      ? const Color(0xFF92400E)
+                                      : const Color(0xFF6B7280),
+                                ),
                               ),
                             ),
                           ],
@@ -1257,6 +1239,7 @@ class OrderSummarySection extends ConsumerWidget {
       );
 
       if (orderNumber == null) {
+        if (!context.mounted) return;
         await _failPay(
           context,
           ref,
@@ -1284,6 +1267,7 @@ class OrderSummarySection extends ConsumerWidget {
       );
 
       if (!validated) {
+        if (!context.mounted) return;
         await _failPay(
           context,
           ref,
@@ -1303,6 +1287,7 @@ class OrderSummarySection extends ConsumerWidget {
 
       // React Cart: always open the "Pay using" chooser (works with an empty
       // DB fee table too — fees then show "at checkout").
+      if (!context.mounted) return;
       checkoutNotifier.setProcessing(false);
       onPaymentComplete();
       _showPayUsing(
@@ -1319,6 +1304,7 @@ class OrderSummarySection extends ConsumerWidget {
       );
       return;
     } catch (e) {
+      if (!context.mounted) return;
       await _failPay(
         context,
         ref,
@@ -1350,6 +1336,7 @@ class OrderSummarySection extends ConsumerWidget {
           : easebuzzPaymentModes(feeMethods),
     );
     if (paymentResponse == null) {
+      if (!context.mounted) return;
       await _failPay(
         context,
         ref,
@@ -1361,22 +1348,8 @@ class OrderSummarySection extends ConsumerWidget {
     }
     final paymentUrl =
         paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
-    if (paymentUrl != null &&
-        paymentUrl.toString().isNotEmpty &&
-        context.mounted) {
-      checkoutNotifier.setProcessing(false);
-      onPaymentComplete();
-      // Match React Cart: clear the submitted cart after payment initiation
-      // succeeds and before leaving for the gateway.
-      await ref.read(cartProvider.notifier).clearCart();
-      context.push(
-        '/payment-webview',
-        extra: {
-          'paymentUrl': paymentUrl.toString(),
-          'orderNumber': orderNumber,
-        },
-      );
-    } else {
+    if (paymentUrl == null || paymentUrl.toString().isEmpty) {
+      if (!context.mounted) return;
       await _failPay(
         context,
         ref,
@@ -1384,7 +1357,22 @@ class OrderSummarySection extends ConsumerWidget {
         checkoutNotifier,
         superCoinIdentity,
       );
+      return;
     }
+    if (!context.mounted) return;
+    checkoutNotifier.setProcessing(false);
+    onPaymentComplete();
+    // Match React Cart: clear the submitted cart after payment initiation
+    // succeeds and before leaving for the gateway.
+    await ref.read(cartProvider.notifier).clearCart();
+    if (!context.mounted) return;
+    context.push(
+      '/payment-webview',
+      extra: {
+        'paymentUrl': paymentUrl.toString(),
+        'orderNumber': orderNumber,
+      },
+    );
   }
 
   /// Juspay UPI-intent sheet for the cart (React: setUpiIntentOrder(orderNumber)).

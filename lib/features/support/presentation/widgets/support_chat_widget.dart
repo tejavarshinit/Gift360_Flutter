@@ -126,11 +126,8 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
         height: 44,
-        // Keep both endpoints finite. Animating AnimatedContainer from a
-        // null width (unbounded constraints) to 48px causes BoxConstraints
-        // interpolation assertions in Flutter Web.
-        width: isPill ? 96 : 44,
-        padding: isPill ? const EdgeInsets.only(left: 12, right: 14) : null,
+        width: isPill ? 124 : 44,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
@@ -146,32 +143,40 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _open
-                ? const Icon(Icons.close, color: Colors.white, size: 18)
-                : const Icon(
-                    Icons.chat_bubble_outline,
-                    color: Colors.white,
-                    size: 18,
+        // The width animates between the circle and the pill. The label must
+        // not be forced into that shrinking box, or the row overflows.
+        child: OverflowBox(
+          alignment: Alignment.centerLeft,
+          minWidth: 0,
+          maxWidth: 124,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 13, right: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _open
+                    ? const Icon(Icons.close, color: Colors.white, size: 18)
+                    : const Icon(
+                        Icons.chat_bubble_outline,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                if (isPill) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    'Ask Us',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
-            if (isPill) ...[
-              const SizedBox(width: 8),
-              AnimatedOpacity(
-                opacity: _askLabelVisible ? 1 : 0,
-                duration: const Duration(milliseconds: 500),
-                child: Text(
-                  'Ask Us',
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ],
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -327,6 +332,7 @@ class _SupportChatPanelState extends ConsumerState<_SupportChatPanel> {
           final key = _storageKeyFor(user);
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(key, publicId);
+          if (!mounted) return;
           setState(() {
             _ticketId = publicId;
             _waitingSince = DateTime.now();
@@ -336,13 +342,20 @@ class _SupportChatPanelState extends ConsumerState<_SupportChatPanel> {
         }
       } else {
         final err = ref.read(supportTicketProvider).error;
-        setState(
-          () => _formError =
-              err ?? 'Failed to submit your request. Please try again.',
-        );
+        if (!mounted) return;
+        final message = (err ?? '').contains('No API address')
+            ? 'Chat needs the staging server. This dev build has no API yet.'
+            : (err ?? 'Failed to submit your request. Please try again.');
+        setState(() => _formError = message);
       }
     } catch (e) {
-      setState(() => _formError = e.toString());
+      if (!mounted) return;
+      final raw = e.toString();
+      setState(
+        () => _formError = raw.contains('No API address')
+            ? 'Chat needs the staging server. This dev build has no API yet.'
+            : 'Could not start the chat. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

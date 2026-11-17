@@ -19,6 +19,7 @@ import 'core/providers/notification_provider.dart';
 import 'core/widgets/gift_header.dart';
 import 'core/widgets/session_expired_dialog.dart';
 import 'config/app_config.dart';
+import 'config/app_flavor.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/auth/data/models/auth_user.dart';
 import 'features/notifications/data/repositories/device_token_api.dart';
@@ -30,7 +31,24 @@ import 'features/rewards/presentation/widgets/app_install_reward_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load();
+  try {
+    // Prod uses .env.prod. The shared .env stays blank so dev does not
+    // call live servers. flutter_dotenv keeps the first value for a key,
+    // so these files must not be merged.
+    if (AppFlavorConfig.isProd) {
+      await dotenv.load(fileName: '.env.prod');
+    } else {
+      await dotenv.load(isOptional: true);
+    }
+  } catch (error, stackTrace) {
+    // Dev has no API file yet. Staging and prod must have .env.
+    if (!AppFlavorConfig.isDev) {
+      debugPrint('[ENV] Failed to load .env: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
+    debugPrint('[ENV] Dev build started without .env');
+  }
 
   var firebaseAvailable = false;
   try {
@@ -46,8 +64,8 @@ void main() async {
 
   // Debug: verify env loaded
   assert(() {
-    print('ENV DEBUG: AUTH_API_URL = ${AppConfig.authApiUrl}');
-    print('ENV DEBUG: BRAND_API_URL = ${AppConfig.brandApiUrl}');
+    debugPrint('ENV DEBUG: AUTH_API_URL = ${AppConfig.authApiUrl}');
+    debugPrint('ENV DEBUG: BRAND_API_URL = ${AppConfig.brandApiUrl}');
     return true;
   }());
 
@@ -204,7 +222,7 @@ class _Gift360AppState extends ConsumerState<Gift360App>
     final result = await _installRewardService.claimIfEligible(user.clientId);
     if (result.status == 'flipkart_user_not_found') {
       final context = navigatorKey.currentContext;
-      if (context != null && mounted) {
+      if (context != null && context.mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(result.message!)));
@@ -233,6 +251,7 @@ class _Gift360AppState extends ConsumerState<Gift360App>
           '/reset-password',
         };
         if (path.isNotEmpty && !authPaths.contains(path)) {
+          if (!context.mounted) return;
           await AppInstallRewardDialog.show(context, coins);
           return;
         }
@@ -277,6 +296,8 @@ class _Gift360AppState extends ConsumerState<Gift360App>
         }
       } catch (_) {}
 
+      if (!currentContext.mounted) return;
+
       // Logout the user
       ref.read(authProvider.notifier).logout();
 
@@ -307,15 +328,25 @@ class _Gift360AppState extends ConsumerState<Gift360App>
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        // App-level overlays (support chat) live above the Navigator so they
-        // are reachable on every page — matching React App.tsx.
-        return Stack(
-          children: [
-            child ?? const SizedBox.shrink(),
-            const GlobalSupportChatOverlay(),
-          ],
+        // Keep type readable on large system font sizes without blowing
+        // fixed phone layouts apart. Overlays sit above the navigator.
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(
+              minScaleFactor: 0.9,
+              maxScaleFactor: 1.25,
+            ),
+          ),
+          child: Stack(
+            children: [
+              child ?? const SizedBox.shrink(),
+              const GlobalSupportChatOverlay(),
+            ],
+          ),
         );
       },
     );
   }
 }
+

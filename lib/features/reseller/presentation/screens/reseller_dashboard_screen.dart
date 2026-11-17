@@ -10,7 +10,7 @@ import 'package:gift360/features/reseller/data/reseller_api.dart';
 import 'package:gift360/features/reseller/data/reseller_csv.dart';
 import 'package:gift360/features/reseller/data/reseller_store.dart';
 import 'package:gift360/features/reseller/presentation/providers/reseller_provider.dart';
-import 'package:gift360/features/reseller/presentation/screens/reseller_order_details_screen.dart';
+import 'package:gift360/presentation/reseller_order_details/reseller_order_details_view.dart';
 
 String _formatResellerMoney(num? value) => NumberFormat.currency(
   locale: 'en_IN',
@@ -226,7 +226,7 @@ class _ResellerDashboardScreenState
       rootNav.pop();
       await rootNav.push(
         MaterialPageRoute(
-          builder: (_) => ResellerOrderDetailsScreen(
+          builder: (_) => ResellerOrderDetailsView(
             details: details,
             createdAt: createdAt,
             avatarInitial: _avatarInitial(),

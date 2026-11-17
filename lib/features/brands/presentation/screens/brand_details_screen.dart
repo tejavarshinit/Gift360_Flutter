@@ -68,8 +68,9 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
         minPrice == maxPrice &&
         (_selectedAmount == null || _selectedAmount!.isEmpty)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted)
+        if (mounted) {
           setState(() => _selectedAmount = minPrice.toInt().toString());
+        }
       });
     }
     // Auto-select first denomination for Fixed brands
@@ -77,10 +78,11 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
         denominations.isNotEmpty &&
         (_selectedAmount == null || _selectedAmount!.isEmpty)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted)
+        if (mounted) {
           setState(
             () => _selectedAmount = denominations.first.toInt().toString(),
           );
+        }
       });
     }
 
@@ -405,8 +407,9 @@ class _BrandDetailsScreenState extends ConsumerState<BrandDetailsScreen> {
                 ),
               ),
               _buildQuantityButton(Icons.add, () {
-                if (_quantity < _maxQuantityPerItem)
+                if (_quantity < _maxQuantityPerItem) {
                   setState(() => _quantity++);
+                }
               }),
             ],
           ),

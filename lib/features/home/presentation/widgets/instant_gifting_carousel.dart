@@ -424,7 +424,7 @@ class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
                             ),
                           ),
                         ),
-                        error: (_, __) => Text(
+                        error: (_, _) => Text(
                           'Loading occasions\u2026',
                           style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF9CA3AF)),
                         ),
@@ -625,77 +625,6 @@ class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
     );
   }
 
-  Widget _buildBrandNudge(String asset, String brand, String message, VoidCallback? onExplore) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.asset(asset, fit: BoxFit.cover),
-        Container(color: Colors.white.withValues(alpha: 0.18)),
-        Positioned(
-          top: 35,
-          left: 125,
-          child: Row(
-            children: ['Apply SC', 'Applied', '₹100 saved'].map((label) {
-              return Container(
-                margin: const EdgeInsets.only(right: 3),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.88), borderRadius: BorderRadius.circular(20)),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 7, height: 7),
-                    const SizedBox(width: 2),
-                    Text(label, style: GoogleFonts.poppins(fontSize: 7, fontWeight: FontWeight.w800, color: _accent)),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          bottom: 12,
-          child: Container(
-            width: 140,
-            height: 126,
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFEDE9FE)),
-              boxShadow: const [BoxShadow(color: Color(0x2E7C3AED), blurRadius: 20, offset: Offset(0, 6))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 12, height: 12),
-                    const SizedBox(width: 3),
-                    Text('150 SC available', style: GoogleFonts.poppins(fontSize: 7, fontWeight: FontWeight.w700, color: Colors.grey[600])),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(children: [Container(width: 20, height: 20, decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle), child: const Center(child: Text('G', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)))), const SizedBox(width: 5), Text(brand, style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.w700))]),
-                const Spacer(),
-                Text('₹500', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700)),
-                Text('₹500', style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w800, color: _accent)),
-                const Spacer(),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Toggle ON for demo', style: GoogleFonts.poppins(fontSize: 7, fontWeight: FontWeight.w600, color: _accent)), Container(width: 32, height: 18, decoration: BoxDecoration(color: const Color(0xFFD1D5DB), borderRadius: BorderRadius.circular(20)), child: const Align(alignment: Alignment.centerLeft, child: Padding(padding: EdgeInsets.all(2), child: CircleAvatar(radius: 7, backgroundColor: Colors.white))))]),
-              ],
-            ),
-          ),
-        ),
-        Positioned(
-          right: 12,
-          bottom: 13,
-          child: Text('Try the toggle — see 20% off', style: GoogleFonts.poppins(fontSize: 7, fontWeight: FontWeight.w600, color: _accent)),
-        ),
-      ],
-    );
-  }
-
   Widget _buildAnimatedBrandNudge(String asset, String brand, int availableCoins, String brandId) {
     return _AnimatedBrandNudge(
       asset: asset,
@@ -706,226 +635,6 @@ class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
     );
   }
 
-  // ─── Slide 1: Step Flow ───
-  Widget _buildSlide1(EdgeInsets padding, bool isMobile) {
-    return Padding(
-      padding: padding,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildAccentBadge('INSTANT GIFTING'),
-          SizedBox(height: isMobile ? 3 : 5),
-          RichText(
-            text: TextSpan(
-              style: GoogleFonts.poppins(
-                fontSize: isMobile ? 14 : 20,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF111827),
-                height: 1.2,
-              ),
-              children: const [
-                TextSpan(text: 'Pick a brand, buy a voucher, '),
-                TextSpan(text: 'send it', style: TextStyle(color: Color(0xFF7C3AED))),
-                TextSpan(text: ' in seconds'),
-              ],
-            ),
-            maxLines: 2,
-          ),
-          SizedBox(height: isMobile ? 6 : 10),
-          _CtaButton(label: 'Start gifting', bg: _accent, onTap: widget.onExploreBrands, useGradient: true),
-          SizedBox(height: isMobile ? 8 : 12),
-          _buildStepsRow(isMobile),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepsRow(bool isMobile) {
-    final steps = [
-      (Icons.store_outlined, 'Pick a brand', 'From 500+ options'),
-      (Icons.shopping_cart_outlined, 'Buy instantly', 'UPI, cards, wallet'),
-      (Icons.card_giftcard, 'Send instantly', 'Straight to their phone'),
-    ];
-
-    final circleSize = isMobile ? 34.0 : 44.0;
-    final iconSize = isMobile ? 15.0 : 20.0;
-    final titleSize = isMobile ? 10.0 : 13.0;
-    final descSize = isMobile ? 8.0 : 11.0;
-    final stepLabelSize = isMobile ? 7.0 : 10.0;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: List.generate(3, (i) {
-        final s = steps[i];
-        return [
-          if (i > 0)
-            Padding(
-              padding: EdgeInsets.only(top: circleSize / 2 - 1),
-              child: Container(
-                height: 2,
-                width: 6,
-                color: const Color(0xFFEDE9FE),
-              ),
-            ),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: circleSize,
-                  height: circleSize,
-                  decoration: const BoxDecoration(color: Color(0xFFF3F0FF), shape: BoxShape.circle),
-                  child: Icon(s.$1, color: _accent, size: iconSize),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Step ${i + 1}',
-                  style: GoogleFonts.poppins(fontSize: stepLabelSize, letterSpacing: 0.5, color: Colors.grey[400]),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  s.$2,
-                  style: GoogleFonts.poppins(fontSize: titleSize, fontWeight: FontWeight.bold, color: Colors.grey[900]),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (!isMobile) ...[
-                  const SizedBox(height: 1),
-                  Text(
-                    s.$3,
-                    style: GoogleFonts.poppins(fontSize: descSize, color: Colors.grey[500]),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ];
-      }).expand((e) => e).toList(),
-    );
-  }
-
-  // ─── Slide 2: SuperCoins ───
-  Widget _buildSlide2(EdgeInsets padding, bool isMobile) {
-    return Padding(
-      padding: padding,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: isMobile ? 1 : 3,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildAccentBadge('REWARDS'),
-                SizedBox(height: isMobile ? 4 : 8),
-                RichText(
-                  text: TextSpan(
-                    style: GoogleFonts.poppins(
-                      fontSize: isMobile ? 14 : 20,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF111827),
-                      height: 1.2,
-                    ),
-                    children: const [
-                      TextSpan(text: 'Earn '),
-                      TextSpan(text: 'SuperCoins', style: TextStyle(color: Color(0xFF7C3AED))),
-                      TextSpan(text: ' on every purchase'),
-                    ],
-                  ),
-                ),
-                SizedBox(height: isMobile ? 3 : 6),
-                Text(
-                  'Get rewarded every time you buy or send a gift voucher.',
-                  style: GoogleFonts.poppins(fontSize: isMobile ? 10 : 13, color: Colors.grey[500], height: 1.2),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                SizedBox(height: isMobile ? 6 : 12),
-                if (isMobile)
-                  _CtaButton(label: 'Explore Now', bg: _accent, onTap: widget.onExploreBrands, useGradient: true)
-                else
-                  Row(
-                    children: [
-                      _CtaButton(label: 'Explore Now', bg: _accent, onTap: widget.onExploreBrands, useGradient: true),
-                      const SizedBox(width: 14),
-                      Expanded(child: _buildSuperCoinInfo()),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-          SizedBox(width: isMobile ? 8 : 12),
-          SizedBox(
-            width: isMobile ? 90 : 160,
-            height: isMobile ? 90 : 160,
-            child: _buildSuperCoinIllustration(small: isMobile),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuperCoinInfo() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: const BoxDecoration(color: Color(0xFFF3F0FF), shape: BoxShape.circle),
-          child: const Icon(Icons.monetization_on_outlined, color: _accent, size: 20),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('SuperCoins', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[900])),
-              Text(
-                'Redeem across 500+ brands on Gift360',
-                style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[500]),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSuperCoinIllustration({bool small = false}) {
-    final imgWidth = small ? 72.0 : 150.0;
-    final coinCount = small ? 6 : 12;
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Image.asset(
-          'assets/images/FlipKartSuperCoin-removebg-preview.png',
-          width: imgWidth,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Icon(Icons.monetization_on, size: small ? 40 : 80, color: const Color(0xFFFFC800)),
-        ),
-        ...List.generate(coinCount, (i) {
-          final rng = Random(i);
-          final size = (small ? 8.0 : 14.0) + rng.nextDouble() * (small ? 6 : 10);
-          final left = -(small ? 26.0 : 42.0) + rng.nextDouble() * (small ? 52 : 84);
-          final top = -(small ? 36.0 : 62.0) + rng.nextDouble() * (small ? 72 : 124);
-          final delay = rng.nextDouble() * 1.8;
-          final dur = 2.5 + rng.nextDouble() * 0.7;
-          return _FloatingCoin(key: ValueKey(i), size: size, left: left, top: top, delay: delay, duration: dur);
-        }),
-      ],
-    );
-  }
 
   // ─── Slide 3: Partner ───
   Widget _buildSlide3(EdgeInsets padding, bool isMobile) {
@@ -983,7 +692,7 @@ class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
               width: isMobile ? 120 : 160,
               height: isMobile ? 120 : 160,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 width: isMobile ? 100 : 160,
                 height: isMobile ? 100 : 160,
                 decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(isMobile ? 10 : 12)),
@@ -1040,7 +749,7 @@ class _InstantGiftingCarouselState extends ConsumerState<InstantGiftingCarousel>
 }
 
 // ─── Pressable CTA — subtle scale-down on tap, mirrors the web's active:scale states ───
-enum _DemoPhase { idle, waiting, ghostTap, toggling, on, off }
+enum _DemoPhase { idle, ghostTap, toggling, on, off }
 
 class _AnimatedBrandNudge extends StatefulWidget {
   final String asset;
@@ -1441,7 +1150,7 @@ class _FloatingCoinState extends State<_FloatingCoin> with SingleTickerProviderS
                 width: widget.size,
                 height: widget.size,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(Icons.circle, size: widget.size, color: const Color(0xFFFFC800)),
+                errorBuilder: (_, _, _) => Icon(Icons.circle, size: widget.size, color: const Color(0xFFFFC800)),
               ),
             ),
           ),

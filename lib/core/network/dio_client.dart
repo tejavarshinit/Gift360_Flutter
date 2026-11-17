@@ -27,6 +27,7 @@ class DioClient {
     );
 
     _dio.interceptors.addAll([
+      _MissingHostInterceptor(),
       _AuthInterceptor(_secureStorage),
       _LogInterceptor(),
       _ErrorInterceptor(),
@@ -37,6 +38,23 @@ class DioClient {
 
   void updateBaseUrl(String newBaseUrl) {
     _dio.options.baseUrl = newBaseUrl;
+  }
+}
+
+class _MissingHostInterceptor extends Interceptor {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (options.uri.host.isEmpty) {
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.connectionError,
+          error: 'No API address in this build.',
+        ),
+      );
+      return;
+    }
+    handler.next(options);
   }
 }
 
@@ -132,7 +150,10 @@ class _ErrorInterceptor extends Interceptor {
         message = 'Connection timeout. Please check your internet.';
         break;
       case DioExceptionType.connectionError:
-        message = 'No internet connection.';
+        final detail = err.error?.toString() ?? '';
+        message = detail.contains('No API address')
+            ? 'No API address in this build.'
+            : 'No internet connection.';
         break;
       case DioExceptionType.badResponse:
         message = _handleBadResponse(

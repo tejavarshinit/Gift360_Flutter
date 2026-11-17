@@ -18,15 +18,12 @@ class BiometricService {
   final String Function() _newDeviceId;
 
   BiometricService({
-    required BiometricApi api,
-    required BiometricKeyStore keyStore,
-    required BiometricStorage storage,
+    required this._api,
+    required this._keyStore,
+    required this._storage,
     DateTime Function()? now,
     String Function()? newDeviceId,
-  }) : _api = api,
-       _keyStore = keyStore,
-       _storage = storage,
-       _now = now ?? DateTime.now,
+  }) : _now = now ?? DateTime.now,
        _newDeviceId = newDeviceId ?? _generateDeviceId;
 
   Future<BiometricEnrollmentState> enrollmentState() async {

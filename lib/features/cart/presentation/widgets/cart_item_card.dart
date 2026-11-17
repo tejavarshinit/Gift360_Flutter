@@ -27,43 +27,48 @@ class CartItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6C5CE7).withValues(alpha: 0.12),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
+            color: const Color(0xFF111827).withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Brand Image
           Container(
-            width: 80,
-            height: 80,
+            width: 72,
+            height: 72,
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFF4F6FB),
+              borderRadius: BorderRadius.circular(14),
             ),
-            clipBehavior: Clip.antiAlias,
             child: image != null && image!.isNotEmpty
                 ? BrandImage(
                     imageUrl: image,
+                    width: double.infinity,
+                    height: double.infinity,
                     fit: BoxFit.contain,
-                    placeholder: (_, __) => const Center(
+                    placeholder: (_, _) => const Center(
                       child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6D5AE6)),
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF6D5AE6),
+                        ),
                       ),
                     ),
-                    errorWidget: (_, __, ___) => const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                    errorWidget: (_, _, _) =>
+                        const Icon(Icons.store, color: Color(0xFF94A3B8)),
                   )
                 : const Icon(Icons.store, color: Color(0xFF94A3B8)),
           ),

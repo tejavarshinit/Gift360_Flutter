@@ -254,7 +254,7 @@ class _DistributorScreenState extends State<DistributorScreen> {
                 width: 120,
                 height: 120,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(Icons.storefront, size: 60, color: Color(0xFF9747FF)),
+                errorBuilder: (_, _, _) => const Icon(Icons.storefront, size: 60, color: Color(0xFF9747FF)),
               ),
             ],
           ),

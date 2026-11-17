@@ -15,15 +15,24 @@ class _NotificationToastState extends ConsumerState<NotificationToast> {
   AppNotification? _currentToast;
   bool _isVisible = false;
   int _lastCount = 0;
+  bool _toastQueued = false;
 
   @override
   Widget build(BuildContext context) {
     final notifications = ref.watch(notificationProvider);
 
-    // Detect new notification
+    // Schedule after this frame. Calling setState here throws
+    // "setState() or markNeedsBuild() called during build".
     if (notifications.length > _lastCount && notifications.isNotEmpty) {
+      final next = notifications.first;
       _lastCount = notifications.length;
-      _showToast(notifications.first);
+      if (!_toastQueued) {
+        _toastQueued = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _toastQueued = false;
+          if (mounted) _showToast(next);
+        });
+      }
     } else if (notifications.isEmpty) {
       _lastCount = 0;
     }
