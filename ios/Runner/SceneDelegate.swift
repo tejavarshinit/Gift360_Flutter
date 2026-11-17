@@ -49,8 +49,48 @@ class SceneDelegate: FlutterSceneDelegate {
         } else {
           result(FlutterError(code: "key_delete_failed", message: "The protected device-lock key could not be removed.", details: nil))
         }
+      case "authenticate":
+        let reason = (call.arguments as? [String: Any])?["reason"] as? String
+          ?? "Unlock Gift360"
+        self.authenticateForAppLock(reason: reason, result: result)
       default:
         result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func authenticateForAppLock(reason: String, result: @escaping FlutterResult) {
+    let context = LAContext()
+    var error: NSError?
+    guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+      result(FlutterError(
+        code: "biometric_unavailable",
+        message: error?.localizedDescription ?? "Biometric authentication is unavailable.",
+        details: nil
+      ))
+      return
+    }
+    context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, evalError in
+      DispatchQueue.main.async {
+        if success {
+          result(true)
+        } else {
+          let message = evalError?.localizedDescription ?? "Biometric authentication failed."
+          let code: String
+          if let laError = evalError as? LAError {
+            switch laError.code {
+            case .userCancel, .appCancel, .systemCancel:
+              code = "biometric_cancelled"
+            case .biometryLockout:
+              code = "biometric_lockout"
+            default:
+              code = "biometric_unavailable"
+            }
+          } else {
+            code = "biometric_unavailable"
+          }
+          result(FlutterError(code: code, message: message, details: nil))
+        }
       }
     }
   }

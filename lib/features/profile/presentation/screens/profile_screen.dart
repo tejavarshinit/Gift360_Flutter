@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/auth/presentation/providers/app_lock_provider.dart';
+import 'package:gift360/features/auth/presentation/widgets/app_lock_gate.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
@@ -15,6 +17,7 @@ import 'package:gift360/features/orders/presentation/providers/orders_provider.d
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
 import 'package:gift360/core/widgets/gift_header.dart';
 import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
+import 'package:gift360/features/profile/data/profile_details_store.dart';
 import 'package:gift360/core/constants/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -26,11 +29,10 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  bool _isEditingName = false;
-  late TextEditingController _nameController;
   int _selectedTab = 0; // 0 = Profile, 1 = Rewards
   Timer? _rewardsTimer;
   int _rewardsTick = 0;
+  ProfileDetails? _profileDetails;
 
   bool _otpLoginEnabled = true;
   bool _biometricLoginEnabled = true;
@@ -41,10 +43,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final user = ref.read(authProvider);
-    _nameController = TextEditingController(text: user?.name ?? '');
-    _restoreDisplayName(user);
     _loadLoginPreferences();
+    _loadProfileDetails();
 
     // Rewards tab: 1s countdown refresh + 10s status re-fetch (matches React).
     _rewardsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -56,9 +56,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
   }
 
+  Future<void> _loadProfileDetails() async {
+    final user = ref.read(authProvider);
+    if (user == null) return;
+    final details = await ProfileDetailsStore.load(user);
+    if (!mounted) return;
+    setState(() => _profileDetails = details);
+  }
+
   Future<void> _loadLoginPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final lock = ref.read(appLockServiceProvider);
       var enrolled = false;
       if (AppConfig.biometricLoginEnabled) {
         try {
@@ -67,14 +76,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           enrolled = state.isEnabled;
         } catch (_) {}
       }
+      final bioLock = await lock.isBiometricLockEnabled();
+      final mpinLock = await lock.isMpinLockEnabled();
       if (!mounted) return;
       setState(() {
         _biometricEnrolled = enrolled;
         _otpLoginEnabled = prefs.getBool('login_method_otp_enabled') ?? true;
         _biometricLoginEnabled =
-            prefs.getBool('login_method_biometric_enabled') ?? enrolled;
+            prefs.getBool('login_method_biometric_enabled') ??
+                (bioLock || enrolled);
         _mpinLoginEnabled =
-            prefs.getBool('login_method_mpin_enabled') ?? enrolled;
+            prefs.getBool('login_method_mpin_enabled') ?? mpinLock;
       });
     } catch (_) {}
   }
@@ -101,41 +113,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _toggleBiometric(bool value, dynamic user) async {
     if (!value) {
-      if (!_otpLoginEnabled && (!_mpinLoginEnabled || !_biometricEnrolled)) {
+      if (!_otpLoginEnabled && !_mpinLoginEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('At least one login method must remain enabled.'),
+            content: Text('At least one unlock method must remain enabled.'),
             backgroundColor: Color(0xFFD4650F),
           ),
         );
         return;
       }
       setState(() => _biometricLoginEnabled = false);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('login_method_biometric_enabled', false);
+      await ref.read(appLockServiceProvider).setBiometricLockEnabled(false);
+      await ref.read(appLockProvider.notifier).refresh();
       return;
     }
 
-    // Toggling ON
     setState(() => _deviceLockLoading = true);
     try {
+      // Verify device biometrics work, then turn on app lock.
+      await ref.read(appLockServiceProvider).authenticateWithBiometrics(
+            reason: 'Enable biometric unlock for Gift360',
+          );
       final service = ref.read(biometricServiceProvider);
       if (!_biometricEnrolled) {
-        await service.resetAndEnable(
-          clientId: user.clientId,
-          token: user.token,
-        );
-        _biometricEnrolled = true;
+        try {
+          await service.resetAndEnable(
+            clientId: user.clientId,
+            token: user.token,
+          );
+          _biometricEnrolled = true;
+        } catch (_) {
+          // App lock biometric can work without backend enrollment.
+        }
       }
-      setState(() {
-        _biometricLoginEnabled = true;
-      });
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('login_method_biometric_enabled', true);
+      await ref.read(appLockServiceProvider).setBiometricLockEnabled(true);
+      setState(() => _biometricLoginEnabled = true);
+      await ref.read(appLockProvider.notifier).refresh();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Biometric login enabled successfully!'),
+            content: Text(
+              'Biometric unlock enabled. Close and reopen the app to try it.',
+            ),
             backgroundColor: Color(0xFF16A34A),
           ),
         );
@@ -156,41 +175,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _toggleMpin(bool value, dynamic user) async {
     if (!value) {
-      if (!_otpLoginEnabled && (!_biometricLoginEnabled || !_biometricEnrolled)) {
+      if (!_otpLoginEnabled && !_biometricLoginEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('At least one login method must remain enabled.'),
+            content: Text('At least one unlock method must remain enabled.'),
             backgroundColor: Color(0xFFD4650F),
           ),
         );
         return;
       }
       setState(() => _mpinLoginEnabled = false);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('login_method_mpin_enabled', false);
+      await ref.read(appLockServiceProvider).setMpinLockEnabled(false);
+      await ref.read(appLockProvider.notifier).refresh();
       return;
     }
 
-    // Toggling ON
     setState(() => _deviceLockLoading = true);
     try {
-      final service = ref.read(biometricServiceProvider);
-      if (!_biometricEnrolled) {
-        await service.resetAndEnable(
-          clientId: user.clientId,
-          token: user.token,
-        );
-        _biometricEnrolled = true;
+      final pin = await showSetMpinDialog(context);
+      if (pin == null || pin.isEmpty) {
+        return;
       }
-      setState(() {
-        _mpinLoginEnabled = true;
-      });
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('login_method_mpin_enabled', true);
+      await ref.read(appLockServiceProvider).setMpin(pin);
+      setState(() => _mpinLoginEnabled = true);
+      await ref.read(appLockProvider.notifier).refresh();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Device MPIN login enabled successfully!'),
+            content: Text(
+              'MPIN set. Close and reopen the app to unlock with it.',
+            ),
             backgroundColor: Color(0xFF16A34A),
           ),
         );
@@ -209,37 +223,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _restoreDisplayName(dynamic user) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getString('displayName');
-      if (saved != null && saved.isNotEmpty && mounted) {
-        _nameController.text = saved;
-      }
-    } catch (_) {}
-  }
-
   @override
   void dispose() {
     _rewardsTimer?.cancel();
-    _nameController.dispose();
     super.dispose();
-  }
-
-  Future<void> _saveDisplayName() async {
-    final newName = _nameController.text.trim();
-    if (newName.isEmpty) return;
-    final user = ref.read(authProvider);
-    if (user == null) return;
-
-    // Save to SharedPreferences (matches React's localStorage.displayName)
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('displayName', newName);
-
-    // Update auth user
-    ref.read(authProvider.notifier).setUser(user.copyWith(name: newName));
-
-    setState(() => _isEditingName = false);
   }
 
   @override
@@ -278,9 +265,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     final balance = walletAsync.valueOrNull?.totalBalance ?? 0;
-    final initial = user.name.trim().isNotEmpty
-        ? user.name.trim().characters.first.toUpperCase()
-        : 'U';
+    final displayName = (_profileDetails?.name.trim().isNotEmpty ?? false)
+        ? _profileDetails!.name.trim()
+        : (user.name.trim().isNotEmpty ? user.name.trim() : 'User');
+    final displayEmail = (_profileDetails?.email.trim().isNotEmpty ?? false)
+        ? _profileDetails!.email.trim()
+        : user.email.trim();
+    final initial = displayName.characters.first.toUpperCase();
 
     final ordersAsync = ref.watch(ordersProvider);
 
@@ -298,7 +289,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     constraints: const BoxConstraints(maxWidth: 620),
                     child: Column(
                       children: [
-                        _buildUserSummaryCard(user, initial),
+                        _buildUserSummaryCard(
+                          name: displayName,
+                          email: displayEmail,
+                          mobile: user.mobile,
+                          initial: initial,
+                        ),
                         const SizedBox(height: 12),
                         _buildBalanceCards(balance, supercoinState.balance),
                         const SizedBox(height: 16),
@@ -307,8 +303,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           const SizedBox(height: 16),
                           _buildRewardsPanel(),
                         ],
-                        const SizedBox(height: 16),
-                        _buildProfileDetailsCard(user),
                         const SizedBox(height: 16),
                         _buildLoginPreferencesCard(user),
                         const SizedBox(height: 16),
@@ -361,76 +355,85 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildUserSummaryCard(dynamic user, String initial) {
+  Widget _buildUserSummaryCard({
+    required String name,
+    required String email,
+    required String mobile,
+    required String initial,
+  }) {
     return _accountCard(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
             radius: 31,
             backgroundColor: AppColors.profileAvatarBg,
-            child: Text(initial, style: GoogleFonts.poppins(fontSize: 25, fontWeight: FontWeight.w700, color: Colors.white)),
+            child: Text(
+              initial,
+              style: GoogleFonts.poppins(
+                fontSize: 25,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_isEditingName)
-                  SizedBox(
-                    height: 36,
-                    child: TextField(
-                      controller: _nameController,
-                      autofocus: true,
-                      onSubmitted: (_) => _saveDisplayName(),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
-                        suffixIcon: IconButton(
-                          tooltip: 'Save name',
-                          onPressed: _saveDisplayName,
-                          icon: const Icon(Icons.check, size: 18, color: AppColors.primaryPurple),
-                        ),
-                      ),
-                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                  )
-                else
-                  Text(user.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 3),
-                Text(user.email.isEmpty ? 'Email unavailable' : user.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _mutedText()),
-                Text(user.mobile.isEmpty ? 'Phone unavailable' : user.mobile, style: _mutedText()),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _infoLine(Icons.phone_outlined, mobile.isEmpty ? 'Mobile unavailable' : mobile),
+                const SizedBox(height: 6),
+                _infoLine(
+                  Icons.mail_outline,
+                  email.isEmpty ? 'Add your email in Profile details' : email,
+                ),
               ],
             ),
           ),
-          if (_isEditingName)
-            IconButton(
-              tooltip: 'Cancel',
-              onPressed: () => setState(() {
-                _isEditingName = false;
-                _nameController.text = user.name;
-              }),
-              icon: const Icon(Icons.close, size: 18),
-            )
-          else
-            TextButton(
-              onPressed: () => setState(() {
-                _nameController.text = user.name;
-                _nameController.selection = TextSelection.collapsed(
-                  offset: _nameController.text.length,
-                );
-                _isEditingName = true;
-              }),
-              child: Text(
-                'Edit',
-                style: GoogleFonts.poppins(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+          TextButton(
+            onPressed: () async {
+              await context.push('/profile/details');
+              if (mounted) _loadProfileDetails();
+            },
+            child: Text(
+              'Edit',
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _infoLine(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 15, color: const Color(0xFF81789A)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: _mutedText(fontSize: 12),
+          ),
+        ),
+      ],
     );
   }
 
@@ -490,7 +493,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _accountMenuRow(Icons.person_outline, 'Profile details', 'Name, email and phone number', () => setState(() => _selectedTab = 0)),
+          _accountMenuRow(
+            Icons.person_outline,
+            'Profile details',
+            'Name, email, mobile, gender and DOB',
+            () async {
+              await context.push('/profile/details');
+              if (mounted) _loadProfileDetails();
+            },
+          ),
           _accountMenuRow(
             Icons.monetization_on_outlined,
             'Rewards / SuperCoins',
@@ -505,12 +516,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _accountMenuRow(Icons.local_shipping_outlined, 'Distributor', 'Partner as a distributor', () => context.push('/distributor')),
           _accountMenuRow(Icons.storefront_outlined, 'Reseller', 'Sell gift vouchers at your own margins', () => context.push('/reseller')),
           _accountMenuRow(Icons.apartment_outlined, 'Corporate', 'Bulk gifting for companies', () => context.push('/corporate')),
-          _accountMenuRow(Icons.menu_rounded, 'Menu', 'The full shortcut list, including feedback', () {
-            showGift360Menu(
-              context,
-              isAuthenticated: ref.read(isAuthenticatedProvider),
-            );
-          }),
           _accountMenuRow(Icons.mail_outline, 'Contact Us', 'Get help with vouchers or payments', _showContactDialog),
         ],
       ),
@@ -601,21 +606,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileDetailsCard(dynamic user) {
-    return _accountCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Profile details', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          _buildLightField('Email', user.email),
-          const SizedBox(height: 12),
-          _buildLightField('Phone Number', user.mobile),
-        ],
-      ),
-    );
-  }
-
   Widget _buildLoginPreferencesCard(dynamic user) {
     return _accountCard(
       child: Column(
@@ -630,7 +620,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Login Methods',
+                'App unlock',
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -640,7 +630,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Choose which login options appear on the sign-in screen',
+            'When enabled, Gift360 asks for biometric or your MPIN every time you open the app',
             style: _mutedText(fontSize: 11),
           ),
           const SizedBox(height: 14),
@@ -655,8 +645,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const Divider(height: 20, color: Color(0xFFF0ECF7)),
             _buildLoginMethodToggleRow(
               icon: Icons.fingerprint_rounded,
-              title: 'Biometric Login',
-              subtitle: 'Sign in with fingerprint or face recognition',
+              title: 'Biometric unlock',
+              subtitle: 'Use fingerprint / face every time you open the app',
               value: _biometricLoginEnabled,
               isLoading: _deviceLockLoading,
               onChanged: (v) => _toggleBiometric(v, user),
@@ -664,8 +654,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const Divider(height: 20, color: Color(0xFFF0ECF7)),
             _buildLoginMethodToggleRow(
               icon: Icons.dialpad_rounded,
-              title: 'Device MPIN Login',
-              subtitle: 'Sign in with device screen lock PIN or pattern',
+              title: 'MPIN unlock',
+              subtitle: 'Set your own 4–6 digit MPIN to unlock the app',
               value: _mpinLoginEnabled,
               isLoading: _deviceLockLoading,
               onChanged: (v) => _toggleMpin(v, user),
@@ -732,22 +722,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             onChanged: onChanged,
             activeThumbColor: const Color(0xFF7B3DC3),
           ),
-      ],
-    );
-  }
-
-  Widget _buildLightField(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: _mutedText(fontSize: 11)),
-        const SizedBox(height: 7),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: BoxDecoration(color: const Color(0xFFF8F7FB), border: Border.all(color: const Color(0xFFE8E3F2)), borderRadius: BorderRadius.circular(10)),
-          child: Text(value.isEmpty ? 'Unavailable' : value, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500)),
-        ),
       ],
     );
   }

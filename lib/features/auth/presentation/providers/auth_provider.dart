@@ -30,16 +30,22 @@ class AuthNotifier extends StateNotifier<AuthUser?> {
 
   Future<void> _loadUser() async {
     try {
-      await _secureStorage.delete(key: 'auth_user');
+      final jsonStr = await _secureStorage.read(key: 'auth_user');
+      if (jsonStr != null && jsonStr.trim().isNotEmpty) {
+        final map = jsonDecode(jsonStr);
+        if (map is Map<String, dynamic>) {
+          final user = AuthUser.fromJson(map);
+          if (user.token.trim().isNotEmpty && user.clientId.trim().isNotEmpty) {
+            state = user;
+          }
+        }
+      }
     } catch (error) {
-      debugPrint('Could not clear the previous user session: $error');
-    }
-    try {
-      await _secureStorage.delete(key: 'auth_token');
-    } catch (error) {
-      debugPrint('Could not clear the previous auth token: $error');
+      debugPrint('Could not restore the previous user session: $error');
     } finally {
       _initialized = true;
+      // Nudge listeners (router / app lock) even when session is null.
+      state = state;
     }
   }
 
@@ -276,8 +282,12 @@ final isAuthenticatedProvider = Provider<bool>((ref) {
   return ref.watch(authProvider) != null;
 });
 
-/// True once any previous authenticated session has been cleared at startup.
+/// True once session restore from secure storage has finished.
 final authInitializedProvider = Provider<bool>((ref) {
-  final notifier = ref.watch(authProvider.notifier);
-  return notifier.initialized;
+  // Rebuild when auth state settles so router redirect re-runs.
+  ref.watch(authProvider);
+  return ref.read(authProvider.notifier).initialized;
 });
+
+/// When true, stay on /login after OTP so biometric + MPIN setup can finish.
+final postLoginSetupHoldingProvider = StateProvider<bool>((ref) => false);

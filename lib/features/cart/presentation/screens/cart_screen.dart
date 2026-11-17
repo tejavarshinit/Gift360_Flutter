@@ -156,21 +156,42 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Shopping Cart',
-              style: GoogleFonts.poppins(
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF2D2D2D),
-              ),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => context.go('/'),
+                  child: const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      size: 20,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Shopping Cart',
+                    style: GoogleFonts.poppins(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF2D2D2D),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
-            Text(
-              '$itemCount ${itemCount == 1 ? 'item' : 'items'} in your cart',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF6B7280),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                '$itemCount ${itemCount == 1 ? 'item' : 'items'} in your cart',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF6B7280),
+                ),
               ),
             ),
           ],

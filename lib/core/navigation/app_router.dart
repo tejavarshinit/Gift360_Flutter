@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/presentation/presentation.dart';
 import 'package:gift360/core/navigation/app_navigator.dart';
 import 'app_back_navigation_scope.dart';
 import 'location_tracker.dart';
+import 'main_tab_back_guard.dart';
 import 'scaffold_with_nav.dart';
 
 /// Tracks onboarding completion, persisted in SharedPreferences under
@@ -43,13 +45,22 @@ GoRoute _backAwareRoute({
 }
 
 final goRouterProvider = Provider<GoRouter>((ref) {
+  // Re-run redirects when session restore / login / logout changes auth.
+  final refresh = ValueNotifier<int>(0);
+  ref.listen<AuthUser?>(authProvider, (_, _) => refresh.value++);
+  ref.listen<bool>(authInitializedProvider, (_, _) => refresh.value++);
+  ref.listen<bool>(postLoginSetupHoldingProvider, (_, _) => refresh.value++);
+  ref.onDispose(refresh.dispose);
+
   return GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: '/login',
+    refreshListenable: refresh,
     observers: [LocationObserver()],
     redirect: (context, state) {
       final isLoggedIn = ref.read(authProvider) != null;
       final authInitialized = ref.read(authInitializedProvider);
+      final holdingLoginForSetup = ref.read(postLoginSetupHoldingProvider);
       final path = state.matchedLocation;
 
       final isPublicPath =
@@ -65,13 +76,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           path.startsWith('/reseller/') ||
           path == '/changepassword';
 
-      // Wait until the previous session has been cleared before routing.
+      // Wait until secure-storage session restore finishes.
       if (!authInitialized) {
         return null;
       }
 
       if (!isLoggedIn && !isPublicPath) {
         return '/login';
+      }
+      // Keep user on login while biometric / MPIN setup dialogs run.
+      if (isLoggedIn && holdingLoginForSetup && path == '/login') {
+        return null;
       }
       if (isLoggedIn &&
           (path == '/login' || path == '/register' || path == '/onboarding')) {
@@ -134,9 +149,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          return AppBackNavigationScope(
-            router: GoRouter.of(context),
-            child: ScaffoldWithNav(navigationShell: navigationShell),
+          return MainTabBackGuard(
+            navigationShell: navigationShell,
+            child: AppBackNavigationScope(
+              router: GoRouter.of(context),
+              child: ScaffoldWithNav(navigationShell: navigationShell),
+            ),
           );
         },
         branches: [
@@ -209,6 +227,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       _backAwareRoute(
         path: '/profile',
         builder: (context, state) => const ProfileView(),
+      ),
+      _backAwareRoute(
+        path: '/profile/details',
+        builder: (context, state) => const ProfileDetailsView(),
       ),
       _backAwareRoute(
         path: '/distributor',

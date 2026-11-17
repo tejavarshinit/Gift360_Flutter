@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_constants.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
+import 'package:gift360/features/profile/data/profile_details_store.dart';
 import 'package:flutter/gestures.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -183,9 +184,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           );
 
       if (response.success && response.token != null) {
+        final user = ref.read(authProvider);
+        if (user != null) {
+          await ProfileDetailsStore.save(
+            user,
+            ProfileDetails(
+              name: _fullNameController.text.trim(),
+              email: _emailController.text.trim(),
+            ),
+          );
+        }
         if (mounted) {
           await Future.delayed(const Duration(milliseconds: 400));
-          if (mounted) context.go('/');
+          // Gender + DOB still needed for a complete profile.
+          if (mounted) context.go('/profile/details?setup=1');
         }
       } else {
         setState(() {

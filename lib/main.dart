@@ -21,6 +21,8 @@ import 'core/widgets/session_expired_dialog.dart';
 import 'config/app_config.dart';
 import 'config/app_flavor.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/auth/presentation/providers/app_lock_provider.dart';
+import 'features/auth/presentation/widgets/app_lock_gate.dart';
 import 'features/auth/data/models/auth_user.dart';
 import 'features/notifications/data/repositories/device_token_api.dart';
 import 'features/notifications/presentation/services/push_notification_service.dart';
@@ -183,8 +185,12 @@ class _Gift360AppState extends ConsumerState<Gift360App>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       _releaseActiveSuperCoinHolds();
+      if (state == AppLifecycleState.paused) {
+        unawaited(ref.read(appLockProvider.notifier).onAppPaused());
+      }
     }
     if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(appLockProvider.notifier).onAppResumed());
       unawaited(_claimInstallRewardForCurrentUser());
     }
   }
@@ -342,6 +348,7 @@ class _Gift360AppState extends ConsumerState<Gift360App>
             children: [
               child ?? const SizedBox.shrink(),
               const GlobalSupportChatOverlay(),
+              const AppLockGate(),
             ],
           ),
         );

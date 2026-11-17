@@ -481,11 +481,10 @@ class _SupportChatPanelState extends ConsumerState<_SupportChatPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(),
-            Flexible(
-              child: _ticketId == null
-                  ? _buildCreateForm(user)
-                  : _buildChatView(ticketState, ticketStatus),
-            ),
+            if (_ticketId == null)
+              _buildCreateForm(user)
+            else
+              Flexible(child: _buildChatView(ticketState, ticketStatus)),
           ],
         ),
       ),
@@ -611,15 +610,16 @@ class _SupportChatPanelState extends ConsumerState<_SupportChatPanel> {
                 ),
               ),
             ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            height: 40,
+            height: 48,
             child: ElevatedButton(
               onPressed: _submitting ? null : _handleSubmit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -636,13 +636,18 @@ class _SupportChatPanelState extends ConsumerState<_SupportChatPanel> {
                     )
                   : Text(
                       'Start conversation',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.visible,
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
+                        height: 1.2,
                       ),
                     ),
             ),
           ),
+          const SizedBox(height: 4),
         ],
       ),
     );

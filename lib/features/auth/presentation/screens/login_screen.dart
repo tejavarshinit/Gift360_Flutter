@@ -10,8 +10,11 @@ import 'package:gift360/config/app_flavor.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/data/models/biometric_models.dart';
+import 'package:gift360/features/auth/presentation/providers/app_lock_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
+import 'package:gift360/features/auth/presentation/widgets/app_lock_gate.dart';
 import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
+import 'package:gift360/features/profile/data/profile_details_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum LoginMethod {
@@ -49,6 +52,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _biometricFingerprintAvailable = true;
   bool _biometricCredentialAvailable = true;
   String? _biometricIssue;
+  bool _autoAuthTriggered = false;
 
   bool _isOtpConfigured = true;
   bool _isBiometricConfigured = true;
@@ -98,7 +102,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _isOtpConfigured = effectiveOtp;
         _isBiometricConfigured = effectiveBiometric;
         _isMpinConfigured = effectiveMpin;
-        _enableBiometricOnOtp = effectiveBiometric || effectiveMpin;
+        // Keep setup-on-login checked by default for new users.
+        _enableBiometricOnOtp = true;
 
         // Automatically select the best enabled method based on profile preferences
         if (_biometricEnrolled &&
@@ -117,10 +122,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _selectedMethod = LoginMethod.mpin;
         }
       });
+      // Ask biometric / device MPIN immediately — no button tap needed.
+      _scheduleAutoAuth();
     } catch (error) {
       if (!mounted) return;
       setState(() => _biometricIssue = error.toString());
     }
+  }
+
+  void _scheduleAutoAuth() {
+    if (_autoAuthTriggered || _isLoading || !_biometricEnrolled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _autoAuthTriggered || _isLoading) return;
+      if (_selectedMethod == LoginMethod.biometric &&
+          _biometricFingerprintAvailable) {
+        _autoAuthTriggered = true;
+        _handleBiometricLogin(DeviceAuthMethod.biometric);
+      } else if (_selectedMethod == LoginMethod.mpin &&
+          _biometricCredentialAvailable) {
+        _autoAuthTriggered = true;
+        _handleBiometricLogin(DeviceAuthMethod.deviceCredential);
+      }
+    });
   }
 
   Future<void> _handleBiometricLogin(DeviceAuthMethod method) async {
@@ -133,7 +156,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         method: method,
       );
       await ref.read(authProvider.notifier).loginWithBiometrics(result);
-      if (mounted) context.go('/');
+      if (mounted) await _goAfterLogin();
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -141,6 +164,74 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// New / incomplete profiles fill Name, Email, Gender, DOB before home.
+  Future<void> _goAfterLogin() async {
+    final user = ref.read(authProvider);
+    if (user != null && await ProfileDetailsStore.isIncomplete(user)) {
+      if (mounted) context.go('/profile/details?setup=1');
+      return;
+    }
+    if (mounted) context.go('/');
+  }
+
+  /// After OTP, set up device biometric + user MPIN on this screen.
+  Future<void> _setupUnlockAfterOtpLogin() async {
+    final currentUser = ref.read(authProvider);
+    if (currentUser == null || !mounted) return;
+
+    if (!AppFlavorConfig.isDev) {
+      try {
+        await ref.read(biometricServiceProvider).resetAndEnable(
+              clientId: currentUser.clientId,
+              token: currentUser.token,
+            );
+      } catch (bioError) {
+        debugPrint('Biometric auto-enable error: $bioError');
+      }
+    }
+
+    if (!mounted) return;
+    final lock = ref.read(appLockServiceProvider);
+
+    // Prompt biometrics right away (permission / Face ID / fingerprint).
+    if (!await lock.isBiometricLockEnabled()) {
+      final lockNotifier = ref.read(appLockProvider.notifier);
+      lockNotifier.beginBiometricPrompt();
+      try {
+        await lock.authenticateWithBiometrics(
+          reason: 'Enable biometric unlock for Gift360',
+        );
+        await lock.setBiometricLockEnabled(true);
+      } catch (e) {
+        debugPrint('App biometric lock setup skipped: $e');
+      } finally {
+        lockNotifier.endBiometricPrompt();
+      }
+    }
+
+    // Then ask to create MPIN if not already set — stay on login for this.
+    if (!mounted) return;
+    if (!await lock.hasMpinSet()) {
+      if (!mounted) return;
+      final pin = await showSetMpinDialog(context);
+      if (pin != null && pin.isNotEmpty) {
+        try {
+          await lock.setMpin(pin);
+        } catch (e) {
+          debugPrint('MPIN setup skipped: $e');
+        }
+      } else {
+        // User cancelled — never leave MPIN lock half-enabled.
+        await lock.clearMpinIfUnset();
+      }
+    }
+
+    // Stay unlocked for this session; lock applies next background / reopen.
+    if (mounted) {
+      ref.read(appLockProvider.notifier).unlock();
     }
   }
 
@@ -192,6 +283,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         c.clear();
       }
     });
+    // Switching to Biometric / MPIN should prompt immediately.
+    if (_biometricEnrolled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isLoading) return;
+        if (method == LoginMethod.biometric &&
+            _biometricFingerprintAvailable) {
+          _handleBiometricLogin(DeviceAuthMethod.biometric);
+        } else if (method == LoginMethod.mpin &&
+            _biometricCredentialAvailable) {
+          _handleBiometricLogin(DeviceAuthMethod.deviceCredential);
+        }
+      });
+    }
   }
 
   Future<void> _handleSendOtp() async {
@@ -265,42 +369,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
+    final needsUnlockSetup =
+        _enableBiometricOnOtp && AppConfig.biometricLoginEnabled;
+    if (needsUnlockSetup) {
+      // Keep /login mounted until biometric + MPIN dialogs finish.
+      ref.read(postLoginSetupHoldingProvider.notifier).state = true;
+    }
     try {
       final response = await ref
           .read(authProvider.notifier)
           .loginWithOtp(LoginWithOtpRequest(mobileNumber: mobile, otp: otp));
       if (response.success && response.token != null) {
-        if (!AppFlavorConfig.isDev &&
+        if (needsUnlockSetup) {
+          await _setupUnlockAfterOtpLogin();
+        } else if (!AppFlavorConfig.isDev &&
             AppConfig.biometricLoginEnabled &&
-            (_isBiometricConfigured || _isMpinConfigured)) {
+            _biometricEnrolled) {
           final currentUser = ref.read(authProvider);
           if (currentUser != null) {
-            if (_enableBiometricOnOtp) {
-              try {
-                await ref.read(biometricServiceProvider).resetAndEnable(
-                      clientId: currentUser.clientId,
-                      token: currentUser.token,
-                    );
-              } catch (bioError) {
-                debugPrint('Biometric auto-enable error: $bioError');
-              }
-            } else if (_biometricEnrolled) {
-              try {
-                await ref.read(biometricServiceProvider).disable(
-                      clientId: currentUser.clientId,
-                      token: currentUser.token,
-                    );
-              } catch (bioError) {
-                debugPrint('Biometric disable error: $bioError');
-              }
+            try {
+              await ref.read(biometricServiceProvider).disable(
+                    clientId: currentUser.clientId,
+                    token: currentUser.token,
+                  );
+            } catch (bioError) {
+              debugPrint('Biometric disable error: $bioError');
             }
           }
         }
         if (mounted) {
           await Future.delayed(const Duration(milliseconds: 300));
-          if (mounted) context.go('/');
+          if (mounted) await _goAfterLogin();
         }
-      } else {
+      } else if (mounted) {
         setState(() {
           _error = response.message.isNotEmpty
               ? response.message
@@ -309,10 +410,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        _error = _friendlyError(e);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = _friendlyError(e);
+          _isLoading = false;
+        });
+      }
+    } finally {
+      if (needsUnlockSetup) {
+        ref.read(postLoginSetupHoldingProvider.notifier).state = false;
+      }
     }
   }
 
@@ -375,7 +482,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         );
         await Future.delayed(const Duration(milliseconds: 400));
-        if (mounted) context.go('/');
+        if (mounted) await _goAfterLogin();
       }
     } catch (e) {
       setState(() {

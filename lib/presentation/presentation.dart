@@ -27,6 +27,7 @@ export 'payment_result/payment_result_view.dart';
 export 'payment_webview/payment_webview_view.dart';
 export 'privacy/privacy_view.dart';
 export 'profile/profile_view.dart';
+export 'profile/profile_details_view.dart';
 export 'refund/refund_view.dart';
 export 'register/register_view.dart';
 export 'reseller/reseller_view.dart';

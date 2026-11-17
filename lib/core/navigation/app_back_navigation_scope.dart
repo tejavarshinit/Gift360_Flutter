@@ -29,10 +29,22 @@ class _AppBackNavigationScopeState extends State<AppBackNavigationScope> {
   void initState() {
     super.initState();
     _controller.addListener(_refresh);
+    // Rebuild when shell tab / route changes so PopScope canPop stays correct.
+    widget.router.routerDelegate.addListener(_refresh);
+  }
+
+  @override
+  void didUpdateWidget(covariant AppBackNavigationScope oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.router.routerDelegate != widget.router.routerDelegate) {
+      oldWidget.router.routerDelegate.removeListener(_refresh);
+      widget.router.routerDelegate.addListener(_refresh);
+    }
   }
 
   @override
   void dispose() {
+    widget.router.routerDelegate.removeListener(_refresh);
     _controller
       ..removeListener(_refresh)
       ..dispose();
@@ -51,17 +63,30 @@ class _AppBackNavigationScopeState extends State<AppBackNavigationScope> {
   @override
   Widget build(BuildContext context) {
     final canPop = widget.router.canPop();
-    final isHome =
-        widget.router.routerDelegate.currentConfiguration.uri.path == '/';
+    final path =
+        widget.router.routerDelegate.currentConfiguration.uri.path;
+    final isHome = path == '/';
+    final isMainTab = path == '/' ||
+        path == '/categories' ||
+        path == '/brands' ||
+        path == '/cart';
     final hasBackHandler = _controller.hasActiveHandler;
+
+    // Home may exit the app. Other main tabs never pop the Activity.
+    final allowSystemPop = !hasBackHandler &&
+        ((isHome && isMainTab) || (!isMainTab && (canPop || isHome)));
 
     return _BackNavigationControllerScope(
       controller: _controller,
       child: PopScope(
-        canPop: !hasBackHandler && (canPop || isHome),
+        canPop: allowSystemPop,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
           if (_controller.handleBack()) return;
+          if (isMainTab && !isHome) {
+            widget.router.go('/');
+            return;
+          }
           if (!canPop && !isHome) widget.router.go('/');
         },
         child: widget.child,

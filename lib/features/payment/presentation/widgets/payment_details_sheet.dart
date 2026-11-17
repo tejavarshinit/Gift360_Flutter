@@ -64,7 +64,8 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
   final TextEditingController _amountController = TextEditingController();
   bool _amountUserEdited = false;
   int _quantity = 1;
-  String _infoTab = '';
+  /// About is open by default so brand details show immediately.
+  String _infoTab = 'about';
   String _selectedPaymentMethod = 'UPI';
   Brand? _detailedBrand;
 
@@ -864,92 +865,134 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                     final bottomPad = incoming > aboveKeyboard
                         ? incoming - aboveKeyboard
                         : 0.0;
-                    final height = (incoming - bottomPad - topInset).clamp(
-                      0.0,
-                      incoming,
-                    );
+                    // Cap height so short content doesn't leave a huge empty
+                    // gap above Add to Cart / Buy Now.
+                    final maxHeight = ((incoming - bottomPad - topInset) * 0.88)
+                        .clamp(0.0, incoming);
                     return Padding(
                       padding: EdgeInsets.only(top: topInset, bottom: bottomPad),
                       child: Align(
                         alignment: Alignment.bottomCenter,
-                        child: Container(
-                          height: height,
-                          decoration: const BoxDecoration(
-                      color: Color(0xFFF3F5F9),
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(50),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 20,
-                          offset: Offset(0, -4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.only(top: 12),
-                          width: 100,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD9D9D9),
-                            borderRadius: BorderRadius.circular(5),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: _close,
-                                child: const Icon(
-                                  Icons.chevron_left,
-                                  size: 24,
-                                  color: Color(0xFF111827),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Payment Details',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxHeight: maxHeight),
+                          child: Material(
+                            color: const Color(0xFFF3F5F9),
+                            elevation: 12,
+                            shadowColor: const Color(0x33000000),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(28),
+                            ),
+                            clipBehavior: Clip.antiAlias,
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildBrandCard(brand),
-                                const SizedBox(height: 16),
-                                _buildAmountSelection(
-                                  brand,
-                                  isFixed,
-                                  denominations,
-                                  minPrice,
-                                  maxPrice,
+                                // Drag handle + header: swipe down to close.
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onVerticalDragUpdate: (details) {
+                                    final delta = details.primaryDelta ?? 0;
+                                    if (delta <= 0) return;
+                                    final h = media.size.height;
+                                    _slideController.value =
+                                        (_slideController.value - delta / h)
+                                            .clamp(0.0, 1.0);
+                                  },
+                                  onVerticalDragEnd: (details) {
+                                    final velocity =
+                                        details.primaryVelocity ?? 0;
+                                    if (_slideController.value < 0.75 ||
+                                        velocity > 700) {
+                                      _close();
+                                    } else {
+                                      _slideController.forward();
+                                    }
+                                  },
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 10),
+                                        width: 48,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFD9D9D9),
+                                          borderRadius:
+                                              BorderRadius.circular(3),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          8,
+                                          16,
+                                          0,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            GestureDetector(
+                                              onTap: _close,
+                                              child: const Icon(
+                                                Icons.chevron_left,
+                                                size: 24,
+                                                color: Color(0xFF111827),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            const Text(
+                                              'Payment Details',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(height: 12),
-                                _buildQuantitySection(amount),
-                                const SizedBox(height: 16),
-                                _buildInfoTabs(_brandWithFetchedDetails(brand)),
-                                if (keyboard > 0) ...[
-                                  const SizedBox(height: 16),
+                                Flexible(
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      12,
+                                      16,
+                                      8,
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        _buildBrandCard(brand),
+                                        const SizedBox(height: 16),
+                                        _buildAmountSelection(
+                                          brand,
+                                          isFixed,
+                                          denominations,
+                                          minPrice,
+                                          maxPrice,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _buildQuantitySection(amount),
+                                        const SizedBox(height: 16),
+                                        _buildInfoTabs(
+                                          _brandWithFetchedDetails(brand),
+                                        ),
+                                        if (keyboard > 0) ...[
+                                          const SizedBox(height: 12),
+                                          _buildBottomBar(
+                                            brand,
+                                            total,
+                                            cashback,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (keyboard == 0)
                                   _buildBottomBar(brand, total, cashback),
-                                ],
                               ],
                             ),
                           ),
-                        ),
-                        if (keyboard == 0) _buildBottomBar(brand, total, cashback),
-                      ],
-                    ),
                         ),
                       ),
                     );
@@ -1605,13 +1648,9 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
 
   Widget _buildBottomBar(Brand brand, double total, int cashback) {
     final processing = widget.processing || _isPaying;
+    // Sheet already sits above the app bottom nav — keep this tight.
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        MediaQuery.of(context).padding.bottom + 12,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       decoration: const BoxDecoration(
         color: Colors.white,
         boxShadow: [

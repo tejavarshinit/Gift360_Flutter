@@ -12,6 +12,7 @@ import android.security.keystore.KeyProperties
 import android.security.keystore.UserNotAuthenticatedException
 import android.util.Base64
 import android.util.Log
+import androidx.activity.OnBackPressedCallback
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -28,6 +29,7 @@ import java.security.UnrecoverableKeyException
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.gift360.gift360/biometric"
+    private val navigationChannelName = "com.gift360.gift360/navigation"
     private val keyAlias = "gift360.deviceauth.login.rsa"
     private val legacyBiometricKeyAlias = "gift360.biometric.login.rsa"
     private val deviceCredentialRequestCode = 43117
@@ -36,8 +38,14 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingChallenge: String? = null
     private var pendingSignResult: MethodChannel.Result? = null
 
+    /** When true, Pixel swipe-back must not finish the Activity (Cart/Brands tabs). */
+    private var blockSystemExit = false
+    private var flutterEngineRef: FlutterEngine? = null
+    private var tabBackCallback: OnBackPressedCallback? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngineRef = flutterEngine
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -47,6 +55,10 @@ class MainActivity : FlutterFragmentActivity() {
                     "signChallenge" -> signChallenge(
                         call.argument<String>("challenge"),
                         call.argument<String>("method"),
+                        result
+                    )
+                    "authenticate" -> authenticateForAppLock(
+                        call.argument<String>("reason") ?: "Unlock Gift360",
                         result
                     )
                     "deleteKey" -> {
@@ -72,6 +84,29 @@ class MainActivity : FlutterFragmentActivity() {
                 result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            navigationChannelName
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setBlockSystemExit" -> {
+                    blockSystemExit = call.arguments as? Boolean ?: false
+                    tabBackCallback?.isEnabled = blockSystemExit
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        // High-priority callback so predictive swipe-back cannot finish the Activity
+        // while Flutter says we are on Cart / Brands / Categories.
+        val callback = object : OnBackPressedCallback(blockSystemExit) {
+            override fun handleOnBackPressed() {
+                // Forward to Flutter (PopScope / BackButtonListener → go Home).
+                flutterEngineRef?.navigationChannel?.popRoute()
+            }
+        }
+        tabBackCallback = callback
+        onBackPressedDispatcher.addCallback(this, callback)
     }
 
     @Suppress("DEPRECATION")
@@ -272,6 +307,52 @@ class MainActivity : FlutterFragmentActivity() {
                     signWithKeyguardConfirmation(challenge, result)
                 }
             }
+        }
+    }
+
+    /** App-lock unlock — biometric only, no keystore signature required. */
+    private fun authenticateForAppLock(reason: String, result: MethodChannel.Result) {
+        if (!isBiometricAvailable()) {
+            result.error(
+                "biometric_unavailable",
+                "No fingerprint or face is set up on this device.",
+                null
+            )
+            return
+        }
+        try {
+            val prompt = BiometricPrompt(
+                this,
+                ContextCompat.getMainExecutor(this),
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(
+                        authenticationResult: BiometricPrompt.AuthenticationResult
+                    ) {
+                        result.success(true)
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        result.error(errorCodeToCode(errorCode), errorCodeToMessage(errorCode), null)
+                    }
+                }
+            )
+            val promptBuilder = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Unlock Gift360")
+                .setSubtitle(reason)
+                .setNegativeButtonText("Cancel")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                promptBuilder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            } else {
+                @Suppress("DEPRECATION")
+                promptBuilder.setDeviceCredentialAllowed(false)
+            }
+            prompt.authenticate(promptBuilder.build())
+        } catch (_: Exception) {
+            result.error(
+                "biometric_unavailable",
+                "Could not start biometric authentication.",
+                null
+            )
         }
     }
 
