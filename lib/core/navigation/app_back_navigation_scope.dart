@@ -60,21 +60,25 @@ class _AppBackNavigationScopeState extends State<AppBackNavigationScope> {
     });
   }
 
+  void _goHomeOrPop({required bool canPop}) {
+    if (canPop) {
+      widget.router.pop();
+    } else {
+      widget.router.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final canPop = widget.router.canPop();
     final path =
         widget.router.routerDelegate.currentConfiguration.uri.path;
     final isHome = path == '/';
-    final isMainTab = path == '/' ||
-        path == '/categories' ||
-        path == '/brands' ||
-        path == '/cart';
     final hasBackHandler = _controller.hasActiveHandler;
 
-    // Home may exit the app. Other main tabs never pop the Activity.
-    final allowSystemPop = !hasBackHandler &&
-        ((isHome && isMainTab) || (!isMainTab && (canPop || isHome)));
+    // Only Home may finish the Activity. Native swipe block is owned by
+    // SystemBackExitGuard. Here we always intercept non-home backs.
+    final allowSystemPop = !hasBackHandler && isHome;
 
     return _BackNavigationControllerScope(
       controller: _controller,
@@ -83,11 +87,9 @@ class _AppBackNavigationScopeState extends State<AppBackNavigationScope> {
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
           if (_controller.handleBack()) return;
-          if (isMainTab && !isHome) {
-            widget.router.go('/');
-            return;
+          if (!isHome) {
+            _goHomeOrPop(canPop: canPop);
           }
-          if (!canPop && !isHome) widget.router.go('/');
         },
         child: widget.child,
       ),

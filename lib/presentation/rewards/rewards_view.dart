@@ -14,7 +14,7 @@ class RewardsView extends StatelessWidget {
     return ConnectedPage<RewardsBloc, RewardsEvent, RewardsState>(
       create: RewardsBloc.new,
       started: const RewardsStarted(),
-      maxContentWidth: 960,
+      maxContentWidth: 440,
       child: const RewardsScreen(),
     );
   }

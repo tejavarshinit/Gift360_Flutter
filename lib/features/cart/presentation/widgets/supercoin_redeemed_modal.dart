@@ -71,17 +71,23 @@ class _SuperCoinRedeemedModalState extends State<SuperCoinRedeemedModal> {
     return Stack(
       children: [
         Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.5))),
-        Center(
-          child: Material(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 340),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+        SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 340,
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                     SizedBox(
                       width: 64,
                       height: 64,
@@ -124,18 +130,40 @@ class _SuperCoinRedeemedModalState extends State<SuperCoinRedeemedModal> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Your ', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700)),
-                        Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 20, height: 20),
-                        Text(' SuperCoins are Burned',
-                            style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700)),
-                      ],
+                    Text.rich(
+                      TextSpan(
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF111827),
+                        ),
+                        children: [
+                          const TextSpan(text: 'Your '),
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2),
+                              child: Image.asset(
+                                'assets/images/SuperCOin-removebg-preview.png',
+                                width: 20,
+                                height: 20,
+                              ),
+                            ),
+                          ),
+                          const TextSpan(text: ' SuperCoins are Burned'),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 4),
-                    Text('Continue payment in',
-                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF6B7280))),
+                    Text(
+                      'Continue payment in',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
                     SizedBox(
                       height: 72,
                       child: Center(
@@ -161,10 +189,13 @@ class _SuperCoinRedeemedModalState extends State<SuperCoinRedeemedModal> {
                         value: (3 - shown + 1) / 3,
                         minHeight: 6,
                         backgroundColor: const Color(0xFFEDEAFF),
-                        valueColor: const AlwaysStoppedAnimation(Color(0xFF9747FF)),
+                        valueColor:
+                            const AlwaysStoppedAnimation(Color(0xFF9747FF)),
                       ),
                     ),
                   ],
+                    ),
+                  ),
                 ),
               ),
             ),

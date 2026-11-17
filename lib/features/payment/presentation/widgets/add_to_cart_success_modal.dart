@@ -160,23 +160,28 @@ class _AddToCartSuccessModalState extends State<AddToCartSuccessModal>
                   ),
                 ),
               ),
-              Center(
-                child: Container(
-                  width: 300,
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width - 32),
-                  height: 280,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0x1F6C5CE7)),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF111827).withValues(alpha: 0.22), blurRadius: 60, offset: const Offset(0, 24)),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+              SafeArea(
+                child: Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    constraints: BoxConstraints(
+                      maxWidth: (MediaQuery.sizeOf(context).width - 40).clamp(260.0, 320.0),
+                      minHeight: 220,
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+                    ),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0x1F6C5CE7)),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFF111827).withValues(alpha: 0.22), blurRadius: 60, offset: const Offset(0, 24)),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                       SizedBox(
                         width: 140,
                         height: 120,
@@ -261,6 +266,7 @@ class _AddToCartSuccessModalState extends State<AddToCartSuccessModal>
                       ),
                     ],
                   ),
+                ),
                 ),
               ),
             ],

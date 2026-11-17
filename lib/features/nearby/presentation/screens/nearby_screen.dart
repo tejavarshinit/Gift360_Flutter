@@ -18,6 +18,7 @@ import 'package:gift360/features/cart/presentation/providers/cart_provider.dart'
 import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
 import 'package:gift360/core/widgets/app_bottom_nav.dart';
+import 'package:gift360/core/widgets/app_snackbar.dart';
 import 'package:gift360/theme/app_colors.dart';
 import 'package:gift360/theme/app_text_styles.dart';
 import 'package:gift360/widgets/location_loading.dart';
@@ -282,12 +283,9 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       _paymentLoading = false;
       _paymentBrand = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${quantity}x ${brand.brandName} voucher(s) of ₹${amount.toInt()} added to cart',
-        ),
-      ),
+    showAppSnackBar(
+      context,
+      '${quantity}x ${brand.brandName} voucher(s) of ₹${amount.toInt()} added to cart',
     );
   }
 
@@ -309,9 +307,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
     final totalAmount = amount * quantity;
     final brandId = brand.brandId ?? '';
     if (brandId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Brand ID not available')));
+      showAppSnackBar(context, 'Brand ID not available');
       return;
     }
 
@@ -337,12 +333,9 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       );
       if (!mounted) return;
       if (orderNumber == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ref.read(paymentProvider).error ?? 'Failed to create order',
-            ),
-          ),
+        showAppSnackBar(
+          context,
+          ref.read(paymentProvider).error ?? 'Failed to create order',
         );
         return;
       }
@@ -354,12 +347,9 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       );
       if (!mounted) return;
       if (!valid) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ref.read(paymentProvider).error ?? 'Order validation failed',
-            ),
-          ),
+        showAppSnackBar(
+          context,
+          ref.read(paymentProvider).error ?? 'Order validation failed',
         );
         return;
       }
@@ -368,12 +358,9 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       final paymentResponse = await paymentNotifier.initiateBackendPayment(paymentMethod: paymentMethod);
       if (!mounted) return;
       if (paymentResponse == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ref.read(paymentProvider).error ?? 'Payment initiation failed',
-            ),
-          ),
+        showAppSnackBar(
+          context,
+          ref.read(paymentProvider).error ?? 'Payment initiation failed',
         );
         return;
       }
@@ -381,11 +368,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       final paymentUrl =
           paymentResponse['payment_url'] ?? paymentResponse['paymentUrl'];
       if (paymentUrl == null || paymentUrl.toString().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Payment URL not received from gateway'),
-          ),
-        );
+        showAppSnackBar(context, 'Payment URL not received from gateway');
         return;
       }
 
@@ -402,9 +385,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Payment error: ${e.toString()}')));
+      showAppSnackBar(context, 'Payment error: ${e.toString()}');
     }
   }
 
@@ -425,9 +406,35 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       _isGeocoding ||
       (_locationStatus == _LocationStatus.granted && _isLoadingBrands);
 
+  void _handleBack() {
+    if (_showPaymentSheet) {
+      setState(() {
+        _showPaymentSheet = false;
+        _paymentLoading = false;
+        _paymentError = null;
+        _paymentBrand = null;
+      });
+      return;
+    }
+    if (_showConfirmModal) {
+      setState(() => _showConfirmModal = false);
+      return;
+    }
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: false,
       body: Stack(
@@ -486,6 +493,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
         ],
       ),
       bottomNavigationBar: const AppBottomNav(currentIndex: -1),
+    ),
     );
   }
 
@@ -501,7 +509,7 @@ class _NearbyScreenState extends ConsumerState<NearbyScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => context.pop(),
+            onTap: _handleBack,
             child: Container(
               width: 40,
               height: 40,

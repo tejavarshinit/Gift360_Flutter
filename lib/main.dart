@@ -13,6 +13,7 @@ import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/navigation/app_router.dart';
 import 'core/navigation/app_navigator.dart';
+import 'core/navigation/system_back_exit_guard.dart';
 import 'core/widgets/global_support_chat_overlay.dart';
 import 'core/network/dio_client.dart';
 import 'core/providers/notification_provider.dart';
@@ -326,33 +327,35 @@ class _Gift360AppState extends ConsumerState<Gift360App>
     final router = ref.watch(goRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    return MaterialApp.router(
-      title: 'Gift360',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: ThemeData.dark(useMaterial3: true),
-      themeMode: themeMode,
-      routerConfig: router,
-      builder: (context, child) {
-        // Keep type readable on large system font sizes without blowing
-        // fixed phone layouts apart. Overlays sit above the navigator.
-        final media = MediaQuery.of(context);
-        return MediaQuery(
-          data: media.copyWith(
-            textScaler: media.textScaler.clamp(
-              minScaleFactor: 0.9,
-              maxScaleFactor: 1.25,
+    return SystemBackExitGuard(
+      child: MaterialApp.router(
+        title: 'Gift360',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: ThemeData.dark(useMaterial3: true),
+        themeMode: themeMode,
+        routerConfig: router,
+        builder: (context, child) {
+          // Keep type readable on large system font sizes without blowing
+          // fixed phone layouts apart. Overlays sit above the navigator.
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(
+              textScaler: media.textScaler.clamp(
+                minScaleFactor: 0.9,
+                maxScaleFactor: 1.25,
+              ),
             ),
-          ),
-          child: Stack(
-            children: [
-              child ?? const SizedBox.shrink(),
-              const GlobalSupportChatOverlay(),
-              const AppLockGate(),
-            ],
-          ),
-        );
-      },
+            child: Stack(
+              children: [
+                child ?? const SizedBox.shrink(),
+                const GlobalSupportChatOverlay(),
+                const AppLockGate(),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

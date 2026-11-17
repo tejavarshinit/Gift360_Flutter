@@ -302,19 +302,24 @@ class _SuperCoinOTPModalState extends ConsumerState<SuperCoinOTPModal> {
             child: Container(color: Colors.black.withValues(alpha: 0.5)),
           ),
         ),
-        // Centered content card (matches Radix DialogContent).
-        Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: 400,
-              maxHeight: MediaQuery.of(context).size.height * 0.9,
-            ),
-            child: Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: _buildContent(),
+        // Centered content card — padded for narrow phones + safe areas.
+        SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
+                ),
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: _buildContent(),
+                  ),
+                ),
               ),
             ),
           ),

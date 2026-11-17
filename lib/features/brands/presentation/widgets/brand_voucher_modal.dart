@@ -100,7 +100,8 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
     final rows = widget.loading || widget.error != null
         ? 2
         : widget.vouchers.length.clamp(1, 5);
-    final sheetHeight = (150.0 + rows * 96.0).clamp(300.0, screenHeight * 0.78);
+    final sheetHeight = (150.0 + rows * 96.0).clamp(280.0, screenHeight * 0.78);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return PopScope(
       canPop: false,
@@ -124,7 +125,11 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
                     position: _slideAnimation,
                     child: Container(
                         width: double.infinity,
-                        height: sheetHeight,
+                        constraints: BoxConstraints(
+                          minHeight: 280,
+                          maxHeight: sheetHeight,
+                        ),
+                        padding: EdgeInsets.only(bottom: bottomInset),
                         decoration: const BoxDecoration(
                           color: Color(0xFFF5F6FA),
                           borderRadius: BorderRadius.vertical(
@@ -139,6 +144,7 @@ class _BrandVoucherModalState extends State<BrandVoucherModal>
                           ],
                         ),
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
                               margin: const EdgeInsets.only(top: 10),

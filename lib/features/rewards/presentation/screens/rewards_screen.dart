@@ -197,82 +197,68 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
     final quizReward = _quizReward(reward);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () => context.go('/'),
-              child: Container(color: Colors.black.withValues(alpha: 0.4)),
-            ),
-          ),
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 440,
-                    maxHeight: MediaQuery.of(context).size.height * 0.9,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Material(
-                      color: Colors.white,
-                      child: Column(
-                        children: [
-                          _buildHeader(context),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                children: [
-                                  _buildQuizCard(
-                                    reward: reward,
-                                    earned: quizEarned,
-                                    won: quizWon,
-                                    coinReward: quizReward,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _buildStoryCard(),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                top: BorderSide(color: Color(0xFFF3F4F6)),
-                              ),
-                            ),
-                            child: Text(
-                              'SuperCoins are credited after we verify your reel or story is live.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                color: const Color(0xFF9CA3AF),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  children: [
+                    _buildQuizCard(
+                      reward: reward,
+                      earned: quizEarned,
+                      won: quizWon,
+                      coinReward: quizReward,
                     ),
+                    const SizedBox(height: 16),
+                    _buildStoryCard(),
+                  ],
+                ),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: Color(0xFFF3F4F6)),
+                  ),
+                ),
+                child: Text(
+                  'SuperCoins are credited after we verify your reel or story is live.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: const Color(0xFF9CA3AF),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  void _goBack(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
   }
 
   Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
+      padding: const EdgeInsets.fromLTRB(4, 8, 16, 16),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -283,35 +269,46 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.auto_awesome, size: 21, color: Color(0xFFFCD34D)),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Rewards',
-                  style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                Text(
-                  'Play the quiz and share your story to win SuperCoins',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: const Color(0xFFE9D5FF),
-                  ),
-                ),
-              ],
-            ),
-          ),
           IconButton(
-            onPressed: () => context.go('/'),
-            tooltip: 'Close rewards',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.close, size: 20, color: Colors.white),
+            onPressed: () => _goBack(context),
+            tooltip: 'Back',
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 10, right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.auto_awesome,
+                        size: 20,
+                        color: Color(0xFFFCD34D),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Rewards',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Play the quiz and share your story to win SuperCoins',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: const Color(0xFFE9D5FF),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
