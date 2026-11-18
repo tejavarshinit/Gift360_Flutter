@@ -84,7 +84,7 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
   }
 
   // ─────────────────────────────────────────────
-  // Header: Back to Home + refresh + title + tabs
+  // Header: Back + refresh + title + tabs
   // ─────────────────────────────────────────────
   Widget _buildHeader(BuildContext context, AsyncValue<OrdersData> ordersAsync) {
     final loading = ordersAsync.isLoading;
@@ -99,7 +99,8 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               GestureDetector(
-                onTap: () => context.go('/'),
+                onTap: () =>
+                    context.canPop() ? context.pop() : context.go('/'),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
@@ -122,7 +123,7 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Back to Home',
+                        'Back',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
