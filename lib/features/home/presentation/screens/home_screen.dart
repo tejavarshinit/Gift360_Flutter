@@ -535,10 +535,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               fit: StackFit.expand,
               children: [
                 // Background matching React: GiftCARD.jpeg (giftCARD in Home.tsx)
-                Image.asset(
-                  'assets/images/GiftCARD.jpeg',
-                  fit: BoxFit.cover,
-                ),
+                Image.asset('assets/images/GiftCARD.jpeg', fit: BoxFit.cover),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 18, 14, 12),
                   child: Stack(
@@ -2345,7 +2342,6 @@ class _OccasionSection extends ConsumerWidget {
   }
 }
 
-
 // ═══════════════════════════════════════════════
 // TopBrandsGrid (Section 3G) — Marquee
 // ═══════════════════════════════════════════════
@@ -2380,9 +2376,13 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
     unawaited(_autoScrollRow(_row2Scroll));
   }
 
+  // ~17px/s so one brand card (~100px) takes about 5–7 seconds to cross.
+  static const _marqueeStepPx = 0.85;
+  static const _marqueeTick = Duration(milliseconds: 50);
+
   Future<void> _autoScrollRow(ScrollController controller) async {
     while (mounted) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(_marqueeTick);
       if (!mounted) return;
       if (_userTouching || !controller.hasClients) continue;
 
@@ -2391,30 +2391,11 @@ class _TopBrandsSectionState extends ConsumerState<_TopBrandsSection> {
       final maxScroll = position.maxScrollExtent;
       if (maxScroll <= 1) continue;
 
-      final remaining = maxScroll - position.pixels;
-      if (remaining <= 1) {
-        if (!_userTouching && controller.hasClients) controller.jumpTo(0);
-        continue;
-      }
-
-      // Animate once across the row instead of issuing 20 jumpTo calls a
-      // second. This avoids web layout races while retaining the marquee.
-      final durationMs = (remaining * 100).round().clamp(1000, 120000);
-      try {
-        await controller.animateTo(
-          maxScroll,
-          duration: Duration(milliseconds: durationMs),
-          curve: Curves.linear,
-        );
-      } catch (_) {
-        // A resize or user drag can interrupt the scroll animation.
-      }
-
-      if (!mounted) return;
-      if (!_userTouching &&
-          controller.hasClients &&
-          controller.position.hasContentDimensions) {
+      final next = position.pixels + _marqueeStepPx;
+      if (next >= maxScroll - 0.5) {
         controller.jumpTo(0);
+      } else {
+        controller.jumpTo(next);
       }
     }
   }
@@ -2863,10 +2844,7 @@ class _RecentlyUsedSection extends ConsumerWidget {
             Align(
               alignment: Alignment.centerRight,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)],

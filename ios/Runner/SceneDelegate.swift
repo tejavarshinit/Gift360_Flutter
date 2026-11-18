@@ -239,7 +239,7 @@ class SceneDelegate: FlutterSceneDelegate {
       }
 
       DispatchQueue.global(qos: .userInitiated).async {
-        var key: SecKey?
+        var item: CFTypeRef?
         var keyError: Unmanaged<CFError>?
         let query: [String: Any] = [
           kSecClass as String: kSecClassKey,
@@ -248,8 +248,10 @@ class SceneDelegate: FlutterSceneDelegate {
           kSecReturnRef as String: true,
           kSecUseAuthenticationContext as String: context
         ]
-        let status = SecItemCopyMatching(query as CFDictionary, &key)
-        guard status == errSecSuccess, let privateKey = key else {
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess,
+              let ref = item,
+              CFGetTypeID(ref) == SecKeyGetTypeID() else {
           DispatchQueue.main.async {
             result(FlutterError(
               code: status == errSecItemNotFound ? "key_missing" : "key_invalidated",
@@ -259,6 +261,7 @@ class SceneDelegate: FlutterSceneDelegate {
           }
           return
         }
+        let privateKey = ref as! SecKey
         guard let signature = SecKeyCreateSignature(
           privateKey,
           .rsaSignatureMessagePKCS1v15SHA256,
