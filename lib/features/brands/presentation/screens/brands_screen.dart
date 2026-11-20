@@ -358,7 +358,16 @@ class _BrandsScreenState extends ConsumerState<BrandsScreen> {
         child: Row(
           children: [
             GestureDetector(
-              onTap: () => context.go('/'),
+              onTap: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  StatefulNavigationShell.of(context).goBranch(
+                    0,
+                    initialLocation: true,
+                  );
+                }
+              },
               child: Container(
                 width: 40,
                 height: 40,

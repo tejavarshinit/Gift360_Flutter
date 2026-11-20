@@ -92,12 +92,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFFF3F5F9),
         body: Stack(
           children: [
-            // Background matching React: flat #f3f5f9
-            Positioned.fill(child: const SizedBox.shrink()),
-            // Main content
             Column(
               children: [
                 if (hasPopulatedCart) _buildHeader(cart),
@@ -148,53 +145,103 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   // ─────────────────────────────────────────────
   Widget _buildHeader(Cart? cart) {
     final itemCount = cart?.totalItems ?? 0;
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () => context.go('/'),
-                  child: const SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      size: 20,
-                      color: Color(0xFF1A1A1A),
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF5B4BDB), Color(0xFF8B5CF6), Color(0xFFA78BFA)],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        StatefulNavigationShell.of(context).goBranch(
+                          0,
+                          initialLocation: true,
+                        );
+                      }
+                    },
+                    tooltip: 'Back',
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.white,
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Text(
-                    'Shopping Cart',
-                    style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF2D2D2D),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.shopping_bag_rounded,
+                          size: 15,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$itemCount in bag',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Text(
-                '$itemCount ${itemCount == 1 ? 'item' : 'items'} in your cart',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF6B7280),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Text(
+                  'Your Cart',
+                  style: GoogleFonts.poppins(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    height: 1.15,
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16),
+                child: Text(
+                  'Review items, pick cashback or SuperCoins, then pay securely.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: Colors.white.withValues(alpha: 0.88),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -355,55 +402,93 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   // Cart Content
   // ─────────────────────────────────────────────
   Widget _buildCartContent(Cart cart, CartCheckoutState checkout) {
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Cart Items
-                ...cart.items.map(
-                  (item) => CartItemCard(
-                    itemId: item.itemId,
-                    brandName: item.brandName,
-                    image: item.image,
-                    quantity: item.quantity,
-                    unitValue: item.unitValue,
-                    lineTotal: item.lineTotal,
-                    onQuantityChange: (itemId, qty) {
-                      ref
-                          .read(cartProvider.notifier)
-                          .updateQuantity(itemId, qty);
-                    },
-                    onRemove: (itemId) {
-                      setState(() {
-                        _itemToDeleteId = itemId;
-                        _itemToDeleteName = item.brandName;
-                      });
-                    },
+        Column(
+          children: [
+            Expanded(
+              child: Transform.translate(
+                offset: const Offset(0, -10),
+                child: Container(
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF3F5F9),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(22),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(0, 18, 0, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: Text(
+                            'Items',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1F1635),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                        ...cart.items.map(
+                          (item) => CartItemCard(
+                            itemId: item.itemId,
+                            brandName: item.brandName,
+                            image: item.image,
+                            quantity: item.quantity,
+                            unitValue: item.unitValue,
+                            lineTotal: item.lineTotal,
+                            onQuantityChange: (itemId, qty) {
+                              ref
+                                  .read(cartProvider.notifier)
+                                  .updateQuantity(itemId, qty);
+                            },
+                            onRemove: (itemId) {
+                              setState(() {
+                                _itemToDeleteId = itemId;
+                                _itemToDeleteName = item.brandName;
+                              });
+                            },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Text(
+                            'Checkout',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1F1635),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                        OrderSummarySection(
+                          onSuperCoinTap: () async {
+                            final ensured = await _ensureOrderBeforeSuperCoin();
+                            if (ensured != null && mounted) {
+                              setState(() => _showSuperCoinOtp = true);
+                            }
+                          },
+                          onPaymentStart: () {
+                            setState(() => _showPaymentSheet = true);
+                          },
+                          onPaymentComplete: () {
+                            setState(() => _showPaymentSheet = false);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                // Order Summary
-                OrderSummarySection(
-                  onSuperCoinTap: () async {
-                    final ensured = await _ensureOrderBeforeSuperCoin();
-                    if (ensured != null && mounted) {
-                      setState(() => _showSuperCoinOtp = true);
-                    }
-                  },
-                  onPaymentStart: () {
-                    setState(() => _showPaymentSheet = true);
-                  },
-                  onPaymentComplete: () {
-                    setState(() => _showPaymentSheet = false);
-                  },
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-        // Dialogs
         if (_itemToDeleteId != null)
           DeleteConfirmDialog(
             brandName: _itemToDeleteName ?? '',

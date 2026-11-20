@@ -6,8 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:gift360/core/navigation/app_router.dart';
 
 /// Single owner of Android `setBlockSystemExit` / predictive swipe-back.
-/// Blocks Activity finish on every route except Home + auth screens
-/// (fixes Offers Near You / Cart / Brands Pixel gesture closing the app).
+/// Blocks Activity finish on every in-app route so back always returns to the
+/// previous page (or Home) instead of closing Gift360.
 class SystemBackExitGuard extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -20,8 +20,10 @@ class SystemBackExitGuard extends ConsumerStatefulWidget {
 
 class _SystemBackExitGuardState extends ConsumerState<SystemBackExitGuard> {
   static const _navChannel = MethodChannel('com.gift360.gift360/navigation');
+
+  /// Only leave the process from auth entry screens (user explicitly backs out
+  /// of login / onboarding). Everywhere else must stay in-app.
   static const _exitAllowed = {
-    '/',
     '/login',
     '/register',
     '/onboarding',
@@ -60,7 +62,6 @@ class _SystemBackExitGuardState extends ConsumerState<SystemBackExitGuard> {
         _router?.routerDelegate.currentConfiguration.uri.path ?? '/';
     final block = !_exitAllowed.contains(path);
     if (block == _blockExit) {
-      // Re-assert native flag in case another caller cleared it.
       _apply(block);
       return;
     }

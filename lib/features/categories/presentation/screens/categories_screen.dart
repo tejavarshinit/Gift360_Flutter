@@ -17,6 +17,7 @@ import 'package:gift360/features/cart/presentation/providers/cart_provider.dart'
 import 'package:gift360/features/cart/data/models/cart.dart';
 import 'package:gift360/core/providers/notification_provider.dart';
 import 'package:gift360/core/widgets/site_footer.dart';
+import 'package:gift360/core/navigation/app_back.dart';
 
 class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
@@ -290,7 +291,34 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     final filterMetaAsync = ref.watch(filterMetaProvider);
     final meta = filterMetaAsync.valueOrNull;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_showPaymentSheet) {
+          setState(() {
+            _showPaymentSheet = false;
+            _paymentBrand = null;
+            _paymentLoading = false;
+            _paymentError = null;
+          });
+          return;
+        }
+        if (_showFilterSheet) {
+          setState(() => _showFilterSheet = false);
+          return;
+        }
+        if (_selectedCategories.isNotEmpty ||
+            _expandedCategories.values.any((e) => e)) {
+          setState(() {
+            _selectedCategories = [];
+            _expandedCategories.clear();
+          });
+          return;
+        }
+        performAppBack(context);
+      },
+      child: Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
       body: Stack(
@@ -361,6 +389,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           if (_showFilterSheet) _buildFilterSheet(meta),
         ],
       ),
+    ),
     );
   }
 
@@ -380,7 +409,16 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         child: Row(
           children: [
             GestureDetector(
-              onTap: () => context.go('/'),
+              onTap: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  StatefulNavigationShell.of(context).goBranch(
+                    0,
+                    initialLocation: true,
+                  );
+                }
+              },
               child: const SizedBox(
                 width: 40,
                 height: 40,

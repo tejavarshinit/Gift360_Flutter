@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_constants.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
+import 'package:gift360/features/checkout_gate/presentation/providers/checkout_gate_provider.dart';
 import 'package:gift360/features/profile/data/profile_details_store.dart';
 import 'package:flutter/gestures.dart';
 
@@ -32,6 +33,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String _emailError = '';
   String _mobileError = '';
   String _termsError = '';
+  String? _emailSuggestion;
+  bool _emailSuggestionUsed = false;
 
   @override
   void dispose() {
@@ -126,6 +129,34 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // Soft email quality check (React Register.tsx). Block only when
+      // server says block: true; otherwise show a one-time typo tip.
+      try {
+        final check = await ref
+            .read(checkoutApiProvider)
+            .checkEmail(_emailController.text.trim());
+        if (check.suggestion != null &&
+            check.suggestion!.isNotEmpty &&
+            !_emailSuggestionUsed) {
+          setState(() {
+            _emailSuggestion = check.suggestion;
+            _isLoading = false;
+          });
+          return;
+        }
+        if (check.block) {
+          setState(() {
+            _emailError = check.message ??
+                check.invalidReason ??
+                'This email cannot be used';
+            _isLoading = false;
+          });
+          return;
+        }
+      } catch (_) {
+        // Fail open — registration OTP still proceeds.
+      }
+
       final response = await ref.read(authProvider.notifier).registerSendOtp(
             mobileNumber: _mobileController.text.trim(),
             email: _emailController.text.trim(),
@@ -260,6 +291,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             enabled: !_otpSent,
           ),
           if (_emailError.isNotEmpty) _buildErrorText(_emailError),
+          if (_emailSuggestion != null) ...[
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _emailController.text = _emailSuggestion!;
+                  _emailSuggestionUsed = true;
+                  _emailSuggestion = null;
+                });
+              },
+              child: Text(
+                'Did you mean $_emailSuggestion? Tap to use it, then Send OTP again.',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF7C3AED),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           _buildMobileInput(),
           if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
@@ -403,6 +454,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                           if (_emailError.isNotEmpty)
                             _buildErrorText(_emailError),
+                          if (_emailSuggestion != null) ...[
+                            const SizedBox(height: 6),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _emailController.text = _emailSuggestion!;
+                                  _emailSuggestionUsed = true;
+                                  _emailSuggestion = null;
+                                });
+                              },
+                              child: Text(
+                                'Did you mean $_emailSuggestion? Tap to use it, then Send OTP again.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF7C3AED),
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
 
                           // ── Mobile input ──

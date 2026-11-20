@@ -8,7 +8,9 @@ import 'package:intl/intl.dart';
 import 'package:gift360/core/widgets/app_bottom_nav.dart';
 import 'package:gift360/core/widgets/brand_image.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
+import 'package:gift360/features/orders/data/pending_order_cart_restore.dart';
 import 'package:gift360/features/orders/presentation/providers/orders_provider.dart';
 
 /// A voucher is "issued" when at least one order item carries a coupon group
@@ -39,8 +41,38 @@ class MyOrdersScreen extends ConsumerStatefulWidget {
 class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
   int _tab = 0; // 0 = Success, 1 = Failed, 2 = Pending
 
-  void _handleViewNow(String orderNumber) {
-    context.push('/my-orders/$orderNumber/checkout');
+  /// Pending checkout page is unreliable (401). Re-add items to cart instead.
+  Future<void> _handlePayNow(Map<String, dynamic> order) async {
+    try {
+      final result = await restorePendingOrderToCart(
+        order: order,
+        cart: ref.read(cartProvider.notifier),
+      );
+      if (result.success) {
+        ref.invalidate(ordersProvider);
+        if (mounted) context.go('/cart');
+        return;
+      }
+      final orderNumber = result.orderNumber ?? orderNumberOf(order);
+      if (orderNumber != null) {
+        await dismissPendingOrder(orderNumber);
+        ref.invalidate(ordersProvider);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.error ??
+                'Removed from pending. Please add the brand again from Brands.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open cart: $e')),
+      );
+    }
   }
 
   @override
@@ -363,12 +395,12 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
                         'These orders are awaiting payment. Tap ',
                   ),
                   TextSpan(
-                    text: 'Pay Now',
+                    text: 'Go to Cart',
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
                   ),
                   const TextSpan(
                     text:
-                        ' to review this order and complete payment.',
+                        ' to add the items back and complete payment.',
                   ),
                 ],
               ),
@@ -382,7 +414,7 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _OrderRow(
                   order: order,
-                  onViewNow: _handleViewNow,
+                  onPayNow: _handlePayNow,
                 ),
               )),
       ],
@@ -584,9 +616,9 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
 // ─────────────────────────────────────────────
 class _OrderRow extends StatelessWidget {
   final Map<String, dynamic> order;
-  final void Function(String orderNumber) onViewNow;
+  final Future<void> Function(Map<String, dynamic> order) onPayNow;
 
-  const _OrderRow({required this.order, required this.onViewNow});
+  const _OrderRow({required this.order, required this.onPayNow});
 
   @override
   Widget build(BuildContext context) {
@@ -796,9 +828,9 @@ class _OrderRow extends StatelessWidget {
                       ),
                     ],
                     const Spacer(),
-                    if (status == 'PENDING' && orderNumber.isNotEmpty)
+                    if (status == 'PENDING')
                       GestureDetector(
-                        onTap: () => onViewNow(orderNumber),
+                        onTap: () => onPayNow(order),
                         child: Container(
                           height: 28,
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -816,13 +848,13 @@ class _OrderRow extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(
-                                Icons.visibility_outlined,
+                                Icons.shopping_cart_outlined,
                                 size: 12,
                                 color: Colors.white,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'Pay Now',
+                                'Go to Cart',
                                 style: GoogleFonts.poppins(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,

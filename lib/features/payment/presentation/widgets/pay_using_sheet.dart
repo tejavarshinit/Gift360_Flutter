@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:gift360/config/app_flavor.dart';
+import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/checkout_gate/presentation/checkout_gate.dart';
+import 'package:gift360/features/checkout_gate/presentation/providers/checkout_gate_provider.dart';
 import 'package:gift360/features/payment/data/models/payment_method_fee.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 import 'package:gift360/features/payment/presentation/widgets/upi_intent_sheet.dart';
@@ -149,7 +152,21 @@ class _PayUsingSheetState extends ConsumerState<PayUsingSheet> {
       _error = null;
     });
     try {
-      final response = await ref.read(orderApiProvider).createUpiIntent(widget.orderNumber);
+      final gate = await runCheckoutGate(
+        api: ref.read(checkoutApiProvider),
+        user: ref.read(authProvider),
+        orderNumber: widget.orderNumber,
+        paymentMethod: 'UPI',
+        context: context,
+      );
+      if (gate.isCancelled) {
+        if (mounted) setState(() => _error = 'Checkout verification cancelled.');
+        return null;
+      }
+      final response = await ref.read(orderApiProvider).createUpiIntent(
+            widget.orderNumber,
+            location: gate.location,
+          );
       final deeplink = response['deeplink']?.toString() ?? '';
       if (deeplink.isEmpty) {
         throw response['responseMessage']?.toString() ?? 'Unable to start the UPI payment.';

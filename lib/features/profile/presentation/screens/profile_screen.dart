@@ -10,6 +10,7 @@ import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/app_lock_provider.dart';
 import 'package:gift360/features/auth/presentation/widgets/app_lock_gate.dart';
+import 'package:gift360/features/checkout_gate/presentation/checkout_gate.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/features/supercoin/presentation/providers/supercoin_provider.dart';
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
@@ -34,7 +35,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   int _rewardsTick = 0;
   ProfileDetails? _profileDetails;
 
-  bool _otpLoginEnabled = true;
   bool _biometricLoginEnabled = true;
   bool _mpinLoginEnabled = true;
   bool _biometricEnrolled = false;
@@ -81,7 +81,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (!mounted) return;
       setState(() {
         _biometricEnrolled = enrolled;
-        _otpLoginEnabled = prefs.getBool('login_method_otp_enabled') ?? true;
         _biometricLoginEnabled =
             prefs.getBool('login_method_biometric_enabled') ??
                 (bioLock || enrolled);
@@ -91,37 +90,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } catch (_) {}
   }
 
-  Future<void> _toggleOtp(bool value) async {
-    if (!value) {
-      if ((!_biometricLoginEnabled || !_biometricEnrolled) &&
-          (!_mpinLoginEnabled || !_biometricEnrolled)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Please enable Biometric or MPIN login before turning off OTP.',
-            ),
-            backgroundColor: Color(0xFFD4650F),
-          ),
-        );
-        return;
-      }
-    }
-    setState(() => _otpLoginEnabled = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('login_method_otp_enabled', value);
-  }
-
   Future<void> _toggleBiometric(bool value, dynamic user) async {
     if (!value) {
-      if (!_otpLoginEnabled && !_mpinLoginEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('At least one unlock method must remain enabled.'),
-            backgroundColor: Color(0xFFD4650F),
-          ),
-        );
-        return;
-      }
       setState(() => _biometricLoginEnabled = false);
       await ref.read(appLockServiceProvider).setBiometricLockEnabled(false);
       await ref.read(appLockProvider.notifier).refresh();
@@ -175,15 +145,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _toggleMpin(bool value, dynamic user) async {
     if (!value) {
-      if (!_otpLoginEnabled && !_biometricLoginEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('At least one unlock method must remain enabled.'),
-            backgroundColor: Color(0xFFD4650F),
-          ),
-        );
-        return;
-      }
       setState(() => _mpinLoginEnabled = false);
       await ref.read(appLockServiceProvider).setMpinLockEnabled(false);
       await ref.read(appLockProvider.notifier).refresh();
@@ -634,15 +595,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             style: _mutedText(fontSize: 11),
           ),
           const SizedBox(height: 14),
-          _buildLoginMethodToggleRow(
-            icon: Icons.sms_outlined,
-            title: 'OTP Login',
-            subtitle: 'Sign in with verification code via SMS',
-            value: _otpLoginEnabled,
-            onChanged: _toggleOtp,
-          ),
           if (AppConfig.biometricLoginEnabled) ...[
-            const Divider(height: 20, color: Color(0xFFF0ECF7)),
             _buildLoginMethodToggleRow(
               icon: Icons.fingerprint_rounded,
               title: 'Biometric unlock',
@@ -836,6 +789,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _buildLogoutCard(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: () async {
+        clearCheckoutLocationCache();
         ref.read(authProvider.notifier).logout();
         if (context.mounted) context.go('/login');
       },

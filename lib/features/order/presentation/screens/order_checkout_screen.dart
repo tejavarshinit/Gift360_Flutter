@@ -21,6 +21,8 @@ import 'package:gift360/features/cart/presentation/widgets/supercoin_status_card
 import 'package:gift360/features/brands/data/models/brand.dart';
 import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
 import 'package:gift360/features/home/presentation/providers/home_providers.dart';
+import 'package:gift360/features/checkout_gate/presentation/checkout_gate.dart';
+import 'package:gift360/features/checkout_gate/presentation/providers/checkout_gate_provider.dart';
 import 'package:gift360/features/order/presentation/providers/order_provider.dart';
 import 'package:gift360/features/payment/data/models/payment_method_fee.dart';
 import 'package:gift360/features/payment/presentation/widgets/pay_using_sheet.dart';
@@ -642,6 +644,24 @@ class _OrderCheckoutScreenState extends ConsumerState<OrderCheckoutScreen> {
         await _unholdSuperCoin();
       }
 
+      final methodForGate = methodCode ?? _selectedPaymentMethod;
+      final gate = await runCheckoutGate(
+        api: ref.read(checkoutApiProvider),
+        user: ref.read(authProvider),
+        orderNumber: widget.orderNumber,
+        paymentMethod: methodForGate,
+        context: mounted ? context : null,
+      );
+      if (gate.isCancelled) {
+        if (mounted) {
+          setState(() {
+            _isRetryingPayment = false;
+            _paymentSheetOpen = false;
+          });
+        }
+        return;
+      }
+
       final api = ref.read(orderApiProvider);
       final response = await api.retryPayment(
         widget.orderNumber,
@@ -656,6 +676,7 @@ class _OrderCheckoutScreenState extends ConsumerState<OrderCheckoutScreen> {
         paymentModes: _useMethodFee
             ? easebuzzPaymentModes(_paymentMethods)
             : null,
+        location: gate.location,
       );
 
       final paymentUrl =

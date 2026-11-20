@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
@@ -24,6 +23,7 @@ import 'config/app_flavor.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/auth/presentation/providers/app_lock_provider.dart';
 import 'features/auth/presentation/widgets/app_lock_gate.dart';
+import 'features/checkout_gate/presentation/checkout_gate.dart';
 import 'features/auth/data/models/auth_user.dart';
 import 'features/notifications/data/repositories/device_token_api.dart';
 import 'features/notifications/presentation/services/push_notification_service.dart';
@@ -286,8 +286,11 @@ class _Gift360AppState extends ConsumerState<Gift360App>
       final currentContext = navigatorKey.currentContext;
       if (currentContext == null) return;
 
-      // Don't show dialog if already on login/onboarding
-      final currentPath = GoRouterState.of(currentContext).matchedLocation;
+      // Don't show dialog if already on login/onboarding.
+      // Use GoRouter from the root key — navigatorKey context is outside
+      // RouteBase.builder, so GoRouterState.of(context) throws.
+      final router = ref.read(goRouterProvider);
+      final currentPath = router.state.matchedLocation;
       if (currentPath == '/login' ||
           currentPath == '/onboarding' ||
           currentPath == '/register') {
@@ -306,6 +309,7 @@ class _Gift360AppState extends ConsumerState<Gift360App>
       if (!currentContext.mounted) return;
 
       // Logout the user
+      clearCheckoutLocationCache();
       ref.read(authProvider.notifier).logout();
 
       // Show session expired dialog
@@ -315,7 +319,7 @@ class _Gift360AppState extends ConsumerState<Gift360App>
         builder: (ctx) => SessionExpiredDialog(
           onLoginRedirect: () {
             Navigator.of(ctx).pop();
-            GoRouter.of(currentContext).go('/login?session=expired');
+            router.go('/login?session=expired');
           },
         ),
       );
@@ -350,7 +354,9 @@ class _Gift360AppState extends ConsumerState<Gift360App>
               children: [
                 child ?? const SizedBox.shrink(),
                 const GlobalSupportChatOverlay(),
-                const AppLockGate(),
+                // Must fill the stack — shrink-wrapped Material left cart
+                // visible beside the lock after resume from recent apps.
+                const Positioned.fill(child: AppLockGate()),
               ],
             ),
           );

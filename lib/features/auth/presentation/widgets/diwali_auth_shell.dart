@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class DiwaliAuthShell extends StatefulWidget {
+import 'package:gift360/features/festival/data/models/festival_config.dart';
+import 'package:gift360/features/festival/presentation/providers/festival_provider.dart';
+import 'package:gift360/features/festival/presentation/widgets/festival_image.dart';
+
+class DiwaliAuthShell extends ConsumerStatefulWidget {
   final Widget child;
   final Widget switchPrompt;
   final Widget? afterMarquee;
@@ -15,10 +20,10 @@ class DiwaliAuthShell extends StatefulWidget {
   });
 
   @override
-  State<DiwaliAuthShell> createState() => _DiwaliAuthShellState();
+  ConsumerState<DiwaliAuthShell> createState() => _DiwaliAuthShellState();
 }
 
-class _DiwaliAuthShellState extends State<DiwaliAuthShell>
+class _DiwaliAuthShellState extends ConsumerState<DiwaliAuthShell>
     with TickerProviderStateMixin {
   late final AnimationController _floatController = AnimationController(
     vsync: this,
@@ -51,14 +56,15 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
 
   @override
   Widget build(BuildContext context) {
+    final festival = festivalConfigOf(ref);
     final theme = GoogleFonts.poppins();
     return Scaffold(
       body: SizedBox.expand(
         child: Stack(
           children: [
             Positioned.fill(
-              child: Image.asset(
-                'assets/images/LoginBackground.png',
+              child: FestivalImage(
+                source: festival.loginBackgroundUrl,
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),
@@ -73,35 +79,35 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                     ),
                     child: Column(
                       children: [
-                        _buildHeader(),
+                        _buildHeader(festival),
                         const SizedBox(height: 8),
                         Text(
-                          'GUARANTEED SAVINGS',
+                          festival.headline,
                           textAlign: TextAlign.center,
                           style: theme.copyWith(
                             fontSize: 28,
                             height: .95,
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFFD4650F),
+                            color: festival.primaryColor,
                           ),
                         ),
                         Text(
-                          'On Your Daily Purchases',
+                          festival.subheadline,
                           textAlign: TextAlign.center,
                           style: theme.copyWith(
                             fontSize: 22,
                             height: 1.05,
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFFB5246F),
+                            color: festival.secondaryColor,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Upto 20% cashback + SuperCoins on 400+ brands',
+                          festival.tagline,
                           style: theme.copyWith(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
-                            color: const Color(0xCC3F1A55),
+                            color: festival.accentColor.withValues(alpha: 0.8),
                           ),
                         ),
                         SizedBox(
@@ -118,13 +124,13 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                               ),
                               child: child,
                             ),
-                            child: Image.asset(
-                              'assets/images/diwali-gift.png',
+                            child: FestivalImage(
+                              source: festival.heroImageUrl,
                               fit: BoxFit.contain,
                             ),
                           ),
                         ),
-                        _buildStats(theme),
+                        _buildStats(theme, festival),
                         const SizedBox(height: 8),
                         Container(
                           width: double.infinity,
@@ -133,11 +139,13 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                             color: Colors.white.withValues(alpha: .95),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFE5E0D8)),
-                            boxShadow: const [
+                            boxShadow: [
                               BoxShadow(
-                                color: Color(0x593F1A55),
+                                color: festival.accentColor.withValues(
+                                  alpha: 0.35,
+                                ),
                                 blurRadius: 40,
-                                offset: Offset(0, 18),
+                                offset: const Offset(0, 18),
                               ),
                             ],
                           ),
@@ -152,37 +160,40 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                                     style: theme.copyWith(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF3F1A55),
+                                      color: festival.accentColor,
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0x1AD4650F),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.auto_awesome,
-                                          size: 12,
-                                          color: Color(0xFFD4650F),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'Diwali',
-                                          style: theme.copyWith(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w600,
-                                            color: const Color(0xFFD4650F),
+                                  if (festival.isActive &&
+                                      festival.name.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: festival.primaryColor
+                                            .withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.auto_awesome,
+                                            size: 12,
+                                            color: festival.primaryColor,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            festival.name,
+                                            style: theme.copyWith(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w600,
+                                              color: festival.primaryColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
                                 ],
                               ),
                               const SizedBox(height: 8),
@@ -191,10 +202,10 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.verified_user_outlined,
                                     size: 13,
-                                    color: Color(0xFFB5246F),
+                                    color: festival.secondaryColor,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
@@ -225,7 +236,7 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                           child: Center(child: widget.switchPrompt),
                         ),
                         const SizedBox(height: 8),
-                        _buildTrustedBy(theme),
+                        _buildTrustedBy(theme, festival),
                         if (widget.afterMarquee != null) ...[
                           const SizedBox(height: 4),
                           widget.afterMarquee!,
@@ -256,9 +267,9 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(FestivalConfig festival) {
     return SizedBox(
-      height: 64,
+      height: 72,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -271,42 +282,45 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
               ),
             ),
           ),
-          Image.asset(
-            'assets/images/gift360full.png',
-            width: 230,
-            fit: BoxFit.contain,
+          FestivalLogo(
+            source: festival.logoUrl,
+            maxHeight: 64,
+            maxWidth: 240,
           ),
-          Positioned(
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .7),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0x4DD4650F)),
-              ),
-              child: const Text(
-                '🪔 HAPPY\nDIWALI',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 8,
-                  height: 1,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF3F1A55),
+          if (festival.isActive && festival.badgeLabel.isNotEmpty)
+            Positioned(
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .7),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: festival.primaryColor.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  festival.badgeLabel,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 8,
+                    height: 1,
+                    fontWeight: FontWeight.w600,
+                    color: festival.accentColor,
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildStats(TextStyle theme) {
-    const stats = [
-      ('25K+', 'Bought & Gifted', Color(0xFFD4650F)),
-      ('20%', 'Upto Cashback', Color(0xFFB5246F)),
-      ('400+', 'Brands', Color(0xFF3F1A55)),
+  Widget _buildStats(TextStyle theme, FestivalConfig festival) {
+    final stats = [
+      ('25K+', 'Bought & Gifted', festival.primaryColor),
+      ('20%', 'Upto Cashback', festival.secondaryColor),
+      ('400+', 'Brands', festival.accentColor),
     ];
     return Row(
       children: stats
@@ -351,7 +365,7 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
     );
   }
 
-  Widget _buildTrustedBy(TextStyle theme) {
+  Widget _buildTrustedBy(TextStyle theme, FestivalConfig festival) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -372,7 +386,7 @@ class _DiwaliAuthShellState extends State<DiwaliAuthShell>
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     letterSpacing: .5,
-                    color: const Color(0xB33F1A55),
+                    color: festival.accentColor.withValues(alpha: 0.7),
                   ),
                 ),
               ),

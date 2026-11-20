@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:gift360/core/navigation/app_back.dart';
+
 class AppBackNavigationScope extends StatefulWidget {
   final GoRouter router;
   final Widget child;
@@ -60,36 +62,18 @@ class _AppBackNavigationScopeState extends State<AppBackNavigationScope> {
     });
   }
 
-  void _goHomeOrPop({required bool canPop}) {
-    if (canPop) {
-      widget.router.pop();
-    } else {
-      widget.router.go('/');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final canPop = widget.router.canPop();
-    final path =
-        widget.router.routerDelegate.currentConfiguration.uri.path;
-    final isHome = path == '/';
-    final hasBackHandler = _controller.hasActiveHandler;
-
-    // Only Home may finish the Activity. Native swipe block is owned by
-    // SystemBackExitGuard. Here we always intercept non-home backs.
-    final allowSystemPop = !hasBackHandler && isHome;
-
+    // Never allow the system to finish the Activity from this scope.
+    // Native swipe block is owned by SystemBackExitGuard.
     return _BackNavigationControllerScope(
       controller: _controller,
       child: PopScope(
-        canPop: allowSystemPop,
+        canPop: false,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
           if (_controller.handleBack()) return;
-          if (!isHome) {
-            _goHomeOrPop(canPop: canPop);
-          }
+          performAppBack(context);
         },
         child: widget.child,
       ),

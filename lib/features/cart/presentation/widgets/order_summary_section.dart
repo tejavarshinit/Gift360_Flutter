@@ -69,8 +69,6 @@ class OrderSummarySection extends ConsumerWidget {
         );
 
     final walletBalance = (walletAsync.valueOrNull?.totalBalance ?? 0).toDouble();
-    final cashbackRedeemPercent =
-        walletAsync.valueOrNull?.cashbackRedeemPercent ?? 50.0;
 
     String countdownDisplay(int seconds) {
       final mins = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -118,30 +116,61 @@ class OrderSummarySection extends ConsumerWidget {
     final sliderDivisions = maxSCCoins > 1.5 ? (maxSCCoins - 1).round() : 1;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 96),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF6C5CE7).withValues(alpha: 0.12),
-            blurRadius: 45,
-            offset: const Offset(0, 20),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
-          Text(
-            'Order Summary',
-            style: GoogleFonts.poppins(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF2D2D2D),
-            ),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EEFF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  size: 18,
+                  color: Color(0xFF6C5CE7),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Order Summary',
+                      style: GoogleFonts.poppins(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1F1635),
+                      ),
+                    ),
+                    Text(
+                      'Rewards & payment breakdown',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -205,65 +234,51 @@ class OrderSummarySection extends ConsumerWidget {
           const Divider(color: Color(0xFFE5E7EB), height: 1),
           const SizedBox(height: 16),
 
-          // ── Rewards Toggle (Section 4G) ──
+          // ── Rewards Toggle ──
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(12),
             ),
-            padding: const EdgeInsets.all(4),
+            padding: const EdgeInsets.all(3),
             child: Row(
               children: [
-                // Cashback & Wallet
                 Expanded(
                   child: GestureDetector(
                     onTap: () =>
                         _requestSwitchToCashback(context, ref, checkout),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 8,
-                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
                         color: checkout.rewardMode == RewardMode.cashbackWallet
-                            ? const Color(0xFFD1FAE5)
+                            ? Colors.white
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow:
+                            checkout.rewardMode == RewardMode.cashbackWallet
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.06),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ]
+                                : null,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.auto_awesome,
-                            size: 14,
-                            color:
-                                checkout.rewardMode == RewardMode.cashbackWallet
-                                ? const Color(0xFF047857)
-                                : const Color(0xFF6B7280),
-                          ),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              'Cashback',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    checkout.rewardMode ==
-                                        RewardMode.cashbackWallet
-                                    ? const Color(0xFF047857)
-                                    : const Color(0xFF6B7280),
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        'Cashback',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: checkout.rewardMode == RewardMode.cashbackWallet
+                              ? const Color(0xFF047857)
+                              : const Color(0xFF6B7280),
+                        ),
                       ),
                     ),
                   ),
                 ),
-                // SuperCoins (hidden when all items are SuperCoin-excluded)
                 if (!allSuperCoinExcluded)
                   Expanded(
                     child: GestureDetector(
@@ -274,42 +289,34 @@ class OrderSummarySection extends ConsumerWidget {
                         await ref.read(supercoinProvider.notifier).refresh();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 8,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           color: checkout.rewardMode == RewardMode.superCoins
-                              ? const Color(0xFFFFF4D6)
+                              ? Colors.white
                               : Colors.transparent,
-                          borderRadius: BorderRadius.circular(999),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow:
+                              checkout.rewardMode == RewardMode.superCoins
+                                  ? [
+                                      BoxShadow(
+                                        color:
+                                            Colors.black.withValues(alpha: 0.06),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ]
+                                  : null,
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/images/SuperCOin-removebg-preview.png',
-                              width: 14,
-                              height: 14,
-                              fit: BoxFit.contain,
-                            ),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                'SuperCoins',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: checkout.rewardMode ==
-                                          RewardMode.superCoins
-                                      ? const Color(0xFF92400E)
-                                      : const Color(0xFF6B7280),
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'SuperCoins',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: checkout.rewardMode == RewardMode.superCoins
+                                ? const Color(0xFF6C5CE7)
+                                : const Color(0xFF6B7280),
+                          ),
                         ),
                       ),
                     ),
@@ -319,58 +326,44 @@ class OrderSummarySection extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          // Cashback & Wallet content
           if (checkout.rewardMode == RewardMode.cashbackWallet) ...[
-            // Earn Cashback card
             Container(
-              padding: const EdgeInsets.all(12),
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF34D399).withValues(alpha: 0.06),
-                border: Border.all(
-                  color: const Color(0xFF34D399).withValues(alpha: 0.25),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFECFDF5), Color(0xFFF5F3FF)],
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFD1FAE5)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Earn Cashback',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF2D2D2D),
-                        ),
-                      ),
-                      if (breakdown.cashbackPercent > 0) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          '(${breakdown.cashbackPercent.toStringAsFixed(0)}%)',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF10B981),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
                   Text(
-                    'Earn ₹${breakdown.cashbackAmount.toStringAsFixed(2)} in cashback after purchase',
+                    'You can earn',
                     style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: const Color(0xFF2D2D2D),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    breakdown.cashbackPercent > 0
+                        ? '₹${breakdown.cashbackAmount.toStringAsFixed(2)} / Cashback (${breakdown.cashbackPercent.toStringAsFixed(0)}%) / or switch to SuperCoins'
+                        : 'Cashback / SuperCoins available at checkout',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF065F46),
+                      height: 1.35,
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
-
-            // Wallet redemption card
             GestureDetector(
               onTap: walletBalance > 0
                   ? () => ref.read(cartCheckoutProvider.notifier).toggleWallet()
@@ -378,89 +371,55 @@ class OrderSummarySection extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: checkout.useWalletBalance
-                      ? const Color(0xFF9747FF).withValues(alpha: 0.08)
-                      : const Color(0xFF9747FF).withValues(alpha: 0.05),
+                  color: const Color(0xFFF8F7FB),
                   border: Border.all(
-                    color: const Color(0xFF9747FF).withValues(alpha: 0.2),
+                    color: checkout.useWalletBalance
+                        ? const Color(0xFF6C5CE7)
+                        : const Color(0xFFE8EAF0),
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    // Radio indicator
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: checkout.useWalletBalance
-                              ? const Color(0xFF9747FF)
-                              : const Color(0xFF9CA3AF).withValues(alpha: 0.4),
-                          width: 2,
-                        ),
-                        color: checkout.useWalletBalance
-                            ? const Color(0xFF9747FF)
-                            : Colors.transparent,
-                      ),
-                      child: checkout.useWalletBalance
-                          ? const Icon(
-                              Icons.check,
-                              size: 12,
-                              color: Colors.white,
-                            )
-                          : null,
+                    Icon(
+                      checkout.useWalletBalance
+                          ? Icons.check_circle_rounded
+                          : Icons.circle_outlined,
+                      size: 20,
+                      color: checkout.useWalletBalance
+                          ? const Color(0xFF6C5CE7)
+                          : const Color(0xFF9CA3AF),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.account_balance_wallet,
-                                size: 16,
-                                color: Color(0xFF9747FF),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Redeem Wallet Points',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF2D2D2D),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
                           Text(
-                            'Available: ₹${walletBalance.toStringAsFixed(2)} • Max: ₹${breakdown.maxWalletUsage.toStringAsFixed(2)} (${cashbackRedeemPercent.round()}% of cart)',
+                            'Redeem Wallet Points',
                             style: GoogleFonts.poppins(
-                              fontSize: 12,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1F1635),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            walletBalance <= 0
+                                ? 'No wallet balance available'
+                                : 'Available ₹${walletBalance.toStringAsFixed(2)} · max ₹${breakdown.maxWalletUsage.toStringAsFixed(2)}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
                               color: const Color(0xFF6B7280),
                             ),
                           ),
-                          if (walletBalance <= 0) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              'No wallet balance available',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[500],
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
                           if (checkout.useWalletBalance &&
                               breakdown.walletDeduction > 0) ...[
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2),
                             Text(
                               '-₹${breakdown.walletDeduction.toStringAsFixed(2)} will be deducted',
                               style: GoogleFonts.poppins(
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w500,
                                 color: const Color(0xFF10B981),
                               ),
@@ -801,7 +760,6 @@ class OrderSummarySection extends ConsumerWidget {
           const Divider(color: Color(0xFFE5E7EB), height: 1),
           const SizedBox(height: 16),
 
-          // Total to Pay
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -809,9 +767,9 @@ class OrderSummarySection extends ConsumerWidget {
               Text(
                 'Total to Pay',
                 style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2D2D2D),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1F1635),
                 ),
               ),
               Column(
@@ -820,34 +778,21 @@ class OrderSummarySection extends ConsumerWidget {
                   Text(
                     '₹${breakdown.finalPayable.toStringAsFixed(2)}',
                     style: GoogleFonts.poppins(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF9747FF),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF6C5CE7),
                     ),
                   ),
-                  // SuperCoin earn preview — right under value
                   if (checkout.rewardMode == RewardMode.superCoins &&
                       estimatedEarn > 0) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Image.asset(
-                          'assets/images/SuperCOin-removebg-preview.png',
-                          width: 12,
-                          height: 12,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Earn ${estimatedEarn.toStringAsFixed(2)}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF10B981),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      'Earn ${estimatedEarn.toStringAsFixed(2)} SC',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF10B981),
+                      ),
                     ),
                   ],
                 ],
@@ -855,23 +800,21 @@ class OrderSummarySection extends ConsumerWidget {
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
 
-          // Pay button: opens the pay-confirm step where the cash payment
-          // method (UPI/DC/CC/NB) is chosen, exactly like React's payOpen
-          // panel with PaymentMethodSelector.
           Container(
             width: double.infinity,
-            height: 48,
+            height: 54,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF9747FF), Color(0xFFB888FF)],
+                colors: [Color(0xFF6C5CE7), Color(0xFF8B5CF6)],
               ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF6C5CE7).withValues(alpha: 0.25),
+                  color: const Color(0xFF6C5CE7).withValues(alpha: 0.35),
                   blurRadius: 16,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
@@ -885,15 +828,15 @@ class OrderSummarySection extends ConsumerWidget {
                 child: Center(
                   child: paymentState.isLoading
                       ? const SizedBox(
-                          width: 24,
-                          height: 24,
+                          width: 22,
+                          height: 22,
                           child: CircularProgressIndicator(
                             color: Colors.white,
                             strokeWidth: 2,
                           ),
                         )
                       : Text(
-                          'Pay \u20b9${breakdown.finalPayable.toStringAsFixed(2)}',
+                          'Pay ₹${breakdown.finalPayable.toStringAsFixed(2)}',
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -921,28 +864,23 @@ class OrderSummarySection extends ConsumerWidget {
 
           const SizedBox(height: 12),
 
-          // Continue Shopping
-          Container(
+          SizedBox(
             width: double.infinity,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD7BDFF),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => context.go('/brands'),
-                child: Center(
-                  child: Text(
-                    'Continue Shopping',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF2D2D2D),
-                    ),
-                  ),
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () => context.go('/brands'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF6C5CE7),
+                side: const BorderSide(color: Color(0xFFD7BDFF), width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                'Continue Shopping',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

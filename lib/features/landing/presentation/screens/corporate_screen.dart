@@ -130,13 +130,27 @@ class _CorporateScreenState extends State<CorporateScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => context.pop(),
+            onTap: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/');
+              }
+            },
             child: const Icon(Icons.arrow_back, color: Color(0xFF374151)),
           ),
           const Spacer(),
           GestureDetector(
             onTap: () => setState(() => _showMenu = !_showMenu),
-            child: Text('⋮', style: GoogleFonts.poppins(fontSize: 18, color: const Color(0xFF374151))),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(
+                Icons.more_horiz_rounded,
+                size: 30,
+                color: Color(0xFF374151),
+              ),
+            ),
           ),
         ],
       ),

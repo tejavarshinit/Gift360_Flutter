@@ -1,6 +1,8 @@
 // Mirrors the voucher/order helper logic in the React reference app's
 // `src/pages/Orders.tsx` (extractVouchers, getImageUrl, mapOrder helpers)
 // and `src/types/order.ts` (VoucherState, DeliveryChannel).
+import 'dart:convert';
+
 import 'package:gift360/core/utils/image_url_helper.dart';
 import 'package:gift360/features/orders/data/voucher_state_store.dart';
 
@@ -250,7 +252,15 @@ double orderTotalAmount(Map<String, dynamic> order) {
 Map<String, dynamic> firstItemMeta(Map<String, dynamic> order) {
   final items = _asList(order['items']);
   if (items.isEmpty) return {};
-  return _asMap(_asMap(items.first)['meta']);
+  final meta = _asMap(items.first)['meta'];
+  if (meta is Map) return _asMap(meta);
+  if (meta is String && meta.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(meta);
+      if (decoded is Map) return _asMap(decoded);
+    } catch (_) {}
+  }
+  return {};
 }
 
 String orderBrandName(Map<String, dynamic> order) {

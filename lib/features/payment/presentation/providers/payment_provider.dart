@@ -2,6 +2,9 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
+import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/checkout_gate/presentation/checkout_gate.dart';
+import 'package:gift360/features/checkout_gate/presentation/providers/checkout_gate_provider.dart';
 import 'package:gift360/features/coupon/data/repositories/coupon_api.dart';
 import 'package:gift360/features/order/data/repositories/order_api.dart';
 import 'package:gift360/features/order/data/repositories/validate_order_api.dart';
@@ -98,12 +101,17 @@ class PaymentState {
 }
 
 class PaymentNotifier extends StateNotifier<PaymentState> {
+  final Ref _ref;
   final OrderApi _orderApi;
   final ValidateOrderApi _validateOrderApi;
   final CouponApi _couponApi;
 
-  PaymentNotifier(this._orderApi, this._validateOrderApi, this._couponApi)
-    : super(PaymentState());
+  PaymentNotifier(
+    this._ref,
+    this._orderApi,
+    this._validateOrderApi,
+    this._couponApi,
+  ) : super(PaymentState());
 
   Future<String?> createOrder({
     required String clientId,
@@ -380,10 +388,23 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     if (state.orderNumber == null) return null;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
+      final gate = await runCheckoutGate(
+        api: _ref.read(checkoutApiProvider),
+        user: _ref.read(authProvider),
+        orderNumber: state.orderNumber!,
+        paymentMethod: (paymentMethod != null && paymentMethod.isNotEmpty)
+            ? paymentMethod
+            : 'CARD',
+      );
+      if (gate.isCancelled) {
+        state = state.copyWith(isLoading: false);
+        return null;
+      }
       final response = await _orderApi.initiateBackendPayment(
         state.orderNumber!,
         paymentMethod: paymentMethod,
         paymentModes: paymentModes,
+        location: gate.location,
       );
       state = state.copyWith(isLoading: false, paymentInitiated: true);
       return response;
@@ -400,5 +421,5 @@ final paymentProvider = StateNotifierProvider<PaymentNotifier, PaymentState>((
   final orderApi = ref.watch(orderApiProvider);
   final validateOrderApi = ref.watch(validateOrderApiProvider);
   final couponApi = ref.watch(couponApiProvider);
-  return PaymentNotifier(orderApi, validateOrderApi, couponApi);
+  return PaymentNotifier(ref, orderApi, validateOrderApi, couponApi);
 });

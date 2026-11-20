@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:gift360/features/checkout_gate/data/device_id.dart';
+import 'package:gift360/features/checkout_gate/data/models/checkout_models.dart';
 
 class PaymentApi {
   final Dio _dio;
@@ -14,17 +16,20 @@ class PaymentApi {
     String orderNumber, {
     String? paymentMethod,
     List<String>? paymentModes,
+    CheckoutLocation? location,
   }) async {
     final hasList = paymentModes != null && paymentModes.isNotEmpty;
-    final payload = (paymentMethod != null && paymentMethod.isNotEmpty) || hasList
-        ? <String, dynamic>{
-            if (paymentMethod != null && paymentMethod.isNotEmpty) 'paymentMethod': paymentMethod,
-            if (hasList) 'paymentModes': paymentModes,
-          }
-        : null;
+    final payload = <String, dynamic>{
+      if (paymentMethod != null && paymentMethod.isNotEmpty)
+        'paymentMethod': paymentMethod,
+      if (hasList) 'paymentModes': paymentModes,
+      if (location != null) 'location': location.toJson(),
+    };
+    final deviceId = await getOrCreateDeviceId();
     final response = await _dio.post(
       '/orders/$orderNumber/initiate-payment',
-      data: payload,
+      data: payload.isEmpty ? null : payload,
+      options: Options(headers: {'X-Device-Id': deviceId}),
     );
     return response.data as Map<String, dynamic>;
   }

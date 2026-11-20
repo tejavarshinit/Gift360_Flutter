@@ -9,19 +9,11 @@ import 'package:gift360/config/app_config.dart';
 import 'package:gift360/config/app_flavor.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
-import 'package:gift360/features/auth/data/models/biometric_models.dart';
 import 'package:gift360/features/auth/presentation/providers/app_lock_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
 import 'package:gift360/features/auth/presentation/widgets/app_lock_gate.dart';
 import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
 import 'package:gift360/features/profile/data/profile_details_store.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-enum LoginMethod {
-  otp,
-  biometric,
-  mpin,
-}
 
 class LoginScreen extends ConsumerStatefulWidget {
   final bool isSessionExpired;
@@ -39,7 +31,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   );
   final List<FocusNode> _otpFocusNodes = List.generate(4, (_) => FocusNode());
 
-  LoginMethod _selectedMethod = LoginMethod.otp;
+  /// After OTP login, optionally enable app-lock (reopen unlock) — not login.
   bool _enableBiometricOnOtp = true;
   bool _otpSent = false;
   bool _isLoading = false;
@@ -48,122 +40,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _error = '';
   String _mobileError = '';
   String _termsError = '';
-  bool _biometricEnrolled = false;
-  bool _biometricFingerprintAvailable = true;
-  bool _biometricCredentialAvailable = true;
-  String? _biometricIssue;
-  bool _autoAuthTriggered = false;
-
-  bool _isOtpConfigured = true;
-  bool _isBiometricConfigured = true;
-  bool _isMpinConfigured = true;
-
-  bool get _showOtpMethod => _isOtpConfigured;
-  bool get _showBiometricMethod =>
-      AppConfig.biometricLoginEnabled && _isBiometricConfigured;
-  bool get _showMpinMethod =>
-      AppConfig.biometricLoginEnabled && _isMpinConfigured;
 
   @override
   void initState() {
     super.initState();
-    if (AppConfig.biometricLoginEnabled) _loadBiometricState();
     if (widget.isSessionExpired) {
       _error = 'Your session has expired. Please login again.';
-    }
-  }
-
-  Future<void> _loadBiometricState() async {
-    try {
-      final service = ref.read(biometricServiceProvider);
-      final state = await service.enrollmentState();
-      final availability = await service.availability();
-      final prefs = await SharedPreferences.getInstance();
-
-      final otpConfigured = prefs.getBool('login_method_otp_enabled') ?? true;
-      final biometricConfigured =
-          prefs.getBool('login_method_biometric_enabled') ?? true;
-      final mpinConfigured =
-          prefs.getBool('login_method_mpin_enabled') ?? true;
-
-      var effectiveOtp = otpConfigured;
-      var effectiveBiometric = biometricConfigured;
-      var effectiveMpin = mpinConfigured;
-      if (!effectiveOtp && !effectiveBiometric && !effectiveMpin) {
-        effectiveOtp = true;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _biometricEnrolled = state.isEnabled;
-        _biometricIssue = state.issue;
-        _biometricFingerprintAvailable = availability.biometricAvailable;
-        _biometricCredentialAvailable = availability.credentialAvailable;
-        _isOtpConfigured = effectiveOtp;
-        _isBiometricConfigured = effectiveBiometric;
-        _isMpinConfigured = effectiveMpin;
-        // Keep setup-on-login checked by default for new users.
-        _enableBiometricOnOtp = true;
-
-        // Automatically select the best enabled method based on profile preferences
-        if (_biometricEnrolled &&
-            _isBiometricConfigured &&
-            _biometricFingerprintAvailable) {
-          _selectedMethod = LoginMethod.biometric;
-        } else if (_biometricEnrolled &&
-            _isMpinConfigured &&
-            _biometricCredentialAvailable) {
-          _selectedMethod = LoginMethod.mpin;
-        } else if (_isOtpConfigured) {
-          _selectedMethod = LoginMethod.otp;
-        } else if (_isBiometricConfigured) {
-          _selectedMethod = LoginMethod.biometric;
-        } else {
-          _selectedMethod = LoginMethod.mpin;
-        }
-      });
-      // Ask biometric / device MPIN immediately — no button tap needed.
-      _scheduleAutoAuth();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _biometricIssue = error.toString());
-    }
-  }
-
-  void _scheduleAutoAuth() {
-    if (_autoAuthTriggered || _isLoading || !_biometricEnrolled) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _autoAuthTriggered || _isLoading) return;
-      if (_selectedMethod == LoginMethod.biometric &&
-          _biometricFingerprintAvailable) {
-        _autoAuthTriggered = true;
-        _handleBiometricLogin(DeviceAuthMethod.biometric);
-      } else if (_selectedMethod == LoginMethod.mpin &&
-          _biometricCredentialAvailable) {
-        _autoAuthTriggered = true;
-        _handleBiometricLogin(DeviceAuthMethod.deviceCredential);
-      }
-    });
-  }
-
-  Future<void> _handleBiometricLogin(DeviceAuthMethod method) async {
-    setState(() {
-      _isLoading = true;
-      _error = '';
-    });
-    try {
-      final result = await ref.read(biometricServiceProvider).login(
-        method: method,
-      );
-      await ref.read(authProvider.notifier).loginWithBiometrics(result);
-      if (mounted) await _goAfterLogin();
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _error = _friendlyError(error);
-          _isLoading = false;
-        });
-      }
     }
   }
 
@@ -271,33 +153,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  void _onSelectMethod(LoginMethod method) {
-    if (_isLoading) return;
-    setState(() {
-      _selectedMethod = method;
-      _error = '';
-      _mobileError = '';
-      _otpSent = false;
-      _otpMessage = '';
-      for (final c in _otpControllers) {
-        c.clear();
-      }
-    });
-    // Switching to Biometric / MPIN should prompt immediately.
-    if (_biometricEnrolled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _isLoading) return;
-        if (method == LoginMethod.biometric &&
-            _biometricFingerprintAvailable) {
-          _handleBiometricLogin(DeviceAuthMethod.biometric);
-        } else if (method == LoginMethod.mpin &&
-            _biometricCredentialAvailable) {
-          _handleBiometricLogin(DeviceAuthMethod.deviceCredential);
-        }
-      });
-    }
-  }
-
   Future<void> _handleSendOtp() async {
     final mobile = _mobileController.text.trim();
     _clearErrors();
@@ -382,20 +237,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (response.success && response.token != null) {
         if (needsUnlockSetup) {
           await _setupUnlockAfterOtpLogin();
-        } else if (!AppFlavorConfig.isDev &&
-            AppConfig.biometricLoginEnabled &&
-            _biometricEnrolled) {
-          final currentUser = ref.read(authProvider);
-          if (currentUser != null) {
-            try {
-              await ref.read(biometricServiceProvider).disable(
-                    clientId: currentUser.clientId,
-                    token: currentUser.token,
-                  );
-            } catch (bioError) {
-              debugPrint('Biometric disable error: $bioError');
-            }
-          }
         }
         if (mounted) {
           await Future.delayed(const Duration(milliseconds: 300));
@@ -420,75 +261,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (needsUnlockSetup) {
         ref.read(postLoginSetupHoldingProvider.notifier).state = false;
       }
-    }
-  }
-
-  /// Registers Biometric or MPIN directly on this tab without requiring a separate sign-in.
-  Future<void> _handleRegisterDeviceAuth(DeviceAuthMethod method) async {
-    final mobile = _mobileController.text.trim();
-    final otp = _otpString;
-    _clearErrors();
-
-    if (!_validateMobile(mobile)) {
-      setState(() => _error = 'Please enter a valid mobile number');
-      return;
-    }
-    if (!_validateOtp()) {
-      setState(() => _error = 'Please enter the 4-digit verification code');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      // 1. Authenticate mobile number to obtain authorization token
-      final response = await ref
-          .read(authProvider.notifier)
-          .loginWithOtp(LoginWithOtpRequest(mobileNumber: mobile, otp: otp));
-
-      if (!response.success || response.token == null) {
-        setState(() {
-          _error = response.message.isNotEmpty
-              ? response.message
-              : 'Verification failed. Please try again.';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // 2. Register device key in secure hardware and link to account.
-      // Dev has no auth gateway, so the local OTP session stands on its own.
-      final currentUser = ref.read(authProvider);
-      if (!AppFlavorConfig.isDev &&
-          currentUser != null &&
-          AppConfig.biometricLoginEnabled) {
-        await ref.read(biometricServiceProvider).resetAndEnable(
-              clientId: currentUser.clientId,
-              token: currentUser.token,
-            );
-        setState(() {
-          _biometricEnrolled = true;
-        });
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              method == DeviceAuthMethod.biometric
-                  ? 'Biometric login registered successfully!'
-                  : 'Device MPIN login registered successfully!',
-            ),
-            backgroundColor: const Color(0xFF16A34A),
-          ),
-        );
-        await Future.delayed(const Duration(milliseconds: 400));
-        if (mounted) await _goAfterLogin();
-      }
-    } catch (e) {
-      setState(() {
-        _error = _friendlyError(e);
-        _isLoading = false;
-      });
     }
   }
 
@@ -546,162 +318,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_error.isNotEmpty) _buildAlert(_error),
-          if (AppConfig.biometricLoginEnabled &&
-              _biometricIssue != null &&
-              _selectedMethod != LoginMethod.otp)
-            _buildAlert('$_biometricIssue You can register again or use OTP.'),
-          _buildMethodSelector(),
-          _buildSelectedMethodView(),
+          _buildOtpView(),
         ],
       ),
     );
   }
 
-  // ── Method Selector Tabs ──
-  Widget _buildMethodSelector() {
-    final tabs = <Widget>[];
-    if (_showOtpMethod) {
-      tabs.add(
-        Expanded(
-          child: _buildTabButton(
-            method: LoginMethod.otp,
-            label: 'OTP',
-            icon: Icons.sms_outlined,
-          ),
-        ),
-      );
-    }
-    if (_showBiometricMethod) {
-      tabs.add(
-        Expanded(
-          child: _buildTabButton(
-            method: LoginMethod.biometric,
-            label: 'Biometric',
-            icon: Icons.fingerprint_rounded,
-            showBadge: _biometricEnrolled && _biometricFingerprintAvailable,
-          ),
-        ),
-      );
-    }
-    if (_showMpinMethod) {
-      tabs.add(
-        Expanded(
-          child: _buildTabButton(
-            method: LoginMethod.mpin,
-            label: 'MPIN',
-            icon: Icons.dialpad_rounded,
-            showBadge: _biometricEnrolled && _biometricCredentialAvailable,
-          ),
-        ),
-      );
-    }
-    if (tabs.length < 2) return const SizedBox.shrink();
-
-    final children = <Widget>[];
-    for (var i = 0; i < tabs.length; i++) {
-      if (i > 0) children.add(const SizedBox(width: 4));
-      children.add(tabs[i]);
-    }
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3EEF8),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5DCF0)),
-      ),
-      child: Row(children: children),
-    );
-  }
-
-  Widget _buildTabButton({
-    required LoginMethod method,
-    required String label,
-    required IconData icon,
-    bool showBadge = false,
-  }) {
-    final isSelected = _selectedMethod == method;
-    return GestureDetector(
-      onTap: () => _onSelectMethod(method),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        height: 46,
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF7B3DC3), Color(0xFF5537BE)],
-                )
-              : null,
-          color: isSelected ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
-          boxShadow: isSelected
-              ? const [
-                  BoxShadow(
-                    color: Color(0x337B3DC3),
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: isSelected ? Colors.white : const Color(0xFF4A4458),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? Colors.white : const Color(0xFF4A4458),
-                  ),
-                ),
-              ],
-            ),
-            if (showBadge)
-              Positioned(
-                top: 5,
-                right: 6,
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF4ADE80)
-                        : const Color(0xFF22C55E),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Selected Method Content ──
-  Widget _buildSelectedMethodView() {
-    switch (_selectedMethod) {
-      case LoginMethod.biometric:
-        return _buildBiometricView();
-      case LoginMethod.mpin:
-        return _buildMpinView();
-      case LoginMethod.otp:
-        return _buildOtpView();
-    }
-  }
-
-  // ── OTP View ──
+  // ── OTP-only login (biometric / MPIN are app-lock on reopen only) ──
   Widget _buildOtpView() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -709,8 +332,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _buildMobileInput(),
         if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
         _buildTermsCheckbox(),
-        if ((_showBiometricMethod || _showMpinMethod) && !_otpSent)
-          _buildBiometricEnableToggle(),
+        if (AppConfig.biometricLoginEnabled && !_otpSent)
+          _buildUnlockEnableToggle(),
         const SizedBox(height: 8),
         if (!_otpSent)
           _buildActionButton(
@@ -726,10 +349,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _buildOtpInputSection(
             verifyButtonLabel: 'Verify & Login',
             onVerify: _handleOtpLogin,
-            extraNotice:
-                _enableBiometricOnOtp &&
-                    (_showBiometricMethod || _showMpinMethod)
-                ? 'Biometric & MPIN will be enabled upon sign in'
+            extraNotice: _enableBiometricOnOtp &&
+                    AppConfig.biometricLoginEnabled
+                ? 'App unlock (biometric / MPIN) will be set up after sign in'
                 : null,
           ),
         if (_otpMessage.isNotEmpty && _otpSent)
@@ -738,7 +360,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildBiometricEnableToggle() {
+  Widget _buildUnlockEnableToggle() {
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 2),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -773,7 +395,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Enable Biometric & MPIN login',
+                    'Enable app unlock',
                     style: GoogleFonts.poppins(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w600,
@@ -781,7 +403,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   Text(
-                    'Fast 1-tap fingerprint or MPIN for next time',
+                    'Fingerprint or MPIN when you reopen the app',
                     style: GoogleFonts.poppins(
                       fontSize: 8.5,
                       color: const Color(0xFF71717A),
@@ -793,282 +415,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  // ── Biometric View ──
-  Widget _buildBiometricView() {
-    if (_biometricEnrolled) {
-      if (!_biometricFingerprintAvailable) {
-        return _buildUnavailableState(
-          title: 'Biometric Not Available',
-          description:
-              'Fingerprint / face sensor is not available on this device.',
-          buttonText: 'Login with MPIN Instead',
-          onTapButton: () => _onSelectMethod(LoginMethod.mpin),
-          secondaryText: 'Or login with OTP',
-          onTapSecondary: () => _onSelectMethod(LoginMethod.otp),
-        );
-      }
-      return Column(
-        children: [
-          const SizedBox(height: 4),
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3E8FF),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFD8B4FE)),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.fingerprint_rounded,
-                size: 32,
-                color: Color(0xFF7B3DC3),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Biometric Login',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF3F1A55),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Touch sensor or glance at camera to sign in',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 10,
-              color: const Color(0xFF6B7280),
-            ),
-          ),
-          const SizedBox(height: 14),
-          _buildActionButton(
-            label: _isLoading
-                ? 'Authenticating...'
-                : 'Authenticate with Biometrics',
-            icon: Icons.fingerprint_rounded,
-            onTap: _isLoading
-                ? null
-                : () => _handleBiometricLogin(DeviceAuthMethod.biometric),
-          ),
-          const SizedBox(height: 8),
-          _buildOtherMethodLinks(LoginMethod.biometric),
-        ],
-      );
-    }
-
-    // ── First-time Registration Directly on this Tab ──
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3E8FF),
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFD8B4FE)),
-              ),
-              child: const Icon(
-                Icons.fingerprint_rounded,
-                size: 18,
-                color: Color(0xFF7B3DC3),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Register Biometric Login',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF3F1A55),
-                    ),
-                  ),
-                  Text(
-                    'Set up 1-tap fingerprint or face sign-in',
-                    style: GoogleFonts.poppins(
-                      fontSize: 8.5,
-                      color: const Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _buildMobileInput(),
-        if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
-        _buildTermsCheckbox(),
-        const SizedBox(height: 8),
-        if (!_otpSent)
-          _buildActionButton(
-            label: _isLoading ? 'Sending Code...' : 'Register Biometric',
-            icon: Icons.fingerprint_rounded,
-            onTap: (_isLoading ||
-                    !_acceptedTerms ||
-                    !_validateMobile(_mobileController.text))
-                ? null
-                : _handleSendOtp,
-          )
-        else
-          _buildOtpInputSection(
-            verifyButtonLabel: 'Verify & Activate Biometric',
-            onVerify: () =>
-                _handleRegisterDeviceAuth(DeviceAuthMethod.biometric),
-            extraNotice: 'Enter verification code to activate biometric login',
-          ),
-        if (_otpMessage.isNotEmpty && _otpSent)
-          _buildSuccessText(_otpMessage),
-      ],
-    );
-  }
-
-  // ── MPIN View ──
-  Widget _buildMpinView() {
-    if (_biometricEnrolled) {
-      if (!_biometricCredentialAvailable) {
-        return _buildUnavailableState(
-          title: 'Screen Lock Not Configured',
-          description:
-              'No screen lock PIN or pattern is set on this device. Please set up a screen lock in settings.',
-          buttonText: 'Login with OTP Instead',
-          onTapButton: () => _onSelectMethod(LoginMethod.otp),
-        );
-      }
-      return Column(
-        children: [
-          const SizedBox(height: 4),
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEDE9FE),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFDDD6FE)),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.dialpad_rounded,
-                size: 28,
-                color: Color(0xFF7B3DC3),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Device MPIN Login',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF3F1A55),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Enter your device PIN or pattern to sign in securely',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 10,
-              color: const Color(0xFF6B7280),
-            ),
-          ),
-          const SizedBox(height: 14),
-          _buildActionButton(
-            label: _isLoading ? 'Authenticating...' : 'Enter Device MPIN',
-            icon: Icons.dialpad_rounded,
-            onTap: _isLoading
-                ? null
-                : () => _handleBiometricLogin(DeviceAuthMethod.deviceCredential),
-          ),
-          const SizedBox(height: 8),
-          _buildOtherMethodLinks(LoginMethod.mpin),
-        ],
-      );
-    }
-
-    // ── First-time Registration Directly on this Tab ──
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEDE9FE),
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFDDD6FE)),
-              ),
-              child: const Icon(
-                Icons.dialpad_rounded,
-                size: 18,
-                color: Color(0xFF7B3DC3),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Register Device MPIN Login',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF3F1A55),
-                    ),
-                  ),
-                  Text(
-                    'Set up device PIN or pattern sign-in',
-                    style: GoogleFonts.poppins(
-                      fontSize: 8.5,
-                      color: const Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _buildMobileInput(),
-        if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
-        _buildTermsCheckbox(),
-        const SizedBox(height: 8),
-        if (!_otpSent)
-          _buildActionButton(
-            label: _isLoading ? 'Sending Code...' : 'Register MPIN',
-            icon: Icons.dialpad_rounded,
-            onTap: (_isLoading ||
-                    !_acceptedTerms ||
-                    !_validateMobile(_mobileController.text))
-                ? null
-                : _handleSendOtp,
-          )
-        else
-          _buildOtpInputSection(
-            verifyButtonLabel: 'Verify & Activate MPIN',
-            onVerify: () =>
-                _handleRegisterDeviceAuth(DeviceAuthMethod.deviceCredential),
-            extraNotice: 'Enter verification code to activate MPIN login',
-          ),
-        if (_otpMessage.isNotEmpty && _otpSent)
-          _buildSuccessText(_otpMessage),
-      ],
     );
   }
 
@@ -1119,120 +465,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  // ── Alternative Links ──
-  Widget _buildOtherMethodLinks(LoginMethod current) {
-    final entries = <MapEntry<String, VoidCallback>>[];
-    if (current != LoginMethod.otp && _showOtpMethod) {
-      entries.add(
-        MapEntry('Login with OTP', () => _onSelectMethod(LoginMethod.otp)),
-      );
-    }
-    if (current != LoginMethod.biometric && _showBiometricMethod) {
-      entries.add(
-        MapEntry(
-          'Login with Biometrics',
-          () => _onSelectMethod(LoginMethod.biometric),
-        ),
-      );
-    }
-    if (current != LoginMethod.mpin && _showMpinMethod) {
-      entries.add(
-        MapEntry('Login with MPIN', () => _onSelectMethod(LoginMethod.mpin)),
-      );
-    }
-    if (entries.isEmpty) return const SizedBox.shrink();
-
-    final children = <Widget>[];
-    for (var i = 0; i < entries.length; i++) {
-      if (i > 0) {
-        children.add(
-          Text(
-            '  •  ',
-            style: GoogleFonts.poppins(
-              fontSize: 10,
-              color: const Color(0xFFA1A1A1),
-            ),
-          ),
-        );
-      }
-      children.add(
-        GestureDetector(
-          onTap: entries[i].value,
-          child: Text(
-            entries[i].key,
-            style: GoogleFonts.poppins(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF7C3AED),
-              decoration: TextDecoration.underline,
-            ),
-          ),
-        ),
-      );
-    }
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: children);
-  }
-
-  // ── Unavailable State ──
-  Widget _buildUnavailableState({
-    required String title,
-    required String description,
-    required String buttonText,
-    required VoidCallback onTapButton,
-    String? secondaryText,
-    VoidCallback? onTapSecondary,
-  }) {
-    return Column(
-      children: [
-        const SizedBox(height: 6),
-        const Icon(
-          Icons.info_outline_rounded,
-          size: 36,
-          color: Color(0xFFD4650F),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF3F1A55),
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          description,
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
-            fontSize: 9.5,
-            color: const Color(0xFF6B7280),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildActionButton(
-          label: buttonText,
-          icon: Icons.arrow_forward_rounded,
-          onTap: onTapButton,
-        ),
-        if (secondaryText != null && onTapSecondary != null) ...[
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: onTapSecondary,
-            child: Text(
-              secondaryText,
-              style: GoogleFonts.poppins(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF7C3AED),
-                decoration: TextDecoration.underline,
-              ),
-            ),
-          ),
-        ],
-      ],
     );
   }
 

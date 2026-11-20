@@ -120,13 +120,15 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
 
   Widget _buildFab() {
     final isPill = !_open && _askLabelVisible;
+    // Sized for icon + "Ask Us" only (no trailing empty space).
+    const pillWidth = 98.0;
     return GestureDetector(
       onTap: () => setState(() => _open = !_open),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
         height: 44,
-        width: isPill ? 124 : 44,
+        width: isPill ? pillWidth : 44,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -143,16 +145,17 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
             ),
           ],
         ),
-        // The width animates between the circle and the pill. The label must
-        // not be forced into that shrinking box, or the row overflows.
+        // OverflowBox keeps the label from overflowing while width animates
+        // between circle (44) and pill.
         child: OverflowBox(
-          alignment: Alignment.centerLeft,
+          alignment: Alignment.center,
           minWidth: 0,
-          maxWidth: 124,
+          maxWidth: pillWidth,
           child: Padding(
-            padding: const EdgeInsets.only(left: 13, right: 14),
+            padding: EdgeInsets.symmetric(horizontal: isPill ? 12 : 0),
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _open
                     ? const Icon(Icons.close, color: Colors.white, size: 18)
@@ -162,7 +165,7 @@ class _SupportChatWidgetState extends ConsumerState<SupportChatWidget> {
                         size: 18,
                       ),
                 if (isPill) ...[
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text(
                     'Ask Us',
                     maxLines: 1,

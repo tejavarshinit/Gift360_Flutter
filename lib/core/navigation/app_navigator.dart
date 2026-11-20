@@ -36,5 +36,39 @@ void showGlobalSupportChat() {
   });
 }
 
+/// Reference-counted hide for GiftHeader + bottom nav while payment details
+/// (or similar full-bleed overlays) are open inside a tab stack.
+final ValueNotifier<int> shellChromeHideCount = ValueNotifier<int>(0);
+
+void _scheduleShellChromeCount(void Function() update) {
+  final phase = SchedulerBinding.instance.schedulerPhase;
+  if (phase == SchedulerPhase.idle ||
+      phase == SchedulerPhase.postFrameCallbacks) {
+    update();
+  } else {
+    WidgetsBinding.instance.addPostFrameCallback((_) => update());
+  }
+}
+
+void hideShellChrome() {
+  _scheduleShellChromeCount(() {
+    shellChromeHideCount.value++;
+  });
+}
+
+void showShellChrome() {
+  _scheduleShellChromeCount(() {
+    if (shellChromeHideCount.value > 0) {
+      shellChromeHideCount.value--;
+    }
+  });
+}
+
+void resetShellChrome() {
+  _scheduleShellChromeCount(() {
+    shellChromeHideCount.value = 0;
+  });
+}
+
 /// Context under the root Navigator (null until the first frame).
 BuildContext? get appRootContext => navigatorKey.currentContext;

@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/config/app_flavor.dart';
 import 'package:gift360/core/navigation/app_navigator.dart';
 import 'package:gift360/features/feedback/presentation/widgets/feedback_form.dart';
+import 'package:gift360/features/festival/presentation/providers/festival_provider.dart';
+import 'package:gift360/features/festival/presentation/widgets/festival_image.dart';
 
 const _coachmarkKey = 'sc_header_coachmark_seen';
 
@@ -43,13 +45,15 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(72);
 
   @override
-  Widget build(BuildContext context, WidgetRef _) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final width = MediaQuery.sizeOf(context).width;
     final phone = width < 600;
     final compact = width < 400;
     final horizontal = width >= 1024 ? 28.0 : phone ? (compact ? 8.0 : 12.0) : 20.0;
     final logoHeight = compact ? 52.0 : phone ? 62.0 : 72.0;
     final showOnline = width >= 390;
+    final festival = festivalConfigOf(ref);
+    final logoMaxWidth = showOnline ? (phone ? 270.0 : 320.0) : width * 0.78;
 
     return Container(
       decoration: const BoxDecoration(
@@ -65,17 +69,11 @@ class GiftHeader extends ConsumerWidget implements PreferredSizeWidget {
             Flexible(
               child: GestureDetector(
                 onTap: () => context.go('/'),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: showOnline ? (phone ? 270 : 320) : width * 0.78,
-                    maxHeight: logoHeight,
-                  ),
-                  child: Image.asset(
-                    'assets/images/gift360full.png',
-                    height: logoHeight,
-                    fit: BoxFit.contain,
-                    alignment: Alignment.centerLeft,
-                  ),
+                child: FestivalLogo(
+                  source: festival.logoUrl,
+                  maxHeight: logoHeight,
+                  maxWidth: logoMaxWidth,
+                  alignment: Alignment.centerLeft,
                 ),
               ),
             ),

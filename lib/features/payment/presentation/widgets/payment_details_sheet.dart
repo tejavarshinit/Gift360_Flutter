@@ -106,14 +106,15 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
   void initState() {
     super.initState();
     hideGlobalSupportChat();
+    hideShellChrome();
     _slideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 260),
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 1),
+      begin: const Offset(0, 0.04),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
     _slideController.forward();
     _ensureDefaultAmount(widget.brand);
     _loadDetailedBrand(widget.brand);
@@ -204,6 +205,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
   void dispose() {
     _backNavigationController?.unregister(_backHandlerKey);
     showGlobalSupportChat();
+    showShellChrome();
     _scCountdownTimer?.cancel();
     _amountController.dispose();
     _slideController.dispose();
@@ -214,7 +216,9 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     if (_isClosing) return;
     _isClosing = true;
     _unholdSuperCoinIfNeeded();
-    _slideController.reverse().then((_) => widget.onClose());
+    _slideController.reverse().then((_) {
+      if (mounted) widget.onClose();
+    });
   }
 
   SuperCoinIdentity? get _superCoinIdentity {
@@ -747,78 +751,67 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     final brand = widget.brand;
 
     if (widget.loading || brand == null) {
-      final topPadding = MediaQuery.of(context).padding.top;
-      final navBarHeight = topPadding + 56;
-      return GestureDetector(
-        onTap: _close,
-        child: Container(
-          color: Colors.black54,
-          child: GestureDetector(
-            onTap: () {},
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                height: MediaQuery.of(context).size.height - navBarHeight,
-                margin: EdgeInsets.only(top: navBarHeight),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF3F5F9),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(50)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x33000000),
-                      blurRadius: 20,
-                      offset: Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: widget.error != null
-                      ? Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.error_outline,
-                                size: 34,
-                                color: Color(0xFFEF4444),
+      return _wrapBackInterceptor(
+        SizedBox.expand(
+          child: Material(
+            color: const Color(0xFFF3F5F9),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  _buildPageHeader(context),
+                  Expanded(
+                    child: Center(
+                      child: widget.error != null
+                          ? Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    size: 34,
+                                    color: Color(0xFFEF4444),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    widget.error!,
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      color: const Color(0xFF475467),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: _close,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF6C5CE7),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('Close'),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                widget.error!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF475467),
+                            )
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CircularProgressIndicator(
+                                  color: Color(0xFF6C5CE7),
                                 ),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _close,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6C5CE7),
-                                  foregroundColor: Colors.white,
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Loading payment details...',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: const Color(0xFF667085),
+                                  ),
                                 ),
-                                child: const Text('Close'),
-                              ),
-                            ],
-                          ),
-                        )
-                      : const Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(color: Color(0xFF6C5CE7)),
-                            SizedBox(height: 12),
-                            Text(
-                              'Loading payment details...',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF667085),
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -838,309 +831,257 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     final discount = double.tryParse(brand.discount ?? '0') ?? 0;
     final cashback = total > 0 ? (total * discount / 100).toInt() : 0;
 
-    return Stack(
-      children: [
-        GestureDetector(
-          onTap: _close,
-          child: Container(
-            color: Colors.black54,
-            child: GestureDetector(
-              onTap: () {},
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final media = MediaQuery.of(context);
-                    final keyboard = media.viewInsets.bottom;
-                    final screen = media.size.height;
-                    final incoming = constraints.maxHeight.isFinite
-                        ? constraints.maxHeight
-                        : screen;
-                    // Home has no bar above this sheet, so the body runs
-                    // under the status bar. Keep the rounded top on screen.
-                    final topInset = media.padding.top;
-                    // Sit above the keyboard without subtracting it twice.
-                    // The page body is often already shorter than the screen.
-                    final aboveKeyboard = (screen - keyboard).clamp(0.0, screen);
-                    final bottomPad = incoming > aboveKeyboard
-                        ? incoming - aboveKeyboard
-                        : 0.0;
-                    // Cap height so short content doesn't leave a huge empty
-                    // gap above Add to Cart / Buy Now.
-                    final maxHeight = ((incoming - bottomPad - topInset) * 0.88)
-                        .clamp(0.0, incoming);
-                    return Padding(
-                      padding: EdgeInsets.only(top: topInset, bottom: bottomPad),
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxHeight: maxHeight),
-                          child: Material(
-                            color: const Color(0xFFF3F5F9),
-                            elevation: 12,
-                            shadowColor: const Color(0x33000000),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(28),
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+
+    return _wrapBackInterceptor(
+      SizedBox.expand(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Material(
+                color: const Color(0xFFF3F5F9),
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Column(
+                    children: [
+                      SafeArea(
+                        bottom: false,
+                        child: _buildPageHeader(context),
+                      ),
+                      Expanded(
+                        child: Transform.translate(
+                          offset: const Offset(0, -12),
+                          child: Container(
+                            width: double.infinity,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF3F5F9),
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(24),
+                              ),
                             ),
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Drag handle + header: swipe down to close.
-                                GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onVerticalDragUpdate: (details) {
-                                    final delta = details.primaryDelta ?? 0;
-                                    if (delta <= 0) return;
-                                    final h = media.size.height;
-                                    _slideController.value =
-                                        (_slideController.value - delta / h)
-                                            .clamp(0.0, 1.0);
-                                  },
-                                  onVerticalDragEnd: (details) {
-                                    final velocity =
-                                        details.primaryVelocity ?? 0;
-                                    if (_slideController.value < 0.75 ||
-                                        velocity > 700) {
-                                      _close();
-                                    } else {
-                                      _slideController.forward();
-                                    }
-                                  },
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 10),
-                                        width: 48,
-                                        height: 5,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFD9D9D9),
-                                          borderRadius:
-                                              BorderRadius.circular(3),
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          16,
-                                          8,
-                                          16,
-                                          0,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            GestureDetector(
-                                              onTap: _close,
-                                              child: const Icon(
-                                                Icons.chevron_left,
-                                                size: 24,
-                                                color: Color(0xFF111827),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            const Text(
-                                              'Payment Details',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                            child: SingleChildScrollView(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                              child: Column(
+                                children: [
+                                  _buildBrandCard(brand),
+                                  const SizedBox(height: 14),
+                                  _buildAmountSelection(
+                                    brand,
+                                    isFixed,
+                                    denominations,
+                                    minPrice,
+                                    maxPrice,
                                   ),
-                                ),
-                                Flexible(
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      16,
-                                      12,
-                                      16,
-                                      8,
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        _buildBrandCard(brand),
-                                        const SizedBox(height: 16),
-                                        _buildAmountSelection(
-                                          brand,
-                                          isFixed,
-                                          denominations,
-                                          minPrice,
-                                          maxPrice,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        _buildQuantitySection(amount),
-                                        const SizedBox(height: 16),
-                                        _buildInfoTabs(
-                                          _brandWithFetchedDetails(brand),
-                                        ),
-                                        if (keyboard > 0) ...[
-                                          const SizedBox(height: 12),
-                                          _buildBottomBar(
-                                            brand,
-                                            total,
-                                            cashback,
-                                          ),
-                                        ],
-                                      ],
-                                    ),
+                                  const SizedBox(height: 12),
+                                  _buildQuantitySection(amount),
+                                  const SizedBox(height: 16),
+                                  _buildInfoTabs(
+                                    _brandWithFetchedDetails(brand),
                                   ),
-                                ),
-                                if (keyboard == 0)
-                                  _buildBottomBar(brand, total, cashback),
-                              ],
+                                  if (keyboard > 0) ...[
+                                    const SizedBox(height: 12),
+                                    _buildBottomBar(brand, total, cashback),
+                                  ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    );
-                  },
+                      if (keyboard == 0)
+                        SafeArea(
+                          top: false,
+                          child: _buildBottomBar(brand, total, cashback),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+            if (_payPanelOpen) _buildPayPanel(brand),
+            if (_showRedeemed)
+              SuperCoinRedeemedModal(
+                open: _showRedeemed,
+                onContinue: _onRedeemedContinue,
+              ),
+          ],
         ),
-        if (_payPanelOpen) _buildPayPanel(brand),
-        if (_showRedeemed)
-          SuperCoinRedeemedModal(
-            open: _showRedeemed,
-            onContinue: _onRedeemedContinue,
+      ),
+    );
+  }
+
+  /// Innermost back handler so phone gesture closes this page instead of
+  /// jumping to Home (which used to leave bottom nav hidden).
+  Widget _wrapBackInterceptor(Widget child) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _close();
+      },
+      child: BackButtonListener(
+        onBackButtonPressed: () async {
+          _close();
+          return true;
+        },
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildPageHeader(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 14),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF6C5CE7), Color(0xFF8B5CF6)],
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: _close,
+            tooltip: 'Back',
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           ),
-      ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Payment Details',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.2,
+                  ),
+                ),
+                Text(
+                  'Choose amount & rewards',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildBrandCard(Brand brand) {
     final discount = brand.discount ?? '';
     final imageUrl = brand.resolvedImageUrl;
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x26000000),
-              blurRadius: 20,
-              offset: Offset(0, 6),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF8F7FB), Color(0xFFEEE9FE)],
+              ),
+              borderRadius: BorderRadius.circular(16),
             ),
-          ],
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Row(
+            child: imageUrl != null
+                ? BrandImage(imageUrl: imageUrl, fit: BoxFit.contain)
+                : const Icon(Icons.store, color: Color(0xFF94A3B8)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(8),
+                Text(
+                  brand.brandName ?? 'Brand',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1F1635),
+                    height: 1.25,
                   ),
-                  child: imageUrl != null
-                      ? BrandImage(imageUrl: imageUrl, fit: BoxFit.contain)
-                      : const Icon(Icons.store, color: Color(0xFF94A3B8)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 58),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          brand.brandName ?? 'Brand',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const Text(
-                          'E-Gift Cards',
-                          style: TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Container(
-                          height: 20,
-                          constraints: const BoxConstraints(minWidth: 145),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Color(0xFF78DEFF), Color(0xFF488599)],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x5578DEFF),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            brand.category ?? 'E-Commerce & Shopping',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  'E-Gift Card',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: const Color(0xFF6B7280),
                   ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        brand.category ?? 'Shopping',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1D4ED8),
+                        ),
+                      ),
+                    ),
+                    if (discount.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3E8FF),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'Cashback $discount%',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF6C5CE7),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
-            if (discount.isNotEmpty)
-              Positioned(
-                top: -12,
-                right: -12,
-                child: Container(
-                  width: 61,
-                  height: 30,
-                  alignment: Alignment.center,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF9747FF), Color(0xFF5B2B99)],
-                    ),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(20),
-                      topLeft: Radius.circular(20),
-                    ),
-                  ),
-                  child: Text(
-                    'Cashback\n$discount%',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 8,
-                      height: 1.5,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1153,28 +1094,21 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
     double maxPrice,
   ) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 20,
-            offset: Offset(0, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8EAF0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Select Amount',
-            style: TextStyle(
-              fontSize: 12,
-              fontFamily: 'Poppins',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black,
+              color: const Color(0xFF1F1635),
             ),
           ),
           if (minPrice > 0 && minPrice == maxPrice) ...[
@@ -1396,20 +1330,21 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
   Widget _buildQuantitySection(double amount) {
     final total = amount * _quantity;
     final discount = double.tryParse(widget.brand?.discount ?? '0') ?? 0;
-    final earn = _payMode == 0 ? (total * discount / 100).round() : 0;
+    final cashbackEarn = discount > 0 ? (total * discount / 100) : 0.0;
+    final brandId = widget.brand?.brandId ?? '';
+    final scEarnKey = brandId.isNotEmpty && total > 0
+        ? superCoinEarnKey([MapEntry(brandId, total)], total)
+        : null;
+    final scEarn = scEarnKey == null
+        ? null
+        : ref.watch(superCoinEarnEstimateProvider(scEarnKey)).valueOrNull;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8EAF0)),
       ),
       child: Column(
         children: [
@@ -1420,7 +1355,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFF111827),
+                  color: const Color(0xFF1F1635),
                 ),
               ),
               const Spacer(),
@@ -1433,14 +1368,14 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                 }),
               ),
               SizedBox(
-                width: 36,
+                width: 40,
                 child: Text(
                   '$_quantity',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF111827),
+                    color: const Color(0xFF1F1635),
                   ),
                 ),
               ),
@@ -1455,10 +1390,11 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
             ],
           ),
           if (total > 0) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             const Divider(height: 1, color: Color(0xFFF0F0F5)),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: Column(
@@ -1472,39 +1408,155 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                         ),
                       ),
                       Text(
-                        '₹${total.toInt()}',
+                        '₹${total == total.roundToDouble() ? total.toInt() : total.toStringAsFixed(2)}',
                         style: GoogleFonts.poppins(
-                          fontSize: 20,
+                          fontSize: 22,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF111827),
-                          height: 1.2,
+                          color: const Color(0xFF1F1635),
+                          height: 1.15,
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (earn > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Earn ₹$earn',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF047857),
-                      ),
-                    ),
-                  ),
               ],
             ),
+            if (cashbackEarn > 0 || (scEarn != null && scEarn > 0)) ...[
+              const SizedBox(height: 12),
+              _buildEarnRewardsBanner(
+                cashback: cashbackEarn,
+                superCoins: scEarn,
+              ),
+            ],
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Shows both reward paths: e.g. "₹72 / Cashback / SuperCoins".
+  Widget _buildEarnRewardsBanner({
+    required double cashback,
+    required double? superCoins,
+  }) {
+    final cashLabel = cashback == cashback.roundToDouble()
+        ? cashback.toInt().toString()
+        : cashback.toStringAsFixed(2);
+    final scLabel = superCoins == null
+        ? null
+        : (superCoins == superCoins.roundToDouble()
+            ? superCoins.toInt().toString()
+            : superCoins.toStringAsFixed(1));
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFECFDF5), Color(0xFFF5F3FF)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD1FAE5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'You can earn',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF6B7280),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (cashback > 0)
+                _earnChip(
+                  icon: Icons.savings_outlined,
+                  label: '₹$cashLabel',
+                  sublabel: 'Cashback',
+                  bg: const Color(0xFFD1FAE5),
+                  fg: const Color(0xFF047857),
+                ),
+              if (cashback > 0 && scLabel != null)
+                Text(
+                  '/',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF9CA3AF),
+                  ),
+                ),
+              if (scLabel != null)
+                _earnChip(
+                  icon: Icons.stars_rounded,
+                  label: scLabel,
+                  sublabel: 'SuperCoins',
+                  bg: const Color(0xFFEDE9FE),
+                  fg: const Color(0xFF6C5CE7),
+                ),
+              if (cashback > 0 && scLabel == null)
+                _earnChip(
+                  icon: Icons.stars_rounded,
+                  label: 'SuperCoins',
+                  sublabel: 'available',
+                  bg: const Color(0xFFEDE9FE),
+                  fg: const Color(0xFF6C5CE7),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _earnChip({
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required Color bg,
+    required Color fg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: fg),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                  height: 1.1,
+                ),
+              ),
+              Text(
+                sublabel,
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: fg.withValues(alpha: 0.85),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1648,18 +1700,12 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
 
   Widget _buildBottomBar(Brand brand, double total, int cashback) {
     final processing = widget.processing || _isPaying;
-    // Sheet already sits above the app bottom nav — keep this tight.
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + (bottomInset > 0 ? 0 : 4)),
       decoration: const BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, -2),
-          ),
-        ],
+        border: Border(top: BorderSide(color: Color(0xFFE8EAF0))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1677,17 +1723,12 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                       );
                     },
               child: Container(
-                height: 42,
+                height: 48,
                 decoration: BoxDecoration(
-                  gradient: !processing
-                      ? const LinearGradient(
-                          colors: [Color(0xFF9747FF), Color(0xFF5B2B99)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        )
-                      : null,
-                  color: !processing ? null : const Color(0xFFD1D5DB),
-                  borderRadius: BorderRadius.circular(10),
+                  color: !processing
+                      ? const Color(0xFF6C5CE7)
+                      : const Color(0xFFD1D5DB),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
                   child: Opacity(
@@ -1697,7 +1738,7 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                       children: [
                         const Icon(
                           Icons.shopping_cart_outlined,
-                          size: 16,
+                          size: 18,
                           color: Colors.white,
                         ),
                         const SizedBox(width: 8),
@@ -1726,25 +1767,17 @@ class _PaymentDetailsSheetState extends ConsumerState<PaymentDetailsSheet>
                   ? null
                   : () => setState(() => _payPanelOpen = true),
               child: Container(
-                height: 42,
+                height: 48,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: !processing ? Colors.white : const Color(0xFFE0E0E0),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: !processing
-                        ? const Color(0xFFE5E7EB)
+                        ? const Color(0xFF6C5CE7)
                         : const Color(0xFFD1D5DB),
+                    width: 1.5,
                   ),
-                  boxShadow: !processing
-                      ? const [
-                          BoxShadow(
-                            color: Color(0x14111827),
-                            blurRadius: 12,
-                            offset: Offset(0, 4),
-                          ),
-                        ]
-                      : null,
                 ),
                 child: Center(
                   child: Text(

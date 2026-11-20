@@ -7,6 +7,7 @@ import 'package:gift360/core/constants/app_colors.dart';
 import 'package:gift360/features/auth/data/models/biometric_models.dart';
 import 'package:gift360/features/auth/presentation/providers/app_lock_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/checkout_gate/presentation/checkout_gate.dart';
 
 /// Full-screen lock when a session is restored and biometric / MPIN is on.
 class AppLockGate extends ConsumerStatefulWidget {
@@ -199,14 +200,16 @@ class _AppLockGateState extends ConsumerState<AppLockGate> {
         ? user!.name.trim()
         : 'there';
 
-    // Fully opaque so home / chat never show "through" the lock.
+    // Fully opaque + expand so home / cart never show beside the lock
+    // (Stack children otherwise shrink-wrap to content width).
     return Material(
       color: const Color(0xFFF8F7FB),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            children: [
+      child: SizedBox.expand(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              children: [
               const SizedBox(height: 36),
               Container(
                 width: 72,
@@ -314,6 +317,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate> {
                   final lock = ref.read(appLockServiceProvider);
                   await lock.setMpinLockEnabled(false);
                   await lock.setBiometricLockEnabled(false);
+                  clearCheckoutLocationCache();
                   await ref.read(authProvider.notifier).logout();
                   ref.read(appLockProvider.notifier).unlock();
                 },
@@ -327,6 +331,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate> {
               ),
               const SizedBox(height: 16),
             ],
+            ),
           ),
         ),
       ),

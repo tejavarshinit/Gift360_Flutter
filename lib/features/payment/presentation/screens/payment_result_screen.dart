@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 import 'package:gift360/features/payment/data/repositories/session_resume_api.dart';
 import 'package:gift360/features/auth/data/models/auth_user.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
+import 'package:gift360/features/orders/data/pending_order_cart_restore.dart';
+import 'package:gift360/features/orders/presentation/providers/orders_provider.dart';
 import 'package:gift360/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:gift360/core/utils/encryption.dart';
 import 'package:gift360/core/utils/analytics.dart';
@@ -70,6 +73,7 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
   int _voucherSecondsLeft = _voucherRedirectSeconds;
   bool _stayOnResult = false;
   Timer? _voucherRedirectTimer;
+  bool _restoringCart = false;
 
   @override
   void initState() {
@@ -345,6 +349,50 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (isSuccess) _startVoucherRedirect();
+    }
+  }
+
+  /// Cart is cleared when payment starts. On failure, re-add this order's
+  /// items so "Go to Cart" can continue checkout.
+  Future<void> _goToCartWithOrderItems() async {
+    if (_restoringCart) return;
+    final orderNumber = _resolvedOrderNumber ?? _resolveOrderNumber();
+    if (orderNumber == null || orderNumber.isEmpty) {
+      if (mounted) context.go('/cart');
+      return;
+    }
+
+    setState(() => _restoringCart = true);
+    try {
+      Map<String, dynamic> order = {'order_number': orderNumber, 'items': []};
+      try {
+        order = await ref.read(orderApiProvider).fetchOrderDetails(orderNumber);
+        order['order_number'] ??= orderNumber;
+      } catch (e) {
+        debugPrint('Order details for cart restore failed: $e');
+      }
+
+      final result = await restorePendingOrderToCart(
+        order: order,
+        cart: ref.read(cartProvider.notifier),
+      );
+      await dismissPendingOrder(orderNumber);
+      ref.invalidate(ordersProvider);
+
+      if (!mounted) return;
+      if (!result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.error ??
+                  'Could not restore items. Add the brand again from Brands.',
+            ),
+          ),
+        );
+      }
+      context.go('/cart');
+    } finally {
+      if (mounted) setState(() => _restoringCart = false);
     }
   }
 
@@ -922,7 +970,8 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                           width: double.infinity,
                           height: 50,
                           child: ElevatedButton(
-                            onPressed: () => context.go('/cart'),
+                            onPressed:
+                                _restoringCart ? null : _goToCartWithOrderItems,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF523DA9),
                               foregroundColor: Colors.white,
@@ -931,9 +980,11 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                               ),
                               elevation: 4,
                             ),
-                            child: const Text(
-                              'Return to Cart',
-                              style: TextStyle(
+                            child: Text(
+                              _restoringCart
+                                  ? 'Adding to cart…'
+                                  : 'Go to Cart',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1565,7 +1616,9 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                                     width: double.infinity,
                                     height: 48,
                                     child: ElevatedButton(
-                                      onPressed: () => context.go('/cart'),
+                                      onPressed: _restoringCart
+                                          ? null
+                                          : _goToCartWithOrderItems,
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(
                                           0xFF7B61FF,
@@ -1577,9 +1630,11 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                                           ),
                                         ),
                                       ),
-                                      child: const Text(
-                                        'Return to Cart',
-                                        style: TextStyle(
+                                      child: Text(
+                                        _restoringCart
+                                            ? 'Adding to cart…'
+                                            : 'Go to Cart',
+                                        style: const TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
                                         ),

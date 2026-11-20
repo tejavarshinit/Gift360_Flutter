@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/brands/presentation/providers/brands_provider.dart';
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
+import 'package:gift360/features/orders/data/pending_order_cart_restore.dart';
 
 const _redeemedStorageKey = 'g360_redeemed_vouchers';
 
@@ -20,6 +21,14 @@ class OrdersData {
   List<Map<String, dynamic>> get allOrders => [...cashOrders, ...superCoinOrders];
 }
 
+bool _isDismissedPending(Map<String, dynamic> order, Set<String> dismissed) {
+  if (orderStatus(order) != 'PENDING' && orderStatus(order) != 'TAMPERED') {
+    return false;
+  }
+  final n = orderNumberOf(order);
+  return n != null && dismissed.contains(n);
+}
+
 /// Fetches the client's orders via two POST /v1/neworders calls with different
 /// payloads (NORMAL and SUPERCOIN), matching React's Orders.tsx exactly.
 final ordersProvider =
@@ -30,6 +39,7 @@ final ordersProvider =
   }
 
   final api = ref.watch(brandsApiProvider);
+  final dismissed = await loadDismissedPendingOrders();
 
   // Make two parallel API calls with different type payloads (matches React)
   final results = await Future.wait([
@@ -43,8 +53,14 @@ final ordersProvider =
     return db.compareTo(da);
   }
 
-  final cashOrders = results[0]..sort(sortFn);
-  final superCoinOrders = results[1]..sort(sortFn);
+  final cashOrders = results[0]
+      .where((o) => !_isDismissedPending(o, dismissed))
+      .toList()
+    ..sort(sortFn);
+  final superCoinOrders = results[1]
+      .where((o) => !_isDismissedPending(o, dismissed))
+      .toList()
+    ..sort(sortFn);
 
   return OrdersData(cashOrders: cashOrders, superCoinOrders: superCoinOrders);
 });

@@ -1,17 +1,71 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import 'package:gift360/core/widgets/brand_image.dart';
+import 'package:gift360/features/cart/presentation/providers/cart_provider.dart';
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
+import 'package:gift360/features/orders/data/pending_order_cart_restore.dart';
+import 'package:gift360/features/orders/presentation/providers/orders_provider.dart';
 
-class PendingCard extends StatelessWidget {
+class PendingCard extends ConsumerStatefulWidget {
   final Map<String, dynamic> order;
 
   const PendingCard({super.key, required this.order});
 
   @override
+  ConsumerState<PendingCard> createState() => _PendingCardState();
+}
+
+class _PendingCardState extends ConsumerState<PendingCard> {
+  bool _busy = false;
+
+  Future<void> _goToCart() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await restorePendingOrderToCart(
+        order: widget.order,
+        cart: ref.read(cartProvider.notifier),
+      );
+
+      if (result.success) {
+        ref.invalidate(ordersProvider);
+        if (!mounted) return;
+        context.go('/cart');
+        return;
+      }
+
+      // Could not restore — drop from pending so it doesn't keep dead retries.
+      final orderNumber = result.orderNumber ?? orderNumberOf(widget.order);
+      if (orderNumber != null) {
+        await dismissPendingOrder(orderNumber);
+        ref.invalidate(ordersProvider);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.error ??
+                'Removed from pending. Please add the brand again from Brands.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open cart: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final order = widget.order;
     final meta = firstItemMeta(order);
     final brandName = orderBrandName(order);
     final imageUrl = orderItemImageUrl(meta);
@@ -54,7 +108,8 @@ class PendingCard extends StatelessWidget {
                     imageUrl: imageUrl,
                     fit: BoxFit.contain,
                     placeholder: (_, _) => const SizedBox(),
-                    errorWidget: (_, _, _) => const Icon(Icons.storefront, color: Color(0xFF94A3B8)),
+                    errorWidget: (_, _, _) =>
+                        const Icon(Icons.storefront, color: Color(0xFF94A3B8)),
                   )
                 : const Icon(Icons.storefront, color: Color(0xFF94A3B8)),
           ),
@@ -63,16 +118,29 @@ class PendingCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(brandName,
-                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                Text(
+                  brandName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 2),
-                Text('₹${amount.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w400, color: Colors.black)),
+                Text(
+                  '₹${amount.toStringAsFixed(0)}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.black,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(999),
@@ -81,46 +149,80 @@ class PendingCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.access_time, size: 9, color: Color(0xFF92400E)),
+                      const Icon(Icons.access_time,
+                          size: 9, color: Color(0xFF92400E)),
                       const SizedBox(width: 4),
-                      Text(orderStatus(order) == 'TAMPERED' ? 'TAMPERED' : 'PENDING',
-                          style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF92400E))),
+                      Text(
+                        orderStatus(order) == 'TAMPERED' ? 'TAMPERED' : 'PENDING',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF92400E),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
                 GestureDetector(
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Please go to cart to retry payment for this order.'),
-                      duration: Duration(seconds: 3),
-                    ));
-                  },
-                  child: Container(
-                    width: 100,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFD79A8), Color(0xFFB96BC6), Color(0xFF6C5CE7)],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
+                  onTap: _busy ? null : _goToCart,
+                  child: Opacity(
+                    opacity: _busy ? 0.6 : 1,
+                    child: Container(
+                      height: 30,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFFFD79A8),
+                            Color(0xFFB96BC6),
+                            Color(0xFF6C5CE7),
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.replay, size: 14, color: Colors.white),
-                        const SizedBox(width: 4),
-                        Text('Retry', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-                      ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_busy)
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          else
+                            const Icon(Icons.shopping_cart_outlined,
+                                size: 14, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(
+                            _busy ? 'Adding…' : 'Go to Cart',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 if (dateStr.isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  Text(dateStr, style: GoogleFonts.poppins(fontSize: 8, fontWeight: FontWeight.w400, color: const Color(0xFF5E5E5E))),
+                  Text(
+                    dateStr,
+                    style: GoogleFonts.poppins(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF5E5E5E),
+                    ),
+                  ),
                 ],
               ],
             ),

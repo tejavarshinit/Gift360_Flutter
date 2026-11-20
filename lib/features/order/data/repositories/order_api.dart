@@ -1,9 +1,24 @@
 import 'package:dio/dio.dart';
+import 'package:gift360/features/checkout_gate/data/device_id.dart';
+import 'package:gift360/features/checkout_gate/data/models/checkout_models.dart';
 
 class OrderApi {
   final Dio _dio;
 
   OrderApi(this._dio);
+
+  Future<Options> _paymentOptions() async {
+    final deviceId = await getOrCreateDeviceId();
+    return Options(headers: {'X-Device-Id': deviceId});
+  }
+
+  Map<String, dynamic> _withLocation(
+    Map<String, dynamic> body,
+    CheckoutLocation? location,
+  ) {
+    if (location == null) return body;
+    return {...body, 'location': location.toJson()};
+  }
 
   Future<Map<String, dynamic>> createOrder(Map<String, dynamic> orderData) async {
     final response = await _dio.post('/orders', data: orderData);
@@ -36,25 +51,34 @@ class OrderApi {
     String orderNumber, {
     String? paymentMethod,
     List<String>? paymentModes,
+    CheckoutLocation? location,
   }) async {
     final hasList = paymentModes != null && paymentModes.isNotEmpty;
-    final payload = (paymentMethod != null && paymentMethod.isNotEmpty) || hasList
-        ? <String, dynamic>{
-            if (paymentMethod != null && paymentMethod.isNotEmpty) 'paymentMethod': paymentMethod,
-            if (hasList) 'paymentModes': paymentModes,
-          }
-        : null;
-    final response = await _dio.post('/orders/$orderNumber/initiate-payment', data: payload);
+    final base = <String, dynamic>{
+      if (paymentMethod != null && paymentMethod.isNotEmpty)
+        'paymentMethod': paymentMethod,
+      if (hasList) 'paymentModes': paymentModes,
+    };
+    final payload = _withLocation(base, location);
+    final response = await _dio.post(
+      '/orders/$orderNumber/initiate-payment',
+      data: payload.isEmpty ? null : payload,
+      options: await _paymentOptions(),
+    );
     return response.data as Map<String, dynamic>;
   }
 
   /// Juspay UPI-intent: start a payment request (POST
   /// /orders/{orderNumber}/intent/create). Returns the backend-built `deeplink`
   /// — the client only launches it, never builds one itself.
-  Future<Map<String, dynamic>> createUpiIntent(String orderNumber) async {
+  Future<Map<String, dynamic>> createUpiIntent(
+    String orderNumber, {
+    CheckoutLocation? location,
+  }) async {
     final response = await _dio.post(
       '/orders/$orderNumber/intent/create',
-      data: <String, dynamic>{},
+      data: _withLocation(<String, dynamic>{}, location),
+      options: await _paymentOptions(),
     );
     return response.data as Map<String, dynamic>;
   }
@@ -80,15 +104,22 @@ class OrderApi {
     required bool earnCashback,
     String? paymentMethod,
     List<String>? paymentModes,
+    CheckoutLocation? location,
   }) async {
     final hasList = paymentModes != null && paymentModes.isNotEmpty;
-    final response = await _dio.post('/orders/$orderNumber/retry-payment', data: {
+    final body = _withLocation({
       'walletUsed': walletUsed,
       'walletAmount': walletAmount,
       'earnCashback': earnCashback,
-      if (paymentMethod != null && paymentMethod.isNotEmpty) 'paymentMethod': paymentMethod,
+      if (paymentMethod != null && paymentMethod.isNotEmpty)
+        'paymentMethod': paymentMethod,
       if (hasList) 'paymentModes': paymentModes,
-    });
+    }, location);
+    final response = await _dio.post(
+      '/orders/$orderNumber/retry-payment',
+      data: body,
+      options: await _paymentOptions(),
+    );
     return response.data as Map<String, dynamic>;
   }
 }

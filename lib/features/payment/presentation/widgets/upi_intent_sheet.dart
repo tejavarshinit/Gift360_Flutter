@@ -9,6 +9,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:gift360/config/app_config.dart';
 import 'package:gift360/config/app_flavor.dart';
+import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
+import 'package:gift360/features/checkout_gate/presentation/checkout_gate.dart';
+import 'package:gift360/features/checkout_gate/presentation/providers/checkout_gate_provider.dart';
 import 'package:gift360/features/payment/presentation/providers/payment_provider.dart';
 
 /// Phases of the Juspay UPI-intent flow (React `UpiIntentPhase`).
@@ -156,8 +159,26 @@ class _UpiIntentSheetState extends ConsumerState<UpiIntentSheet>
       _phase = _UpiPhase.initiating;
     });
     try {
+      final gate = await runCheckoutGate(
+        api: ref.read(checkoutApiProvider),
+        user: ref.read(authProvider),
+        orderNumber: widget.orderNumber,
+        paymentMethod: 'UPI',
+        context: context,
+      );
+      if (gate.isCancelled) {
+        if (!mounted) return;
+        setState(() {
+          _phase = _UpiPhase.failed;
+          _error = 'Checkout verification cancelled.';
+        });
+        return;
+      }
       final api = ref.read(orderApiProvider);
-      final response = await api.createUpiIntent(widget.orderNumber);
+      final response = await api.createUpiIntent(
+        widget.orderNumber,
+        location: gate.location,
+      );
       final deeplink = response['deeplink']?.toString() ?? '';
       if (deeplink.isEmpty) {
         throw Exception(
