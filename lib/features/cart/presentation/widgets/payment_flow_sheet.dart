@@ -91,7 +91,9 @@ class _PaymentFlowSheetState extends State<PaymentFlowSheet>
                             colors: [Color(0xFFE8D5F5), Colors.white],
                           ),
                     color: isSuccess ? Colors.white : null,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: const Color(0x2821184A),
@@ -109,7 +111,9 @@ class _PaymentFlowSheetState extends State<PaymentFlowSheet>
                         width: 56,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6D5AE6).withValues(alpha: 0.22),
+                          color: const Color(
+                            0xFF6D5AE6,
+                          ).withValues(alpha: 0.22),
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -123,7 +127,9 @@ class _PaymentFlowSheetState extends State<PaymentFlowSheet>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(0xFF6C5CE7).withValues(alpha: 0.18),
+                              color: const Color(
+                                0xFF6C5CE7,
+                              ).withValues(alpha: 0.18),
                               width: 6,
                             ),
                           ),
@@ -159,7 +165,9 @@ class _PaymentFlowSheetState extends State<PaymentFlowSheet>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF7DDB99).withValues(alpha: 0.35),
+                                color: const Color(
+                                  0xFF7DDB99,
+                                ).withValues(alpha: 0.35),
                                 blurRadius: 36,
                                 offset: const Offset(0, 18),
                               ),
@@ -173,7 +181,11 @@ class _PaymentFlowSheetState extends State<PaymentFlowSheet>
                                 color: Color(0xFF41B66E),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.check, color: Colors.white, size: 24),
+                              child: const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                             ),
                           ),
                         ),
@@ -193,17 +205,24 @@ class _PaymentFlowSheetState extends State<PaymentFlowSheet>
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                'View Voucher',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF6C5CE7),
-                                  decoration: TextDecoration.underline,
+                              Flexible(
+                                child: Text(
+                                  'Tap to view voucher to your mail and contact number',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF6C5CE7),
+                                    decoration: TextDecoration.underline,
+                                  ),
                                 ),
                               ),
                               SizedBox(width: 8),
-                              Icon(Icons.arrow_forward, size: 16, color: Color(0xFF6C5CE7)),
+                              Icon(
+                                Icons.arrow_forward,
+                                size: 16,
+                                color: Color(0xFF6C5CE7),
+                              ),
                             ],
                           ),
                         ),

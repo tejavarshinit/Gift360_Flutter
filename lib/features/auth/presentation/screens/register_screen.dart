@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gift360/core/constants/app_constants.dart';
+import 'package:gift360/features/checkout/data/checkout_gate_logic.dart';
+import 'package:gift360/features/checkout/presentation/providers/checkout_provider.dart';
 import 'package:gift360/features/auth/presentation/providers/auth_provider.dart';
 import 'package:gift360/features/auth/presentation/widgets/diwali_auth_shell.dart';
 import 'package:flutter/gestures.dart';
@@ -18,8 +20,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _mobileController = TextEditingController();
-  final List<TextEditingController> _otpControllers =
-      List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _otpControllers = List.generate(
+    4,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _otpFocusNodes = List.generate(4, (_) => FocusNode());
 
   bool _otpSent = false;
@@ -28,6 +32,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String _error = '';
   String _nameError = '';
   String _emailError = '';
+  String? _emailHint;
+  String? _hintSeenFor;
   String _mobileError = '';
 
   @override
@@ -47,6 +53,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _validateMobile(String m) => AppConstants.mobileRegex.hasMatch(m);
   bool _validateEmail(String e) => AppConstants.emailRegex.hasMatch(e);
   bool _validateOtp() => _otpControllers.every((c) => c.text.length == 1);
+
+  void _onEmailChanged(String value) {
+    if (_emailHint != null) setState(() => _emailHint = null);
+  }
 
   String get _otpString => _otpControllers.map((c) => c.text).join();
 
@@ -74,7 +84,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       valid = false;
     } else if (!_validateMobile(_mobileController.text.trim())) {
       setState(
-          () => _mobileError = 'Please enter a valid 10-digit mobile number');
+        () => _mobileError = 'Please enter a valid 10-digit mobile number',
+      );
       valid = false;
     }
     return valid;
@@ -114,9 +125,38 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final response = await ref.read(authProvider.notifier).registerSendOtp(
+      // Advisory server-side email check. A failed check remains fail-open so
+      // registration is not blocked by a temporary verification-service issue.
+      final email = _emailController.text.trim();
+      try {
+        final check = await ref.read(checkoutApiProvider).checkEmail(email);
+        if (!check.valid && check.block) {
+          setState(() {
+            _emailError = invalidEmailMessage(check.reason);
+            _emailHint = check.suggestion;
+            _hintSeenFor = email;
+            _isLoading = false;
+          });
+          return;
+        }
+        if (check.suggestion != null && _hintSeenFor != email) {
+          setState(() {
+            _emailHint = check.suggestion;
+            _hintSeenFor = email;
+            _isLoading = false;
+          });
+          return;
+        }
+      } catch (_) {
+        // Fail open per the registration email-check contract.
+      }
+      setState(() => _emailHint = null);
+
+      final response = await ref
+          .read(authProvider.notifier)
+          .registerSendOtp(
             mobileNumber: _mobileController.text.trim(),
-            email: _emailController.text.trim(),
+            email: email,
           );
 
       if (response.notRegistered == false) {
@@ -164,7 +204,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final response = await ref.read(authProvider.notifier).registerVerifyOtp(
+      final response = await ref
+          .read(authProvider.notifier)
+          .registerVerifyOtp(
             fullName: _fullNameController.text.trim(),
             email: _emailController.text.trim(),
             mobileNumber: _mobileController.text.trim(),
@@ -235,8 +277,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             hint: 'Enter your email ID',
             keyboardType: TextInputType.emailAddress,
             enabled: !_otpSent,
+            onChanged: _onEmailChanged,
           ),
           if (_emailError.isNotEmpty) _buildErrorText(_emailError),
+          if (_emailHint != null && !_otpSent) _buildEmailSuggestion(),
           const SizedBox(height: 8),
           _buildMobileInput(),
           if (_mobileError.isNotEmpty) _buildErrorText(_mobileError),
@@ -554,6 +598,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     required String hint,
     TextInputType? keyboardType,
     bool enabled = true,
+    ValueChanged<String>? onChanged,
   }) {
     return Container(
       height: 36,
@@ -566,11 +611,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         controller: controller,
         keyboardType: keyboardType,
         enabled: enabled,
-        onChanged: (_) => _clearErrors(),
-        style: GoogleFonts.poppins(
-          fontSize: 11,
-          color: Colors.black,
-        ),
+        onChanged: (value) {
+          _clearErrors();
+          onChanged?.call(value);
+        },
+        style: GoogleFonts.poppins(fontSize: 11, color: Colors.black),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: GoogleFonts.poppins(
@@ -578,17 +623,64 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             color: const Color(0xFFA6A4A4),
           ),
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide:
-                const BorderSide(color: Color(0xFF7C3AED), width: 1.5),
+            borderSide: const BorderSide(color: Color(0xFF7C3AED), width: 1.5),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: Color(0xFFD9D9D9)),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmailSuggestion() {
+    final suggestion = _emailHint;
+    if (suggestion == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text.rich(
+        TextSpan(
+          style: GoogleFonts.poppins(
+            fontSize: 10,
+            color: const Color(0xFF5A5A5A),
+          ),
+          children: [
+            const TextSpan(text: 'Did you mean '),
+            WidgetSpan(
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _emailController.text = suggestion;
+                    _emailController.selection = TextSelection.collapsed(
+                      offset: suggestion.length,
+                    );
+                    _emailHint = null;
+                    _emailError = '';
+                    _hintSeenFor = suggestion;
+                  });
+                },
+                child: Text(
+                  suggestion,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF7C3AED),
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ),
+            const TextSpan(text: '?'),
+          ],
         ),
       ),
     );
@@ -611,17 +703,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: const BoxDecoration(
               color: Color(0xFFF7F7FA),
-              border: Border(
-                right: BorderSide(color: Color(0xFFEBEBEB)),
-              ),
+              border: Border(right: BorderSide(color: Color(0xFFEBEBEB))),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  '🇮🇳',
-                  style: TextStyle(fontSize: 13),
-                ),
+                const Text('🇮🇳', style: TextStyle(fontSize: 13)),
                 const SizedBox(width: 4),
                 Text(
                   '+91',
@@ -649,10 +736,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               enabled: !_otpSent,
               onChanged: (_) => _clearErrors(),
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                color: Colors.black,
-              ),
+              style: GoogleFonts.poppins(fontSize: 11, color: Colors.black),
               decoration: InputDecoration(
                 hintText: 'Enter mobile number',
                 hintStyle: GoogleFonts.poppins(
@@ -661,8 +745,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 counterText: '',
                 border: InputBorder.none,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ),
@@ -673,7 +759,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   // ── Send OTP Button ──
   Widget _buildSendOtpButton() {
-    final isValid = _validateMobile(_mobileController.text) &&
+    final isValid =
+        _validateMobile(_mobileController.text) &&
         _validateEmail(_emailController.text) &&
         _fullNameController.text.trim().isNotEmpty;
     return GestureDetector(
@@ -712,11 +799,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 if (!_isLoading) ...[
                   const SizedBox(width: 6),
-                  const Icon(
-                    Icons.send_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
+                  const Icon(Icons.send_rounded, size: 16, color: Colors.white),
                 ],
               ],
             ),
@@ -759,7 +842,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(
-                        color: Color(0xFF7C3AED), width: 1.5),
+                      color: Color(0xFF7C3AED),
+                      width: 1.5,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -869,11 +954,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 14,
-            color: Colors.red[600],
-          ),
+          Icon(Icons.error_outline, size: 14, color: Colors.red[600]),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -906,16 +987,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Widget _buildSuccessText(String text) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Text(
-          '✓ $text',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
-            fontSize: 9,
-            color: const Color(0xFF16A34A),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      );
-
+    padding: const EdgeInsets.only(top: 4),
+    child: Text(
+      '✓ $text',
+      textAlign: TextAlign.center,
+      style: GoogleFonts.poppins(
+        fontSize: 9,
+        color: const Color(0xFF16A34A),
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  );
 }

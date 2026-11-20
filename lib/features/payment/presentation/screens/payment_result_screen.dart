@@ -1178,9 +1178,11 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                                   ),
                                 ),
                               const SizedBox(height: 12),
-                              SizedBox(
-                                width: 240,
-                                height: 48,
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minWidth: 240,
+                                  maxWidth: 340,
+                                ),
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
@@ -1206,9 +1208,15 @@ class _PaymentResultScreenState extends ConsumerState<PaymentResultScreen> {
                                       backgroundColor: Colors.transparent,
                                       shadowColor: Colors.transparent,
                                       shape: const StadiumBorder(),
+                                      minimumSize: const Size(240, 48),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 12,
+                                      ),
                                     ),
                                     child: const Text(
-                                      'View my vouchers',
+                                      'Tap to view voucher to your mail and contact number',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,

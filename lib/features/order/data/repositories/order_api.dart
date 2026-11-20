@@ -1,11 +1,16 @@
 import 'package:dio/dio.dart';
+import 'package:gift360/core/utils/checkout_device_id.dart';
+import 'package:gift360/features/checkout/data/checkout_gate.dart';
 
 class OrderApi {
   final Dio _dio;
+  final CheckoutGate checkoutGate;
 
-  OrderApi(this._dio);
+  OrderApi(this._dio, {required this.checkoutGate});
 
-  Future<Map<String, dynamic>> createOrder(Map<String, dynamic> orderData) async {
+  Future<Map<String, dynamic>> createOrder(
+    Map<String, dynamic> orderData,
+  ) async {
     final response = await _dio.post('/orders', data: orderData);
     return response.data as Map<String, dynamic>;
   }
@@ -21,11 +26,13 @@ class OrderApi {
   }
 
   Future<Map<String, dynamic>> updateOrderStatus(
-      String orderNumber, String status) async {
-    final response = await _dio.post('/orders/status', data: {
-      'encryptedData': orderNumber,
-      'status': status,
-    });
+    String orderNumber,
+    String status,
+  ) async {
+    final response = await _dio.post(
+      '/orders/status',
+      data: {'encryptedData': orderNumber, 'status': status},
+    );
     return response.data as Map<String, dynamic>;
   }
 
@@ -37,14 +44,22 @@ class OrderApi {
     String? paymentMethod,
     List<String>? paymentModes,
   }) async {
+    final location = await checkoutGate.beforePayment(
+      orderNumber: orderNumber,
+      paymentMethod: paymentMethod,
+    );
     final hasList = paymentModes != null && paymentModes.isNotEmpty;
-    final payload = (paymentMethod != null && paymentMethod.isNotEmpty) || hasList
-        ? <String, dynamic>{
-            if (paymentMethod != null && paymentMethod.isNotEmpty) 'paymentMethod': paymentMethod,
-            if (hasList) 'paymentModes': paymentModes,
-          }
-        : null;
-    final response = await _dio.post('/orders/$orderNumber/initiate-payment', data: payload);
+    final payload = <String, dynamic>{
+      'deviceId': await getCheckoutDeviceId(),
+      if (paymentMethod != null && paymentMethod.isNotEmpty)
+        'paymentMethod': paymentMethod,
+      if (hasList) 'paymentModes': paymentModes,
+      if (location != null) 'location': location.toJson(),
+    };
+    final response = await _dio.post(
+      '/orders/$orderNumber/initiate-payment',
+      data: payload,
+    );
     return response.data as Map<String, dynamic>;
   }
 
@@ -52,9 +67,16 @@ class OrderApi {
   /// /orders/{orderNumber}/intent/create). Returns the backend-built `deeplink`
   /// — the client only launches it, never builds one itself.
   Future<Map<String, dynamic>> createUpiIntent(String orderNumber) async {
+    final location = await checkoutGate.beforePayment(
+      orderNumber: orderNumber,
+      paymentMethod: 'UPI',
+    );
     final response = await _dio.post(
       '/orders/$orderNumber/intent/create',
-      data: <String, dynamic>{},
+      data: {
+        if (location != null) 'location': location.toJson(),
+        'deviceId': await getCheckoutDeviceId(),
+      },
     );
     return response.data as Map<String, dynamic>;
   }
@@ -81,14 +103,24 @@ class OrderApi {
     String? paymentMethod,
     List<String>? paymentModes,
   }) async {
+    final location = await checkoutGate.beforePayment(
+      orderNumber: orderNumber,
+      paymentMethod: paymentMethod,
+    );
     final hasList = paymentModes != null && paymentModes.isNotEmpty;
-    final response = await _dio.post('/orders/$orderNumber/retry-payment', data: {
-      'walletUsed': walletUsed,
-      'walletAmount': walletAmount,
-      'earnCashback': earnCashback,
-      if (paymentMethod != null && paymentMethod.isNotEmpty) 'paymentMethod': paymentMethod,
-      if (hasList) 'paymentModes': paymentModes,
-    });
+    final response = await _dio.post(
+      '/orders/$orderNumber/retry-payment',
+      data: {
+        'walletUsed': walletUsed,
+        'walletAmount': walletAmount,
+        'earnCashback': earnCashback,
+        if (location != null) 'location': location.toJson(),
+        'deviceId': await getCheckoutDeviceId(),
+        if (paymentMethod != null && paymentMethod.isNotEmpty)
+          'paymentMethod': paymentMethod,
+        if (hasList) 'paymentModes': paymentModes,
+      },
+    );
     return response.data as Map<String, dynamic>;
   }
 }

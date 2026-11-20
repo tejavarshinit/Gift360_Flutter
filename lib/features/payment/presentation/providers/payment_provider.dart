@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gift360/features/auth/presentation/providers/providers.dart';
+import 'package:gift360/features/checkout/presentation/providers/checkout_provider.dart';
 import 'package:gift360/features/coupon/data/repositories/coupon_api.dart';
 import 'package:gift360/features/order/data/repositories/order_api.dart';
 import 'package:gift360/features/order/data/repositories/validate_order_api.dart';
@@ -9,7 +10,7 @@ import 'package:gift360/features/payment/data/models/payment.dart';
 
 final orderApiProvider = Provider<OrderApi>((ref) {
   final dio = ref.watch(giftcardDioProvider);
-  return OrderApi(dio);
+  return OrderApi(dio, checkoutGate: ref.watch(checkoutGateProvider));
 });
 
 final validateOrderApiProvider = Provider<ValidateOrderApi>((ref) {

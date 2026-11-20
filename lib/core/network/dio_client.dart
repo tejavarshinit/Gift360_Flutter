@@ -155,6 +155,17 @@ class _ErrorInterceptor extends Interceptor {
   }
 
   String _handleBadResponse(int? statusCode, dynamic data) {
+    if (data is Map) {
+      final errorCode = data['errorCode']?.toString();
+      if (errorCode == 'EMAIL_NOT_VERIFIED') {
+        return (data['message'] ??
+                'Please verify your email to continue. We have to be able to send your invoice and vouchers.')
+            .toString();
+      }
+      if (errorCode != null && errorCode.startsWith('LOCATION_')) {
+        return checkoutLocationErrorMessage(errorCode);
+      }
+    }
     if (data is Map<String, dynamic> && data.containsKey('message')) {
       return data['message'] as String;
     }
@@ -174,5 +185,25 @@ class _ErrorInterceptor extends Interceptor {
       default:
         return 'Error: $statusCode';
     }
+  }
+}
+
+String checkoutLocationErrorMessage(String errorCode) {
+  switch (errorCode) {
+    case 'LOCATION_MISSING':
+      return 'Please share your location or enter your PIN code to continue.';
+    case 'LOCATION_STALE':
+      return 'Your location confirmation expired. Please confirm it again.';
+    case 'LOCATION_OUTSIDE_INDIA':
+      return 'This location is outside India. Please use a valid Indian location or PIN code.';
+    case 'LOCATION_PIN_INVALID':
+      return 'Enter a valid 6-digit postal PIN code.';
+    case 'LOCATION_PIN_NOT_ALLOWED':
+      return "This PIN code can't be used for this payment. Please share your location.";
+    case 'LOCATION_CONSENT_MISSING':
+    case 'LOCATION_NO_CONSENT':
+      return 'Please agree to share your location for this payment.';
+    default:
+      return 'Please share your location or enter your PIN code to continue.';
   }
 }

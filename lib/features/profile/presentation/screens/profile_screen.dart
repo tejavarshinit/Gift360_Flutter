@@ -13,6 +13,9 @@ import 'package:gift360/features/supercoin/presentation/providers/supercoin_prov
 import 'package:gift360/features/rewards/presentation/providers/rewards_provider.dart';
 import 'package:gift360/features/orders/presentation/providers/orders_provider.dart';
 import 'package:gift360/features/orders/data/models/voucher_view.dart';
+import 'package:gift360/features/profile/data/models/profile_verification.dart';
+import 'package:gift360/features/profile/presentation/providers/profile_verification_provider.dart';
+import 'package:gift360/features/profile/presentation/widgets/verification_status.dart';
 import 'package:gift360/core/widgets/gift_header.dart';
 import 'package:gift360/core/constants/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,8 +64,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       var enrolled = false;
       if (AppConfig.biometricLoginEnabled) {
         try {
-          final state =
-              await ref.read(biometricServiceProvider).enrollmentState();
+          final state = await ref
+              .read(biometricServiceProvider)
+              .enrollmentState();
           enrolled = state.isEnabled;
         } catch (_) {}
       }
@@ -155,7 +159,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _toggleMpin(bool value, dynamic user) async {
     if (!value) {
-      if (!_otpLoginEnabled && (!_biometricLoginEnabled || !_biometricEnrolled)) {
+      if (!_otpLoginEnabled &&
+          (!_biometricLoginEnabled || !_biometricEnrolled)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('At least one login method must remain enabled.'),
@@ -255,7 +260,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           top: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final horizontalPadding = constraints.maxWidth >= 600 ? 48.0 : 20.0;
+              final horizontalPadding = constraints.maxWidth >= 600
+                  ? 48.0
+                  : 20.0;
               return SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
                   horizontalPadding,
@@ -283,6 +290,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final ordersAsync = ref.watch(ordersProvider);
 
+    // Server-authoritative verification state; a failure renders nothing extra.
+    final verification = profileVerificationOrNull(
+      ref.watch(profileVerificationProvider(user.clientId)),
+    );
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F7FB),
       body: SafeArea(
@@ -297,7 +309,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     constraints: const BoxConstraints(maxWidth: 620),
                     child: Column(
                       children: [
-                        _buildUserSummaryCard(user, initial),
+                        _buildUserSummaryCard(user, initial, verification),
                         const SizedBox(height: 12),
                         _buildBalanceCards(balance, supercoinState.balance),
                         const SizedBox(height: 16),
@@ -307,7 +319,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           _buildRewardsPanel(),
                         ],
                         const SizedBox(height: 16),
-                        _buildProfileDetailsCard(user),
+                        _buildProfileDetailsCard(user, verification),
                         const SizedBox(height: 16),
                         _buildLoginPreferencesCard(user),
                         const SizedBox(height: 16),
@@ -344,7 +356,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           Text(
             'MY ACCOUNT',
-            style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: .5),
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .5,
+            ),
           ),
           TextButton.icon(
             onPressed: _showContactDialog,
@@ -352,7 +368,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             label: const Text('Help'),
             style: TextButton.styleFrom(
               foregroundColor: AppColors.primaryPurple,
-              textStyle: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+              textStyle: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -360,14 +379,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildUserSummaryCard(dynamic user, String initial) {
+  Widget _buildUserSummaryCard(
+    dynamic user,
+    String initial,
+    ProfileVerification? verification,
+  ) {
     return _accountCard(
       child: Row(
         children: [
           CircleAvatar(
             radius: 31,
             backgroundColor: AppColors.profileAvatarBg,
-            child: Text(initial, style: GoogleFonts.poppins(fontSize: 25, fontWeight: FontWeight.w700, color: Colors.white)),
+            child: Text(
+              initial,
+              style: GoogleFonts.poppins(
+                fontSize: 25,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -383,22 +413,54 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       onSubmitted: (_) => _saveDisplayName(),
                       decoration: InputDecoration(
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(9),
+                        ),
                         suffixIcon: IconButton(
                           tooltip: 'Save name',
                           onPressed: _saveDisplayName,
-                          icon: const Icon(Icons.check, size: 18, color: AppColors.primaryPurple),
+                          icon: const Icon(
+                            Icons.check,
+                            size: 18,
+                            color: AppColors.primaryPurple,
+                          ),
                         ),
                       ),
-                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   )
                 else
-                  Text(user.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700)),
+                  Text(
+                    user.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 const SizedBox(height: 3),
-                Text(user.email.isEmpty ? 'Email unavailable' : user.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _mutedText()),
-                Text(user.mobile.isEmpty ? 'Phone unavailable' : user.mobile, style: _mutedText()),
+                Text(
+                  user.email.isEmpty ? 'Email unavailable' : user.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _mutedText(),
+                ),
+                Text(
+                  user.mobile.isEmpty ? 'Phone unavailable' : user.mobile,
+                  style: _mutedText(),
+                ),
+                if (verification?.verified == true) ...[
+                  const SizedBox(height: 4),
+                  const VerifiedBadge(),
+                ],
               ],
             ),
           ),
@@ -436,7 +498,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _buildBalanceCards(double balance, dynamic superCoins) {
     return Row(
       children: [
-        Expanded(child: _accountMetric('Balance', '₹${balance.toStringAsFixed(2)}')),
+        Expanded(
+          child: _accountMetric('Balance', 'â‚¹${balance.toStringAsFixed(2)}'),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: _accountMetric(
@@ -474,7 +538,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: accent ? AppColors.primaryPurple : const Color(0xFF30284A),
+                  color: accent
+                      ? AppColors.primaryPurple
+                      : const Color(0xFF30284A),
                 ),
               ),
             ],
@@ -489,7 +555,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _accountMenuRow(Icons.person_outline, 'Profile details', 'Name, email and phone number', () => setState(() => _selectedTab = 0)),
+          _accountMenuRow(
+            Icons.person_outline,
+            'Profile details',
+            'Name, email and phone number',
+            () => setState(() => _selectedTab = 0),
+          ),
           _accountMenuRow(
             Icons.monetization_on_outlined,
             'Rewards / SuperCoins',
@@ -497,9 +568,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             () => setState(() => _selectedTab = 1),
             assetIcon: 'assets/images/SuperCOin-removebg-preview.png',
           ),
-          _accountMenuRow(Icons.card_giftcard_outlined, 'My Vouchers', 'Open your purchased and redeemed vouchers', () => context.push('/orders')),
-          _accountMenuRow(Icons.storefront_outlined, 'Partner with us', 'Sell gift vouchers at your own margins', () => context.push('/reseller')),
-          _accountMenuRow(Icons.mail_outline, 'Contact Us', 'Get help with vouchers or payments', _showContactDialog),
+          _accountMenuRow(
+            Icons.card_giftcard_outlined,
+            'My Vouchers',
+            'Open your purchased and redeemed vouchers',
+            () => context.push('/orders'),
+          ),
+          _accountMenuRow(
+            Icons.storefront_outlined,
+            'Partner with us',
+            'Sell gift vouchers at your own margins',
+            () => context.push('/reseller'),
+          ),
+          _accountMenuRow(
+            Icons.mail_outline,
+            'Contact Us',
+            'Get help with vouchers or payments',
+            _showContactDialog,
+          ),
         ],
       ),
     );
@@ -517,13 +603,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       child: Container(
         constraints: const BoxConstraints(minHeight: 64),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF0ECF8)))),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFF0ECF8))),
+        ),
         child: Row(
           children: [
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: AppColors.primaryPurple.withValues(alpha: .1), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: AppColors.primaryPurple.withValues(alpha: .1),
+                shape: BoxShape.circle,
+              ),
               child: assetIcon == null
                   ? Icon(icon, size: 20, color: AppColors.primaryPurple)
                   : Padding(
@@ -536,8 +627,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _mutedText(fontSize: 11)),
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _mutedText(fontSize: 11),
+                  ),
                 ],
               ),
             ),
@@ -573,7 +675,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ],
               ),
-              TextButton(onPressed: () => setState(() => _selectedTab = 0), child: const Text('Back')),
+              TextButton(
+                onPressed: () => setState(() => _selectedTab = 0),
+                child: const Text('Back'),
+              ),
             ],
           ),
           Container(
@@ -589,16 +694,45 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileDetailsCard(dynamic user) {
+  Widget _buildProfileDetailsCard(
+    dynamic user,
+    ProfileVerification? verification,
+  ) {
     return _accountCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Profile details', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(
+            'Profile details',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 12),
           _buildLightField('Email', user.email),
           const SizedBox(height: 12),
           _buildLightField('Phone Number', user.mobile),
+          if (verification != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: VerificationStatusRow(
+                    label: 'Email',
+                    verified: verification.emailVerified,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: VerificationStatusRow(
+                    label: 'Location',
+                    verified: verification.locationVerified,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -733,14 +867,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: BoxDecoration(color: const Color(0xFFF8F7FB), border: Border.all(color: const Color(0xFFE8E3F2)), borderRadius: BorderRadius.circular(10)),
-          child: Text(value.isEmpty ? 'Unavailable' : value, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500)),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F7FB),
+            border: Border.all(color: const Color(0xFFE8E3F2)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            value.isEmpty ? 'Unavailable' : value,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildPastOrdersCard(BuildContext context, AsyncValue<OrdersData> ordersAsync) {
+  Widget _buildPastOrdersCard(
+    BuildContext context,
+    AsyncValue<OrdersData> ordersAsync,
+  ) {
     return _accountCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -748,18 +895,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Past Orders', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700)),
-              TextButton(onPressed: () => context.push('/orders'), child: const Text('View all')),
+              Text(
+                'Past Orders',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              TextButton(
+                onPressed: () => context.push('/orders'),
+                child: const Text('View all'),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           ordersAsync.when(
-            loading: () => Column(children: List.generate(2, (_) => _orderSkeleton())),
-            error: (_, _) => _orderMessage('Unable to load orders right now.', isError: true),
+            loading: () =>
+                Column(children: List.generate(2, (_) => _orderSkeleton())),
+            error: (_, _) => _orderMessage(
+              'Unable to load orders right now.',
+              isError: true,
+            ),
             data: (data) {
               final orders = data.allOrders.take(3).toList();
               if (orders.isEmpty) return _orderMessage('No orders yet.');
-              return Column(children: orders.map((order) => _orderPreview(order)).toList());
+              return Column(
+                children: orders.map((order) => _orderPreview(order)).toList(),
+              );
             },
           ),
         ],
@@ -771,7 +933,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Container(
       height: 82,
       margin: const EdgeInsets.only(top: 10),
-      decoration: BoxDecoration(color: const Color(0xFFF0ECF8), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0ECF8),
+        borderRadius: BorderRadius.circular(14),
+      ),
     );
   }
 
@@ -780,45 +945,106 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       width: double.infinity,
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: isError ? const Color(0xFFFFF1F2) : const Color(0xFFF8F7FB), borderRadius: BorderRadius.circular(12)),
-      child: Text(text, textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 12, color: isError ? Colors.red.shade700 : const Color(0xFF81789A))),
+      decoration: BoxDecoration(
+        color: isError ? const Color(0xFFFFF1F2) : const Color(0xFFF8F7FB),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: GoogleFonts.poppins(
+          fontSize: 12,
+          color: isError ? Colors.red.shade700 : const Color(0xFF81789A),
+        ),
+      ),
     );
   }
 
   Widget _orderPreview(Map<String, dynamic> order) {
-    final items = order['items'] is List ? List<Map<String, dynamic>>.from((order['items'] as List).whereType<Map>()) : <Map<String, dynamic>>[];
-    final meta = items.isNotEmpty && items.first['meta'] is Map ? Map<String, dynamic>.from(items.first['meta'] as Map) : <String, dynamic>{};
-    final merchant = meta['brand_name']?.toString() ?? meta['brandName']?.toString() ?? 'Gift voucher';
-    final amount = order['pricing'] is Map ? (order['pricing'] as Map)['final_payable'] ?? (order['pricing'] as Map)['subtotal'] : order['total_amount'];
+    final items = order['items'] is List
+        ? List<Map<String, dynamic>>.from(
+            (order['items'] as List).whereType<Map>(),
+          )
+        : <Map<String, dynamic>>[];
+    final meta = items.isNotEmpty && items.first['meta'] is Map
+        ? Map<String, dynamic>.from(items.first['meta'] as Map)
+        : <String, dynamic>{};
+    final merchant =
+        meta['brand_name']?.toString() ??
+        meta['brandName']?.toString() ??
+        'Gift voucher';
+    final amount = order['pricing'] is Map
+        ? (order['pricing'] as Map)['final_payable'] ??
+              (order['pricing'] as Map)['subtotal']
+        : order['total_amount'];
     final date = orderCreatedAt(order);
     return Container(
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFE8E3F2)), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE8E3F2)),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         children: [
           Row(
             children: [
               _buildOrderImage(meta),
               const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(merchant, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
-                Text('${items.length} ${items.length == 1 ? 'item' : 'items'} · ${date ?? 'Date unavailable'}', style: _mutedText(fontSize: 11)),
-              ])),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      merchant,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${items.length} ${items.length == 1 ? 'item' : 'items'} Â· ${date ?? 'Date unavailable'}',
+                      style: _mutedText(fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(color: AppColors.primaryPurple.withValues(alpha: .1), borderRadius: BorderRadius.circular(20)),
-                child: Text((order['status'] ?? 'PROCESSING').toString(), style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primaryPurple)),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryPurple.withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  (order['status'] ?? 'PROCESSING').toString(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryPurple,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
           const Divider(height: 1),
           const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Total bill', style: _mutedText(fontSize: 12)),
-            Text('₹${amount ?? 0}', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700)),
-          ]),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Total bill', style: _mutedText(fontSize: 12)),
+              Text(
+                'â‚¹${amount ?? 0}',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -865,7 +1091,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _accountCard({required Widget child, EdgeInsets padding = const EdgeInsets.all(16), Key? key}) {
+  Widget _accountCard({
+    required Widget child,
+    EdgeInsets padding = const EdgeInsets.all(16),
+    Key? key,
+  }) {
     return Container(
       key: key,
       width: double.infinity,
@@ -879,7 +1109,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  TextStyle _mutedText({double fontSize = 12}) => GoogleFonts.poppins(fontSize: fontSize, color: const Color(0xFF81789A));
+  TextStyle _mutedText({double fontSize = 12}) =>
+      GoogleFonts.poppins(fontSize: fontSize, color: const Color(0xFF81789A));
 
   Widget _buildGuestAccountLanding(BuildContext context) {
     final textTheme = GoogleFonts.poppins();
@@ -1218,7 +1449,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 4),
             Text(
               '${orderNumber != null && orderNumber.isNotEmpty ? 'Credited with order $orderNumber' : 'Your reward has been credited.'}'
-              '${redeemedAt != null ? ' • ${DateFormat('d MMM yyyy, h:mm a').format(redeemedAt.toLocal())}' : ''}',
+              '${redeemedAt != null ? ' â€¢ ${DateFormat('d MMM yyyy, h:mm a').format(redeemedAt.toLocal())}' : ''}',
               style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
             ),
           ],
