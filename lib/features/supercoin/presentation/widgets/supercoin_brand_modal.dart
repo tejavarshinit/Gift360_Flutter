@@ -826,7 +826,7 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                       children: [
                         Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 14, height: 14),
                         const SizedBox(width: 6),
-                        Expanded(child: Text('Buy vouchers starting at ₹100 and earn up to ${_earnPercent.toStringAsFixed(0)}% cashback in SuperCoins!', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w500, color: const Color(0xFF6B46A5)))),
+                        Expanded(child: Text('Buy vouchers starting at ₹100 and earn up to ${_earnPercent.toStringAsFixed(0)}% coinback in SuperCoins!', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w500, color: const Color(0xFF6B46A5)))),
                       ],
                     ),
                   ),
@@ -904,15 +904,38 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Earn upto % SuperCoins', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF7C3AED))),
-                      const SizedBox(width: 4),
-                      Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 14, height: 14),
-                      const SizedBox(width: 4),
-                      Text('upto 100 SuperCoins', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF7C3AED))),
-                    ],
+                  // Earn callout - brand gradient pill so it draws the eye
+                  // without cluttering the amount box.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF7C3AED), Color(0xFF9747FF)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(9),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.28),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('Earn upto ', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w500, color: Colors.white)),
+                        Text('${_earnPercent.toStringAsFixed(0)}% SuperCoins', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                        const SizedBox(width: 6),
+                        Image.asset('assets/images/SuperCOin-removebg-preview.png', width: 14, height: 14),
+                        const SizedBox(width: 6),
+                        Text('max ', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w500, color: Colors.white)),
+                        Text('100 SuperCoins', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ],
+                    ),
                   ),
                 ],
                 // Quantity
@@ -927,22 +950,23 @@ class _SuperCoinBrandModalState extends ConsumerState<SuperCoinBrandModal> {
                         children: [
                           _qtyButton('-', () => setState(() => _quantity = (_quantity - 1).clamp(1, 3))),
                           const SizedBox(width: 8),
-                          SizedBox(
-                            width: 221,
-                            height: 30,
-                            child: TextField(
-                              textAlign: TextAlign.center,
-                              keyboardType: TextInputType.number,
-                              controller: TextEditingController(text: _quantity.toString()),
-                              onChanged: (v) {
-                                final n = int.tryParse(v) ?? 1;
-                                setState(() => _quantity = n.clamp(1, 3));
-                              },
-                              decoration: InputDecoration(
-                                contentPadding: EdgeInsets.zero,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFF9747FF))),
+                          Expanded(
+                            child: SizedBox(
+                              height: 30,
+                              child: TextField(
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                controller: TextEditingController(text: _quantity.toString()),
+                                onChanged: (v) {
+                                  final n = int.tryParse(v) ?? 1;
+                                  setState(() => _quantity = n.clamp(1, 3));
+                                },
+                                decoration: InputDecoration(
+                                  contentPadding: EdgeInsets.zero,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFF9747FF))),
+                                ),
+                                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF4E4E4E)),
                               ),
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF4E4E4E)),
                             ),
                           ),
                           const SizedBox(width: 8),
